@@ -1,0 +1,199 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the email to be used"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com)",
+      "Enter a password with at least 8 characters (e.g., Password123)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the login or dashboard page"
+    ]
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ],
+    "title": "Account creation with duplicate email is rejected",
+    "priority": "High",
+    "preconditions": [
+      "An existing account with email 'existing@example.com' already exists in the system",
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter the email address 'existing@example.com'",
+      "Enter a valid password (e.g., Password123)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the email is already in use",
+      "No duplicate account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password less than 8 characters is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com)",
+      "Enter a password with 7 characters (e.g., Pass123)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password exactly 8 characters is accepted",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the email to be used"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., boundary@example.com)",
+      "Enter a password with exactly 8 characters (e.g., Pass1234)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the login or dashboard page"
+    ]
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC005",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password of 7 characters is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., boundary@example.com)",
+      "Enter a password with exactly 7 characters (e.g., Pass123)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC006",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ],
+    "title": "Email uniqueness validation is performed before account creation",
+    "priority": "High",
+    "preconditions": [
+      "An existing account with email 'existing@example.com' already exists in the system",
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter the email address 'existing@example.com'",
+      "Enter a valid password (e.g., Password123)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "The system checks for email uniqueness before creating the account",
+      "Account creation is rejected with an error message indicating duplicate email",
+      "No new account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC007",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Password length validation is performed before account creation",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com)",
+      "Enter a password with 6 characters (e.g., Pass12)",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "The system validates the password length before creating the account",
+      "Account creation is rejected with an error message indicating minimum password length requirement",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC008",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001",
+      "RISK001"
+    ],
+    "title": "Race condition during concurrent account creation with same email",
+    "priority": "High",
+    "preconditions": [
+      "No existing account with the email 'race@example.com'",
+      "System is ready to handle concurrent requests"
+    ],
+    "test_steps": [
+      "Send two or more concurrent account creation requests with the same email 'race@example.com' and valid passwords",
+      "Wait for all requests to complete"
+    ],
+    "expected_results": [
+      "Only one account is created with the email 'race@example.com'",
+      "All other requests are rejected with an appropriate error message (e.g., email already exists)",
+      "No duplicate accounts exist in the system"
+    ]
+  }
+]

@@ -1,0 +1,52 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What are the specific password complexity requirements beyond minimum length (e.g., must include uppercase, lowercase, digits, special characters, or avoid common patterns)?",
+      "reason": "The requirement only specifies a minimum length of 8 characters, but common security standards often require additional complexity. Without this, test coverage for password validation is incomplete.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What is the expected format for a valid email address (e.g., must contain '@' and a domain, specific allowed characters, length limits)?",
+      "reason": "Email format validation rules are not specified, which could lead to acceptance of invalid emails or rejection of valid ones. This affects both user experience and data integrity.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is there any account verification or confirmation process after account creation (e.g., email verification link, admin approval, or immediate activation)?",
+      "reason": "The requirement does not describe what happens after the account is created. This impacts the user flow and test scenarios for account state and access.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What error messages or user feedback should be displayed when a duplicate email is entered or when the password does not meet requirements?",
+      "reason": "Error handling and user feedback are not defined, which affects usability and test coverage for validation scenarios.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "How should the system handle the race condition risk for email uniqueness during concurrent account creation (e.g., database constraints, locking, or retry logic)?",
+      "reason": "The risk is identified but no mitigation strategy is specified. This is critical for ensuring data integrity under concurrent usage.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Are there any additional fields required for account creation (e.g., name, phone number, or acceptance of terms)?",
+      "reason": "The functional requirement only mentions email and password, but typical registration forms include other fields. Missing fields could lead to incomplete test coverage.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q007",
+      "question": "What is the maximum length allowed for the email and password fields?",
+      "reason": "Length limits are not specified, which could lead to buffer overflow issues or unexpected truncation. This is important for input validation testing.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q008",
+      "question": "Should the password be stored securely (e.g., hashed and salted), and if so, what algorithm should be used?",
+      "reason": "Security requirements for password storage are not mentioned, which is critical for data protection and compliance.",
+      "impact": "High"
+    }
+  ]
+}

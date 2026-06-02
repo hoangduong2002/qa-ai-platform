@@ -1,0 +1,61 @@
+{
+  "scope_decision": {
+    "positive": true,
+    "negative": true,
+    "validation": true,
+    "boundary": true,
+    "business_rule": true,
+    "security": false,
+    "permissions": false,
+    "ux_ui": false,
+    "integration": false,
+    "network": false,
+    "localization": false,
+    "timezone": false
+  },
+  "included_categories": [
+    "positive",
+    "negative",
+    "validation",
+    "boundary",
+    "business_rule"
+  ],
+  "excluded_categories": [
+    {
+      "category": "security",
+      "reason": "No user input, authentication, permission, or data persistence details are explicitly defined beyond basic validation; security requirements are not stated."
+    },
+    {
+      "category": "permissions",
+      "reason": "No roles, access levels, or permission requirements are mentioned in the requirement analysis."
+    },
+    {
+      "category": "ux_ui",
+      "reason": "No UI behavior, messages, loading states, or empty states are specified in the requirement analysis."
+    },
+    {
+      "category": "integration",
+      "reason": "Dependencies are identified (database, email service) but no integration points or API contracts are explicitly defined; integration testing scope is not justified."
+    },
+    {
+      "category": "network",
+      "reason": "No network-related requirements (e.g., latency, offline mode) are mentioned."
+    },
+    {
+      "category": "localization",
+      "reason": "No localization or internationalization requirements are stated."
+    },
+    {
+      "category": "timezone",
+      "reason": "No timezone-related requirements are mentioned."
+    }
+  ],
+  "scenario_generation_rules": [
+    "Generate positive test scenarios for successful account creation with valid mandatory fields.",
+    "Generate negative test scenarios for missing, invalid, or duplicate data.",
+    "Generate validation test scenarios for email format, password complexity, and mandatory field checks.",
+    "Generate boundary test scenarios for password length limits and other field constraints (if any are implied by validation rules).",
+    "Generate business rule test scenarios for unique identification (email or username) and verification steps (if applicable).",
+    "Do not generate test scenarios for missing information such as specific field names, password rules, error messages, or account limits until clarified."
+  ]
+}

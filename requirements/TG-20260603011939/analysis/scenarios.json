@@ -1,0 +1,68 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "category": "Positive",
+    "description": "Verify that a user can successfully create an account by providing a unique email and a password that is at least 8 characters long.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Account creation with duplicate email is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the email provided already exists in the system, enforcing the business rule that email must be unique.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ]
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Account creation with password shorter than 8 characters is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the password is less than 8 characters, enforcing the minimum password length rule.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Email uniqueness validation before account creation",
+    "category": "Validation",
+    "description": "Verify that the system checks for email uniqueness before proceeding with account creation, ensuring no duplicate accounts are created.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ]
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Password length validation at exactly 8 characters",
+    "category": "Boundary",
+    "description": "Verify that account creation succeeds when the password is exactly 8 characters long, testing the lower boundary of the minimum length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "Password length validation at 7 characters (just below minimum)",
+    "category": "Boundary",
+    "description": "Verify that account creation fails when the password is 7 characters long, testing the boundary just below the minimum length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  }
+]

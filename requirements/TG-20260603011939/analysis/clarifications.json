@@ -1,0 +1,52 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What is the exact format or pattern required for a valid email address (e.g., must contain '@' and a domain, specific allowed characters, etc.)?",
+      "reason": "The requirement analysis lists email format validation as missing information, and the risks mention that no email format validation could allow invalid addresses. Without this, test cases cannot verify valid/invalid email inputs.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "Are there any password complexity requirements beyond the minimum length of 8 characters (e.g., must include uppercase, lowercase, digit, special character)?",
+      "reason": "The risks and missing information both highlight the absence of password complexity rules, which could lead to weak passwords. This is critical for security testing.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is email verification required before the account is activated or usable? If so, what is the verification process (e.g., sending a confirmation link, code)?",
+      "reason": "The missing information section explicitly lists this as unknown, and the risks mention unverified accounts. This affects the account creation flow and test scenarios.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What is the maximum allowed length for the password?",
+      "reason": "The missing information section lists maximum password length as unknown. Without this, boundary testing for password length cannot be performed.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "What are the exact error messages to be displayed for duplicate email and for password shorter than 8 characters?",
+      "reason": "The missing information section notes that error messages are not specified. This is needed to validate the user interface and error handling.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Does the registration form include a password confirmation field (e.g., 'Confirm Password')? If so, what validation is applied (e.g., must match the password field)?",
+      "reason": "The missing information section lists this as unknown. This affects the registration flow and test cases for password matching.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q007",
+      "question": "Are there any specific requirements for the email field regarding case sensitivity (e.g., should 'User@Example.com' be treated as the same as 'user@example.com')?",
+      "reason": "Email uniqueness is required, but case sensitivity handling is not specified. This could lead to duplicate accounts or false uniqueness errors.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q008",
+      "question": "What is the expected behavior if the user enters an email that already exists? Should the system display a generic error or a specific message, and should it reveal whether the email is already registered?",
+      "reason": "The requirement only states email must be unique, but the user experience and security implications (e.g., information disclosure) are not defined.",
+      "impact": "Medium"
+    }
+  ]
+}

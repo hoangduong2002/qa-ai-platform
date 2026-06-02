@@ -1,0 +1,95 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account creation with valid mandatory fields",
+    "category": "Positive",
+    "description": "Verify that a customer can successfully create a new account when all mandatory fields are provided with valid data, and the system stores the information and confirms creation.",
+    "related_requirements": [
+      "FR1: The system shall allow a customer to create a new account.",
+      "FR2: The system shall collect and store customer information required for account creation."
+    ]
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Account creation fails when mandatory fields are missing",
+    "category": "Negative",
+    "description": "Verify that the system rejects account creation when one or more mandatory fields are not provided, and does not create the account.",
+    "related_requirements": [
+      "FR1: The system shall allow a customer to create a new account.",
+      "V1: All mandatory fields must be provided and valid before account creation."
+    ]
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Account creation fails with invalid email format",
+    "category": "Validation",
+    "description": "Verify that the system rejects account creation when the provided email address does not conform to a valid email format (e.g., missing '@', missing domain, invalid characters).",
+    "related_requirements": [
+      "V2: Email address format must be valid."
+    ]
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Account creation fails with weak password not meeting complexity requirements",
+    "category": "Validation",
+    "description": "Verify that the system rejects account creation when the password does not meet the defined complexity requirements (e.g., insufficient length, missing required character types).",
+    "related_requirements": [
+      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    ]
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Account creation fails when email or username already exists",
+    "category": "Business Rule",
+    "description": "Verify that the system prevents creation of a duplicate account by rejecting a registration attempt where the email or username already exists in the system.",
+    "related_requirements": [
+      "BR1: Each customer account must be uniquely identifiable (e.g., by email or username).",
+      "V4: Username or email must not already exist in the system."
+    ]
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "Account creation with password at minimum length boundary",
+    "category": "Boundary",
+    "description": "Verify that the system accepts account creation when the password is exactly at the minimum required length (assuming a minimum length is part of complexity requirements).",
+    "related_requirements": [
+      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    ]
+  },
+  {
+    "scenario_id": "SC007",
+    "title": "Account creation with password at maximum length boundary",
+    "category": "Boundary",
+    "description": "Verify that the system accepts account creation when the password is exactly at the maximum allowed length (assuming a maximum length is defined).",
+    "related_requirements": [
+      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    ]
+  },
+  {
+    "scenario_id": "SC008",
+    "title": "Account creation fails with password exceeding maximum length",
+    "category": "Boundary",
+    "description": "Verify that the system rejects account creation when the password exceeds the maximum allowed length (assuming a maximum length is defined).",
+    "related_requirements": [
+      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    ]
+  },
+  {
+    "scenario_id": "SC009",
+    "title": "Account creation fails with password below minimum length",
+    "category": "Boundary",
+    "description": "Verify that the system rejects account creation when the password is shorter than the minimum required length (assuming a minimum length is part of complexity requirements).",
+    "related_requirements": [
+      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    ]
+  },
+  {
+    "scenario_id": "SC010",
+    "title": "Account creation with identity or contact verification step (if applicable)",
+    "category": "Business Rule",
+    "description": "Verify that if account creation requires verification of customer identity or contact information, the system initiates the verification process (e.g., sends a verification email) and does not fully activate the account until verification is completed.",
+    "related_requirements": [
+      "BR2: Account creation may require verification of customer identity or contact information."
+    ]
+  }
+]

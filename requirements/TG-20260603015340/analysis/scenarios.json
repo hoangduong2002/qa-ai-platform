@@ -1,0 +1,91 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "category": "Positive",
+    "description": "Verify that a user can successfully create an account by providing a valid email and a password that meets the minimum length requirement of 8 characters.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Account creation with duplicate email is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the email provided already exists in the system, enforcing the business rule that email must be unique.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ]
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Account creation with password less than 8 characters is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the password length is less than 8 characters, enforcing the minimum password length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Account creation with password exactly 8 characters is accepted",
+    "category": "Boundary",
+    "description": "Verify that a password with exactly 8 characters is accepted as valid, testing the lower boundary of the password length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Account creation with password of 7 characters is rejected",
+    "category": "Boundary",
+    "description": "Verify that a password with 7 characters is rejected, testing the boundary just below the minimum length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "Email uniqueness validation is performed before account creation",
+    "category": "Validation",
+    "description": "Verify that the system checks for email uniqueness before proceeding with account creation, ensuring that duplicate emails are detected and rejected.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ]
+  },
+  {
+    "scenario_id": "SC007",
+    "title": "Password length validation is performed before account creation",
+    "category": "Validation",
+    "description": "Verify that the system validates the password length (minimum 8 characters) before proceeding with account creation, rejecting passwords that do not meet the requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC008",
+    "title": "Race condition during concurrent account creation with same email",
+    "category": "Security",
+    "description": "Verify that when multiple concurrent account creation requests are made with the same email, the system handles the race condition correctly and prevents duplicate accounts from being created.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001",
+      "RISK001"
+    ]
+  }
+]
