@@ -56,6 +56,10 @@ from app.utils.review_comment_session import (
     save_review_comment
 )
 
+from app.utils.improvement_history import (
+    save_improvement_history_item
+)
+
 
 load_dotenv()
 
@@ -248,6 +252,15 @@ async def run_generation(
 
     review = result.get("coverage_review", {})
     final_review = result.get("final_coverage_review", {})
+    
+    save_improvement_history_item(
+        ticket_id=ticket_id,
+        version="v0",
+        iteration=0,
+        coverage_score=final_review.get("coverage_score", ""),
+        improvement_score=final_review.get("improvement_score", ""),
+        note="Initial generation"
+    )
 
     summary_message = (
         f"✅ Done: {ticket_id}\n\n"
@@ -298,6 +311,7 @@ async def run_generation(
             "clarification_answers",
             {}
         ),
+        improvement_history=artifacts.get("improvement_history", []),
         version="v0"
     )
 
@@ -577,6 +591,24 @@ async def handle_text_message(
         )
 
         version = f"v{session.get('improve_iterations', 0)}"
+        
+        save_improvement_history_item(
+            ticket_id=comment_ticket_id,
+            version=version,
+            iteration=session.get(
+                "improve_iterations",
+                0
+            ),
+            coverage_score=final_review.get(
+                "coverage_score",
+                ""
+            ),
+            improvement_score=final_review.get(
+                "improvement_score",
+                ""
+            ),
+            note="Comment-based improvement"
+        )
 
         improve_message = (
             f"✅ Comment-based improvement completed: {comment_ticket_id}\n\n"
@@ -635,6 +667,7 @@ async def handle_text_message(
                 "clarification_answers",
                 {}
             ),
+            improvement_history=artifacts.get("improvement_history", []),
             version=version
         )
 
@@ -845,6 +878,15 @@ async def handle_review_action(
         session = load_review_session(ticket_id)
 
         version = f"v{session.get('improve_iterations', 0)}"
+        
+        save_improvement_history_item(
+            ticket_id=ticket_id,
+            version=version,
+            iteration=session.get("improve_iterations", 0),
+            coverage_score=final_review.get("coverage_score", ""),
+            improvement_score=final_review.get("improvement_score", ""),
+            note="AI improve again"
+        )
 
         improve_message = (
             f"✅ Improvement completed: {ticket_id}\n\n"
@@ -900,6 +942,7 @@ async def handle_review_action(
                 "clarification_answers",
                 {}
             ),
+            improvement_history=artifacts.get("improvement_history", []),
             version=version
         )
 

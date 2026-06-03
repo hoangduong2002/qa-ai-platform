@@ -1,0 +1,25 @@
+{
+  "history": [
+    {
+      "version": "v0",
+      "iteration": 0,
+      "coverage_score": 88,
+      "improvement_score": 5,
+      "note": "Initial generation"
+    },
+    {
+      "version": "v1",
+      "iteration": 1,
+      "coverage_score": 90,
+      "improvement_score": 7,
+      "note": "AI improve again"
+    },
+    {
+      "version": "v2",
+      "iteration": 2,
+      "coverage_score": 88,
+      "improvement_score": 5,
+      "note": "Comment-based improvement"
+    }
+  ]
+}

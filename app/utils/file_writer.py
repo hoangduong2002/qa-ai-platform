@@ -141,16 +141,30 @@ def save_improved_testcases(
 
 def save_coverage_review(
     ticket_id: str,
-    review: dict
+    coverage_review: dict
 ):
-
-    return save_json(
+    output_file = (
         Path("requirements")
         / ticket_id
         / "review"
-        / "coverage_review.json",
-        review
+        / "coverage_review.json"
     )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        json.dumps(
+            coverage_review,
+            indent=2,
+            ensure_ascii=False
+        ),
+        encoding="utf-8"
+    )
+
+    return str(output_file)
 
 
 def save_final_coverage_review(

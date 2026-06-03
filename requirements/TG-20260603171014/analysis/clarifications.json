@@ -1,0 +1,52 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What are the specific password complexity requirements beyond minimum length (e.g., must include uppercase, lowercase, numbers, special characters)?",
+      "reason": "The requirement only specifies a minimum length of 8 characters; additional complexity rules are missing and may affect security and validation logic.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What is the expected format for a valid email address (e.g., must contain '@' and a domain, specific regex pattern)?",
+      "reason": "Email format validation rules are not specified, which could lead to inconsistent user input handling and potential security issues.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is there an email verification step required after account creation (e.g., sending a confirmation link)?",
+      "reason": "The requirement does not describe any verification process, which impacts the account activation flow and user experience.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What error messages or user feedback should be displayed for duplicate email, short password, or invalid email format?",
+      "reason": "Error handling and user feedback are not specified, which affects usability and test coverage for negative scenarios.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "How should the system handle concurrent registration attempts with the same email to prevent race conditions?",
+      "reason": "The risk mentions race conditions, but no specific handling mechanism (e.g., database constraints, locking) is defined.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Are there any additional fields required for account creation (e.g., name, phone number, date of birth)?",
+      "reason": "The functional requirement only mentions email and password; other common registration fields are not addressed.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q007",
+      "question": "What is the maximum allowed length for email and password fields?",
+      "reason": "Only a minimum password length is specified; maximum lengths are missing and could affect data storage and validation.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q008",
+      "question": "Should the password be stored in a hashed format, and if so, what hashing algorithm should be used?",
+      "reason": "Password storage security is not mentioned, which is critical for data protection and compliance.",
+      "impact": "High"
+    }
+  ]
+}

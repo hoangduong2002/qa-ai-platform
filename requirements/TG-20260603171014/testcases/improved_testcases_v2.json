@@ -1,0 +1,314 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account registration page",
+      "No existing account with the email to be used"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Enter a password of at least 8 characters (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard",
+      "New account is stored in the database with the provided email and hashed password"
+    ]
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL001"
+    ],
+    "title": "Account creation with duplicate email is rejected",
+    "priority": "High",
+    "preconditions": [
+      "An existing account with email 'existing@example.com' already exists in the system",
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter the email address 'existing@example.com'",
+      "Enter a valid password (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the email is already in use (e.g., 'Email already registered')",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password shorter than 8 characters is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Enter a password of 7 characters or less (e.g., Pass123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password exactly 8 characters is accepted",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account registration page",
+      "No existing account with the email to be used"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Enter a password of exactly 8 characters (e.g., Pass1234)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard",
+      "New account is stored in the database with the provided email and hashed password"
+    ]
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC006",
+    "related_requirement_ids": [
+      "RISK001",
+      "BR001",
+      "VAL001"
+    ],
+    "title": "Concurrent registration attempts with the same email are handled securely",
+    "priority": "High",
+    "preconditions": [
+      "No existing account with email 'concurrent@example.com' exists in the system",
+      "System is configured to handle concurrent requests"
+    ],
+    "test_steps": [
+      "Send 5 simultaneous registration requests with the same email 'concurrent@example.com' and valid passwords",
+      "Wait for all requests to complete",
+      "Check the database for accounts with email 'concurrent@example.com'"
+    ],
+    "expected_results": [
+      "Only one account is created with the email 'concurrent@example.com'",
+      "All other requests are rejected with an appropriate error message (e.g., 'Email already in use')",
+      "No duplicate accounts exist in the database",
+      "No race condition or data integrity issues occur"
+    ]
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with empty password is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Leave the password field empty",
+      "Leave the confirm password field empty",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with whitespace-only password is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Enter a password consisting only of spaces (e.g., '        ' - 8 spaces)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password containing leading/trailing spaces is accepted",
+    "priority": "Low",
+    "preconditions": [
+      "User is on the account registration page",
+      "No existing account with the email to be used"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., testuser@example.com)",
+      "Enter a password with leading and trailing spaces that is at least 8 characters excluding spaces (e.g., '  Password123  ')",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard",
+      "New account is stored in the database with the provided email and hashed password"
+    ]
+  },
+  {
+    "testcase_id": "TC009",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with empty email is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Leave the email field empty",
+      "Enter a valid password of at least 8 characters (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that email is required",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC010",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL001",
+      "RC001"
+    ],
+    "title": "Account creation with duplicate email using different case is rejected",
+    "priority": "High",
+    "preconditions": [
+      "An existing account with email 'existing@example.com' already exists in the system",
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter the email address 'EXISTING@EXAMPLE.COM' (same email but different case)",
+      "Enter a valid password (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the email is already in use (e.g., 'Email already registered')",
+      "No new account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL001",
+      "RC001"
+    ],
+    "title": "Account creation with duplicate email after successful registration is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account registration page",
+      "No existing account with the email to be used initially"
+    ],
+    "test_steps": [
+      "Enter a valid, unique email address (e.g., newuser@example.com)",
+      "Enter a valid password (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button",
+      "Verify account is created successfully",
+      "Navigate back to the registration page",
+      "Enter the same email address 'newuser@example.com'",
+      "Enter a valid password (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "First account creation is successful",
+      "Second account creation fails",
+      "An error message is displayed indicating that the email is already in use (e.g., 'Email already registered')",
+      "No duplicate account is created in the database"
+    ]
+  },
+  {
+    "testcase_id": "TC012",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL001",
+      "RC001"
+    ],
+    "title": "Account creation with duplicate email using special characters (e.g., + alias) is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "An existing account with email 'test+alias@example.com' already exists in the system",
+      "User is on the account registration page"
+    ],
+    "test_steps": [
+      "Enter the email address 'test+alias@example.com' (exact duplicate)",
+      "Enter a valid password (e.g., Password123)",
+      "Confirm the password",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the email is already in use (e.g., 'Email already registered')",
+      "No new account is created in the database"
+    ]
+  }
+]

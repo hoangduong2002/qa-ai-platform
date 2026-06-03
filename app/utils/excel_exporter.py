@@ -185,7 +185,8 @@ def export_testcases_to_excel(
     final_review: dict,
     clarifications: dict | None = None,
     clarification_answers: dict | None = None,
-    version: str = "latest"
+    version: str = "latest",
+    improvement_history: list | None = None,
 ):
 
     output_dir = (
@@ -568,6 +569,34 @@ def export_testcases_to_excel(
             )
         ]
     )
+    
+    # Sheet 8: Improvement History
+    ws_history = wb.create_sheet(
+        "Improvement History"
+    )
+
+    ws_history.append(
+        [
+            "Version",
+            "Iteration",
+            "Coverage Score",
+            "Improvement Score",
+            "Note"
+        ]
+    )
+
+    improvement_history = improvement_history or []
+
+    for item in improvement_history:
+        ws_history.append(
+            [
+                item.get("version", ""),
+                item.get("iteration", ""),
+                item.get("coverage_score", ""),
+                item.get("improvement_score", ""),
+                item.get("note", "")
+            ]
+        )
 
     _apply_styles(wb)
 

@@ -1,0 +1,64 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What specific password complexity requirements (e.g., uppercase, lowercase, numbers, special characters) are required beyond the minimum length of 8 characters?",
+      "reason": "The requirement only specifies a minimum length; additional complexity rules are missing and could affect security and test coverage.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What is the expected format for a valid email address (e.g., must contain '@' and a domain, specific TLD restrictions)?",
+      "reason": "Email format validation rules are not defined, which could lead to acceptance of invalid emails or rejection of valid ones.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is there an account confirmation or verification process after account creation (e.g., email verification link, OTP)?",
+      "reason": "The requirement does not describe any post-creation verification, which is critical for user authentication and security.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What error messages or user feedback should be displayed when a duplicate email is entered or when the password does not meet requirements?",
+      "reason": "Error handling and user feedback are not specified, which impacts usability and test validation.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "How should the system handle concurrent registration attempts with the same email to ensure uniqueness (e.g., database constraints, locking mechanisms)?",
+      "reason": "The risk mentions concurrent registration failures, but no specific handling mechanism is defined.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Should the password be stored hashed or in plain text? If hashed, what hashing algorithm should be used?",
+      "reason": "Password storage method is not mentioned, which is a critical security concern.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q007",
+      "question": "Are there any character restrictions or allowed character sets for the email and password fields (e.g., no spaces, no Unicode)?",
+      "reason": "Character restrictions are not specified, which could lead to input validation gaps.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q008",
+      "question": "What is the maximum length allowed for the email and password fields?",
+      "reason": "Maximum lengths are not defined, which could affect database storage and input validation.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q009",
+      "question": "Should the email be case-sensitive or case-insensitive for uniqueness validation?",
+      "reason": "Case sensitivity of email uniqueness is not specified, which could lead to duplicate accounts or false positives.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q010",
+      "question": "Is there any rate limiting or throttling for account creation attempts to prevent abuse?",
+      "reason": "No mention of rate limiting, which could be a security risk for brute-force or spam attacks.",
+      "impact": "Medium"
+    }
+  ]
+}

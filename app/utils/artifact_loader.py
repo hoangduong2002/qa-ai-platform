@@ -6,6 +6,9 @@ from app.utils.review_comment_session import (
 from app.utils.review_comment_session import (
     load_review_comments
 )
+from app.utils.improvement_history import (
+    load_improvement_history
+)
 
 def enrich_analysis_with_review_comments(
     analysis: dict,
@@ -138,6 +141,8 @@ def load_ticket_artifacts(ticket_id: str):
             "accepted": False
         }
     )
+    
+    improvement_history = load_improvement_history(ticket_id)
 
     return {
         "ticket_id": ticket_id,
@@ -150,5 +155,6 @@ def load_ticket_artifacts(ticket_id: str):
         "testcases": testcases,
         "coverage_review": coverage_review,
         "final_coverage_review": final_coverage_review,
+        "improvement_history": improvement_history,
         "session": session
     }
