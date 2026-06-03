@@ -1,95 +1,109 @@
 [
   {
     "scenario_id": "SC001",
-    "title": "Successful account creation with valid mandatory fields",
+    "title": "Successful account creation with valid email and password",
     "category": "Positive",
-    "description": "Verify that a customer can successfully create a new account when all mandatory fields are provided with valid data, and the system stores the information and confirms creation.",
-    "related_requirements": [
-      "FR1: The system shall allow a customer to create a new account.",
-      "FR2: The system shall collect and store customer information required for account creation."
+    "description": "User creates an account using a unique email and a password that meets the minimum and maximum length requirements (e.g., 12 characters). The account is created successfully.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "BR002",
+      "BR004"
     ]
   },
   {
     "scenario_id": "SC002",
-    "title": "Account creation fails when mandatory fields are missing",
-    "category": "Negative",
-    "description": "Verify that the system rejects account creation when one or more mandatory fields are not provided, and does not create the account.",
-    "related_requirements": [
-      "FR1: The system shall allow a customer to create a new account.",
-      "V1: All mandatory fields must be provided and valid before account creation."
+    "title": "Account creation with missing email",
+    "category": "Validation",
+    "description": "User attempts to create an account without providing an email. The system should reject the request and indicate that email is required.",
+    "related_requirement_ids": [
+      "VAL001"
     ]
   },
   {
     "scenario_id": "SC003",
-    "title": "Account creation fails with invalid email format",
+    "title": "Account creation with missing password",
     "category": "Validation",
-    "description": "Verify that the system rejects account creation when the provided email address does not conform to a valid email format (e.g., missing '@', missing domain, invalid characters).",
-    "related_requirements": [
-      "V2: Email address format must be valid."
+    "description": "User attempts to create an account without providing a password. The system should reject the request and indicate that password is required.",
+    "related_requirement_ids": [
+      "VAL002"
     ]
   },
   {
     "scenario_id": "SC004",
-    "title": "Account creation fails with weak password not meeting complexity requirements",
-    "category": "Validation",
-    "description": "Verify that the system rejects account creation when the password does not meet the defined complexity requirements (e.g., insufficient length, missing required character types).",
-    "related_requirements": [
-      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    "title": "Account creation with duplicate email",
+    "category": "Negative",
+    "description": "User attempts to create an account using an email that already exists in the system. The system should reject the request due to email uniqueness rule.",
+    "related_requirement_ids": [
+      "BR001"
     ]
   },
   {
     "scenario_id": "SC005",
-    "title": "Account creation fails when email or username already exists",
-    "category": "Business Rule",
-    "description": "Verify that the system prevents creation of a duplicate account by rejecting a registration attempt where the email or username already exists in the system.",
-    "related_requirements": [
-      "BR1: Each customer account must be uniquely identifiable (e.g., by email or username).",
-      "V4: Username or email must not already exist in the system."
+    "title": "Account creation with password exactly 8 characters",
+    "category": "Boundary",
+    "description": "User creates an account with a password of exactly 8 characters. The account should be created successfully as it meets the minimum length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002"
     ]
   },
   {
     "scenario_id": "SC006",
-    "title": "Account creation with password at minimum length boundary",
+    "title": "Account creation with password exactly 50 characters",
     "category": "Boundary",
-    "description": "Verify that the system accepts account creation when the password is exactly at the minimum required length (assuming a minimum length is part of complexity requirements).",
-    "related_requirements": [
-      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    "description": "User creates an account with a password of exactly 50 characters. The account should be created successfully as it meets the maximum length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR004"
     ]
   },
   {
     "scenario_id": "SC007",
-    "title": "Account creation with password at maximum length boundary",
+    "title": "Account creation with password of 7 characters",
     "category": "Boundary",
-    "description": "Verify that the system accepts account creation when the password is exactly at the maximum allowed length (assuming a maximum length is defined).",
-    "related_requirements": [
-      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    "description": "User attempts to create an account with a password of 7 characters. The system should reject the request as it is below the minimum length of 8 characters.",
+    "related_requirement_ids": [
+      "BR002"
     ]
   },
   {
     "scenario_id": "SC008",
-    "title": "Account creation fails with password exceeding maximum length",
+    "title": "Account creation with password of 51 characters",
     "category": "Boundary",
-    "description": "Verify that the system rejects account creation when the password exceeds the maximum allowed length (assuming a maximum length is defined).",
-    "related_requirements": [
-      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    "description": "User attempts to create an account with a password of 51 characters. The system should reject the request as it exceeds the maximum length of 50 characters.",
+    "related_requirement_ids": [
+      "BR004"
     ]
   },
   {
     "scenario_id": "SC009",
-    "title": "Account creation fails with password below minimum length",
-    "category": "Boundary",
-    "description": "Verify that the system rejects account creation when the password is shorter than the minimum required length (assuming a minimum length is part of complexity requirements).",
-    "related_requirements": [
-      "V3: Password must meet complexity requirements (e.g., length, character types)."
+    "title": "Login attempt before email verification",
+    "category": "Business Rule",
+    "description": "User creates an account but does not verify their email. The user attempts to log in. The system should prevent login until the email is verified.",
+    "related_requirement_ids": [
+      "BR003"
     ]
   },
   {
     "scenario_id": "SC010",
-    "title": "Account creation with identity or contact verification step (if applicable)",
+    "title": "Login attempt after successful email verification",
+    "category": "Positive",
+    "description": "User creates an account, verifies their email within 24 hours, and then attempts to log in. The system should allow login.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "BR005"
+    ]
+  },
+  {
+    "scenario_id": "SC011",
+    "title": "Login attempt with expired verification link",
     "category": "Business Rule",
-    "description": "Verify that if account creation requires verification of customer identity or contact information, the system initiates the verification process (e.g., sends a verification email) and does not fully activate the account until verification is completed.",
-    "related_requirements": [
-      "BR2: Account creation may require verification of customer identity or contact information."
+    "description": "User creates an account but does not verify their email within 24 hours. The verification link expires. The user attempts to log in. The system should prevent login due to unverified email.",
+    "related_requirement_ids": [
+      "BR003",
+      "BR005"
     ]
   }
 ]

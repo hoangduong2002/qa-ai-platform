@@ -20,12 +20,22 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 
-from graph.testcase_graph import graph
+from graph.requirement_understanding_graph import (
+    requirement_understanding_graph
+)
+
+from graph.test_generation_graph import (
+    test_generation_graph
+)
 
 from app.utils.excel_exporter import export_testcases_to_excel
 from app.utils.workspace_writer import create_workspace_from_text
 from app.utils.file_extractors import extract_file_text
 from app.utils.artifact_loader import load_ticket_artifacts
+
+from app.utils.clarification_session import (
+    save_clarification_answers
+)
 
 from app.services.improve_cycle_service import run_improve_cycle
 
@@ -35,6 +45,15 @@ from app.utils.review_session import (
     increment_improve_iteration,
     mark_accepted,
     can_improve_again
+)
+
+from app.utils.clarification_session import (
+    save_clarification_answers,
+    save_clarification_questions_snapshot
+)
+
+from app.utils.review_comment_session import (
+    save_review_comment
 )
 
 
@@ -62,6 +81,15 @@ def build_review_keyboard(ticket_id: str):
             ]
         )
 
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "💬 Comment & Improve",
+                    callback_data=f"comment_improve:{ticket_id}"
+                )
+            ]
+        )
+
     keyboard.append(
         [
             InlineKeyboardButton(
@@ -74,7 +102,10 @@ def build_review_keyboard(ticket_id: str):
     return InlineKeyboardMarkup(keyboard)
 
 
-def build_excel_keyboard(ticket_id: str, excel_files: list[str]):
+def build_excel_keyboard(
+    ticket_id: str,
+    excel_files: list[str]
+):
     if not excel_files:
         return None
 
@@ -93,45 +124,68 @@ def build_excel_keyboard(ticket_id: str, excel_files: list[str]):
     return InlineKeyboardMarkup(keyboard)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def build_clarification_keyboard(ticket_id: str):
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "✍️ Answer Clarifications",
+                callback_data=f"answer_clarifications:{ticket_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⏭️ Skip Clarifications",
+                callback_data=f"skip_clarifications:{ticket_id}"
+            )
+        ]
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def extract_clarification_questions(result: dict) -> list:
+    clarifications = result.get("clarifications", {})
+
+    return clarifications.get(
+        "clarification_questions",
+        []
+    )
+
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     await update.message.reply_text(
         "QA AI Bot ready.\n\n"
         "Commands:\n"
         "/generate DEMO-001\n"
         "/generate_text <requirement>\n"
         "/status <ticket_id>\n\n"
-        "Or upload requirement file:\n"
-        "- .txt\n"
-        "- .md\n"
-        "- .docx\n"
-        "- .pptx\n"
-        "- .png\n"
-        "- .jpg\n"
-        "- .jpeg\n"
-        "- .webp"
+        "Or upload requirement files...\n"
     )
 
 
-async def send_excel_file(
-    update: Update,
+async def send_excel_file_from_message(
+    message,
     ticket_id: str,
     excel_file: str
 ):
     excel_path = Path(excel_file)
 
     if not excel_path.exists():
-        await update.message.reply_text(
+        await message.reply_text(
             f"Excel file was not generated: {excel_file}"
         )
         return
 
     with excel_path.open("rb") as file:
-        await update.message.reply_document(
+        await message.reply_document(
             document=InputFile(
                 file,
-                filename=f"{ticket_id}_testcases.xlsx"
+                filename=excel_path.name
             ),
-            caption="Generated testcases Excel file"
+            caption=f"Generated testcases Excel file: {ticket_id}"
         )
 
 
@@ -161,11 +215,18 @@ async def send_excel_file_to_chat(
         )
 
 
-async def process_ticket(update: Update, ticket_id: str):
-    result = graph.invoke(
-        {
-            "ticket_id": ticket_id
-        }
+async def run_generation(
+    message,
+    ticket_id: str,
+    understanding_result: dict
+):
+    if not hasattr(message, "reply_text"):
+        raise TypeError(
+            f"run_generation expected Telegram Message, got {type(message)}"
+        )
+
+    result = test_generation_graph.invoke(
+        understanding_result
     )
 
     save_review_session(
@@ -188,7 +249,7 @@ async def process_ticket(update: Update, ticket_id: str):
     review = result.get("coverage_review", {})
     final_review = result.get("final_coverage_review", {})
 
-    message = (
+    summary_message = (
         f"✅ Done: {ticket_id}\n\n"
         f"Scenarios: {len(scenarios)}\n"
         f"Testcases: {len(testcases)}\n\n"
@@ -205,15 +266,21 @@ async def process_ticket(update: Update, ticket_id: str):
 
     if gaps:
         for item in gaps[:5]:
-            message += f"- {item}\n"
+            summary_message += f"- {item}\n"
     else:
-        message += "- None\n"
+        summary_message += "- None\n"
 
-    message += "\nDo you want AI to improve test cases again?"
+    summary_message += (
+        "\nDo you want AI to improve test cases again?"
+    )
 
-    await update.message.reply_text(
-        message,
+    await message.reply_text(
+        summary_message,
         reply_markup=build_review_keyboard(ticket_id)
+    )
+    
+    artifacts = load_ticket_artifacts(
+        ticket_id
     )
 
     excel_file = export_testcases_to_excel(
@@ -223,17 +290,86 @@ async def process_ticket(update: Update, ticket_id: str):
         testcases,
         review,
         final_review,
+        clarifications=artifacts.get(
+            "clarifications",
+            {}
+        ),
+        clarification_answers=artifacts.get(
+            "clarification_answers",
+            {}
+        ),
         version="v0"
     )
 
-    await send_excel_file(
-        update,
+    await send_excel_file_from_message(
+        message,
         ticket_id,
         excel_file
     )
 
 
-async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def process_ticket(
+    update: Update,
+    ticket_id: str
+):
+    understanding_result = requirement_understanding_graph.invoke(
+        {
+            "ticket_id": ticket_id
+        }
+    )
+
+    questions = extract_clarification_questions(
+        understanding_result
+    )
+
+    if questions:
+        
+        save_clarification_questions_snapshot(
+            ticket_id,
+            understanding_result.get(
+                "clarifications",
+                {}
+            )
+        )
+        
+        clarification_message = (
+            f"❓ Clarifications found for {ticket_id}\n\n"
+        )
+
+        for item in questions:
+            clarification_message += (
+                f"{item.get('question_id', '')}: "
+                f"{item.get('question', '')}\n"
+                f"Impact: {item.get('impact', 'N/A')}\n\n"
+            )
+            
+        clarification_message += (
+            f"Total clarification questions: {len(questions)}\n\n"
+        )
+
+        clarification_message += (
+            "Do you want to answer these clarifications "
+            "before generating test cases?"
+        )
+
+        await update.message.reply_text(
+            clarification_message,
+            reply_markup=build_clarification_keyboard(ticket_id)
+        )
+
+        return
+
+    await run_generation(
+        update.message,
+        ticket_id,
+        understanding_result
+    )
+
+
+async def generate(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     if not context.args:
         await update.message.reply_text(
             "Usage: /generate DEMO-001"
@@ -246,7 +382,10 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Generating testcases for {ticket_id}..."
     )
 
-    await process_ticket(update, ticket_id)
+    await process_ticket(
+        update,
+        ticket_id
+    )
 
 
 async def generate_text(
@@ -278,7 +417,10 @@ async def generate_text(
         f"Processing..."
     )
 
-    await process_ticket(update, ticket_id)
+    await process_ticket(
+        update,
+        ticket_id
+    )
 
 
 async def handle_requirement_file(
@@ -288,7 +430,9 @@ async def handle_requirement_file(
     document = update.message.document
 
     if not document:
-        await update.message.reply_text("No document found.")
+        await update.message.reply_text(
+            "No document found."
+        )
         return
 
     ticket_id = (
@@ -311,8 +455,15 @@ async def handle_requirement_file(
     original_dir = source_dir / "original_files"
     extracted_dir = source_dir / "extracted"
 
-    original_dir.mkdir(parents=True, exist_ok=True)
-    extracted_dir.mkdir(parents=True, exist_ok=True)
+    original_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    extracted_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     telegram_file = await document.get_file()
 
@@ -327,7 +478,9 @@ async def handle_requirement_file(
     )
 
     try:
-        extracted_text = extract_file_text(file_path)
+        extracted_text = extract_file_text(
+            file_path
+        )
 
     except Exception as error:
         await update.message.reply_text(
@@ -341,7 +494,10 @@ async def handle_requirement_file(
         )
         return
 
-    extracted_file = extracted_dir / "extracted_requirement.md"
+    extracted_file = (
+        extracted_dir
+        / "extracted_requirement.md"
+    )
 
     extracted_file.write_text(
         extracted_text,
@@ -359,7 +515,172 @@ async def handle_requirement_file(
         f"Processing {ticket_id}..."
     )
 
-    await process_ticket(update, ticket_id)
+    await process_ticket(
+        update,
+        ticket_id
+    )
+
+
+async def handle_text_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    comment_ticket_id = context.user_data.get(
+        "comment_improve_for"
+    )
+
+    if comment_ticket_id:
+        comment_text = update.message.text
+
+        session = increment_improve_iteration(
+            comment_ticket_id
+        )
+
+        save_review_comment(
+            comment_ticket_id,
+            session.get(
+                "improve_iterations",
+                0
+            ),
+            comment_text
+        )
+
+        context.user_data.pop(
+            "comment_improve_for",
+            None
+        )
+
+        await update.message.reply_text(
+            f"Review comment saved for {comment_ticket_id}.\n"
+            f"Improving test cases with your comment...\n"
+            f"Iteration: {session.get('improve_iterations')}/"
+            f"{session.get('max_iterations')}"
+        )
+
+        result = run_improve_cycle(
+            comment_ticket_id
+        )
+
+        analysis = result.get("analysis", {})
+        scenarios = result.get("scenarios", [])
+
+        testcases = (
+            result.get("improved_testcases")
+            or result.get("testcases", [])
+        )
+
+        review = result.get("coverage_review", {})
+        final_review = result.get("final_coverage_review", {})
+
+        session = load_review_session(
+            comment_ticket_id
+        )
+
+        version = f"v{session.get('improve_iterations', 0)}"
+
+        improve_message = (
+            f"✅ Comment-based improvement completed: {comment_ticket_id}\n\n"
+            f"Iteration: {session.get('improve_iterations')}/"
+            f"{session.get('max_iterations')}\n"
+            f"Scenarios: {len(scenarios)}\n"
+            f"Testcases: {len(testcases)}\n\n"
+            f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
+            f"Final Coverage: {final_review.get('coverage_score', 'N/A')}\n"
+            f"Improvement: +{final_review.get('improvement_score', 0)}\n\n"
+            f"Remaining Gaps:\n"
+        )
+
+        gaps = final_review.get("remaining_gaps") or []
+
+        if gaps:
+            for item in gaps[:5]:
+                improve_message += f"- {item}\n"
+        else:
+            improve_message += "- None\n"
+
+        if can_improve_again(
+            comment_ticket_id
+        ):
+            improve_message += (
+                "\nDo you want AI to improve test cases again?"
+            )
+        else:
+            improve_message += (
+                "\nMaximum improvement iterations reached."
+            )
+
+        await update.message.reply_text(
+            improve_message,
+            reply_markup=build_review_keyboard(
+                comment_ticket_id
+            )
+        )
+
+        artifacts = load_ticket_artifacts(
+            comment_ticket_id
+        )
+
+        excel_file = export_testcases_to_excel(
+            comment_ticket_id,
+            analysis,
+            scenarios,
+            testcases,
+            review,
+            final_review,
+            clarifications=artifacts.get(
+                "clarifications",
+                {}
+            ),
+            clarification_answers=artifacts.get(
+                "clarification_answers",
+                {}
+            ),
+            version=version
+        )
+
+        await send_excel_file_from_message(
+            update.message,
+            comment_ticket_id,
+            excel_file
+        )
+
+        return
+
+    ticket_id = context.user_data.get(
+        "answering_clarifications_for"
+    )
+
+    if not ticket_id:
+        return
+
+    answer_text = update.message.text
+
+    save_clarification_answers(
+        ticket_id,
+        answer_text
+    )
+
+    context.user_data.pop(
+        "answering_clarifications_for",
+        None
+    )
+
+    await update.message.reply_text(
+        f"Clarification answers saved for {ticket_id}.\n"
+        f"Re-running requirement understanding..."
+    )
+
+    understanding_result = requirement_understanding_graph.invoke(
+        {
+            "ticket_id": ticket_id
+        }
+    )
+
+    await run_generation(
+        update.message,
+        ticket_id,
+        understanding_result
+    )
 
 
 async def handle_review_action(
@@ -372,15 +693,48 @@ async def handle_review_action(
 
     parts = query.data.split(":")
 
-    action = parts[0]
-
     if len(parts) < 2:
         await query.message.reply_text(
             "Invalid action."
         )
         return
 
+    action = parts[0]
     ticket_id = parts[1]
+
+    if action == "answer_clarifications":
+        context.user_data[
+            "answering_clarifications_for"
+        ] = ticket_id
+
+        await query.message.reply_text(
+            "Please reply with clarification answers in this format:\n\n"
+            "Q001: answer...\n"
+            "Q002: answer...\n\n"
+            "After receiving your answers, I will re-run the requirement understanding step."
+        )
+
+        return
+
+    if action == "skip_clarifications":
+        await query.edit_message_text(
+            f"⏭️ Clarifications skipped for {ticket_id}.\n\n"
+            f"Generating test cases..."
+        )
+
+        understanding_result = requirement_understanding_graph.invoke(
+            {
+                "ticket_id": ticket_id
+            }
+        )
+
+        await run_generation(
+            query.message,
+            ticket_id,
+            understanding_result
+        )
+
+        return
 
     if action == "download":
         if len(parts) < 3:
@@ -415,9 +769,38 @@ async def handle_review_action(
             )
 
         return
+    
+    if action == "comment_improve":
+
+        if not can_improve_again(
+            ticket_id
+        ):
+            await query.edit_message_text(
+                f"⚠️ Maximum improvement iterations reached for {ticket_id}.\n\n"
+                f"Please review manually or accept the current version."
+            )
+            return
+
+        context.user_data[
+            "comment_improve_for"
+        ] = ticket_id
+
+        await query.message.reply_text(
+            "Please describe what you want AI to improve.\n\n"
+            "Examples:\n"
+            "- Add more negative test cases\n"
+            "- Add boundary value test cases\n"
+            "- Add API validation scenarios\n"
+            "- Add security test cases\n"
+            "- Focus on duplicate email and concurrency cases"
+        )
+
+        return
 
     if action == "accept":
-        mark_accepted(ticket_id)
+        mark_accepted(
+            ticket_id
+        )
 
         await query.edit_message_text(
             f"✅ Accepted: {ticket_id}\n\n"
@@ -427,14 +810,18 @@ async def handle_review_action(
         return
 
     if action == "improve":
-        if not can_improve_again(ticket_id):
+        if not can_improve_again(
+            ticket_id
+        ):
             await query.edit_message_text(
                 f"⚠️ Maximum improvement iterations reached for {ticket_id}.\n\n"
                 f"Please review manually or accept the current version."
             )
             return
 
-        session = increment_improve_iteration(ticket_id)
+        session = increment_improve_iteration(
+            ticket_id
+        )
 
         await query.edit_message_text(
             f"🔄 Improving test cases for {ticket_id}...\n"
@@ -459,7 +846,7 @@ async def handle_review_action(
 
         version = f"v{session.get('improve_iterations', 0)}"
 
-        message = (
+        improve_message = (
             f"✅ Improvement completed: {ticket_id}\n\n"
             f"Iteration: {session.get('improve_iterations')}/"
             f"{session.get('max_iterations')}\n"
@@ -475,19 +862,27 @@ async def handle_review_action(
 
         if gaps:
             for item in gaps[:5]:
-                message += f"- {item}\n"
+                improve_message += f"- {item}\n"
         else:
-            message += "- None\n"
+            improve_message += "- None\n"
 
         if can_improve_again(ticket_id):
-            message += "\nDo you want AI to improve test cases again?"
+            improve_message += (
+                "\nDo you want AI to improve test cases again?"
+            )
         else:
-            message += "\nMaximum improvement iterations reached."
+            improve_message += (
+                "\nMaximum improvement iterations reached."
+            )
 
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=message,
+            text=improve_message,
             reply_markup=build_review_keyboard(ticket_id)
+        )
+        
+        artifacts = load_ticket_artifacts(
+            ticket_id
         )
 
         excel_file = export_testcases_to_excel(
@@ -497,6 +892,14 @@ async def handle_review_action(
             testcases,
             review,
             final_review,
+            clarifications=artifacts.get(
+                "clarifications",
+                {}
+            ),
+            clarification_answers=artifacts.get(
+                "clarification_answers",
+                {}
+            ),
             version=version
         )
 
@@ -544,7 +947,7 @@ async def status(
             ]
         )
 
-    message = (
+    status_message = (
         f"📊 Status: {ticket_id}\n\n"
         f"Scenarios: {len(scenarios)}\n"
         f"Testcases: {len(testcases)}\n\n"
@@ -559,12 +962,12 @@ async def status(
 
     if excel_files:
         for file_name in excel_files[-5:]:
-            message += f"- {file_name}\n"
+            status_message += f"- {file_name}\n"
     else:
-        message += "- None\n"
+        status_message += "- None\n"
 
     await update.message.reply_text(
-        message,
+        status_message,
         reply_markup=build_excel_keyboard(
             ticket_id,
             excel_files
@@ -586,19 +989,38 @@ def main():
     )
 
     app.add_handler(
-        CommandHandler("start", start)
+        CommandHandler(
+            "start",
+            start
+        )
     )
 
     app.add_handler(
-        CommandHandler("generate", generate)
+        CommandHandler(
+            "generate",
+            generate
+        )
     )
 
     app.add_handler(
-        CommandHandler("generate_text", generate_text)
+        CommandHandler(
+            "generate_text",
+            generate_text
+        )
     )
 
     app.add_handler(
-        CommandHandler("status", status)
+        CommandHandler(
+            "status",
+            status
+        )
+    )
+
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_text_message
+        )
     )
 
     app.add_handler(
@@ -609,7 +1031,9 @@ def main():
     )
 
     app.add_handler(
-        CallbackQueryHandler(handle_review_action)
+        CallbackQueryHandler(
+            handle_review_action
+        )
     )
 
     app.run_polling()

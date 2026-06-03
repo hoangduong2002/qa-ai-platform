@@ -2,260 +2,259 @@
   {
     "testcase_id": "TC001",
     "scenario_id": "SC001",
-    "title": "Successful account creation with valid mandatory fields",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "BR002",
+      "BR004"
+    ],
+    "title": "Verify successful account creation with valid email and 12-character password",
     "priority": "High",
     "preconditions": [
-      "User is on the account registration page",
-      "No existing account with the same email or username exists in the system"
+      "User is on the account creation page",
+      "No existing account with the provided email"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'John')",
-      "Enter a valid last name (e.g., 'Doe')",
-      "Enter a valid email address (e.g., 'john.doe@example.com')",
-      "Enter a valid password meeting complexity requirements (e.g., 'P@ssw0rd123')",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a unique valid email address in the email field",
+      "Enter a password of exactly 12 characters meeting all requirements",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input without error",
-      "Confirm password field matches and no mismatch error is shown",
-      "Account is created successfully; a success message is displayed (e.g., 'Account created successfully'); user is redirected to the account dashboard or login page; account data is stored in the database"
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the email verification page or notified to verify email"
     ]
   },
   {
     "testcase_id": "TC002",
     "scenario_id": "SC002",
-    "title": "Account creation fails when mandatory fields are missing",
+    "related_requirement_ids": [
+      "VAL001"
+    ],
+    "title": "Verify account creation is rejected when email field is empty",
     "priority": "High",
     "preconditions": [
-      "User is on the account registration page"
+      "User is on the account creation page"
     ],
     "test_steps": [
-      "Leave the first name field empty",
-      "Enter a valid last name (e.g., 'Doe')",
-      "Enter a valid email address (e.g., 'john.doe@example.com')",
-      "Enter a valid password meeting complexity requirements (e.g., 'P@ssw0rd123')",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Leave the email field empty",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field is empty",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input without error",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed near the first name field indicating it is required; no account is created in the database"
+      "Account creation is rejected",
+      "An error message is displayed indicating that email is required",
+      "No account is created"
     ]
   },
   {
     "testcase_id": "TC003",
     "scenario_id": "SC003",
-    "title": "Account creation fails with invalid email format",
+    "related_requirement_ids": [
+      "VAL002"
+    ],
+    "title": "Verify account creation is rejected when password field is empty",
     "priority": "High",
     "preconditions": [
-      "User is on the account registration page"
+      "User is on the account creation page"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'John')",
-      "Enter a valid last name (e.g., 'Doe')",
-      "Enter an invalid email address (e.g., 'johndoeexample.com' missing '@')",
-      "Enter a valid password meeting complexity requirements (e.g., 'P@ssw0rd123')",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a valid unique email address",
+      "Leave the password field empty",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input but shows validation error on submission",
-      "Password field accepts input without error",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed indicating the email format is invalid; no account is created in the database"
+      "Account creation is rejected",
+      "An error message is displayed indicating that password is required",
+      "No account is created"
     ]
   },
   {
     "testcase_id": "TC004",
     "scenario_id": "SC004",
-    "title": "Account creation fails with weak password not meeting complexity requirements",
+    "related_requirement_ids": [
+      "BR001"
+    ],
+    "title": "Verify account creation is rejected when email already exists",
     "priority": "High",
     "preconditions": [
-      "User is on the account registration page"
+      "An existing account with email 'test@example.com' already exists in the system"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'John')",
-      "Enter a valid last name (e.g., 'Doe')",
-      "Enter a valid email address (e.g., 'john.doe@example.com')",
-      "Enter a weak password (e.g., 'abc' - too short, no uppercase, no digit, no special character)",
-      "Confirm the password by re-entering the same weak password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter email 'test@example.com' in the email field",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input but shows validation error on submission",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed indicating the password does not meet complexity requirements (e.g., minimum length, required character types); no account is created in the database"
+      "Account creation is rejected",
+      "An error message is displayed indicating that the email is already in use",
+      "No new account is created"
     ]
   },
   {
     "testcase_id": "TC005",
     "scenario_id": "SC005",
-    "title": "Account creation fails when email or username already exists",
-    "priority": "High",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002"
+    ],
+    "title": "Verify account creation with password of exactly 8 characters",
+    "priority": "Medium",
     "preconditions": [
-      "User is on the account registration page",
-      "An existing account with email 'existing@example.com' is already registered in the system"
+      "User is on the account creation page",
+      "No existing account with the provided email"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'Jane')",
-      "Enter a valid last name (e.g., 'Smith')",
-      "Enter the already registered email address (e.g., 'existing@example.com')",
-      "Enter a valid password meeting complexity requirements (e.g., 'P@ssw0rd456')",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a unique valid email address",
+      "Enter a password of exactly 8 characters",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input without error",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed indicating that the email or username already exists; no duplicate account is created in the database"
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "Password meets minimum length requirement"
     ]
   },
   {
     "testcase_id": "TC006",
     "scenario_id": "SC006",
-    "title": "Account creation with password at minimum length boundary",
+    "related_requirement_ids": [
+      "FR001",
+      "BR004"
+    ],
+    "title": "Verify account creation with password of exactly 50 characters",
     "priority": "Medium",
     "preconditions": [
-      "User is on the account registration page",
-      "Minimum password length requirement is known (e.g., 8 characters)"
+      "User is on the account creation page",
+      "No existing account with the provided email"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'Alice')",
-      "Enter a valid last name (e.g., 'Johnson')",
-      "Enter a valid email address (e.g., 'alice.johnson@example.com')",
-      "Enter a password exactly at the minimum length and meeting all other complexity requirements (e.g., 'Abcd123!' - 8 characters with uppercase, lowercase, digit, special char)",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a unique valid email address",
+      "Enter a password of exactly 50 characters",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input without error",
-      "Confirm password field matches",
-      "Account is created successfully; a success message is displayed; account is stored in the database"
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "Password meets maximum length requirement"
     ]
   },
   {
     "testcase_id": "TC007",
     "scenario_id": "SC007",
-    "title": "Account creation with password at maximum length boundary",
+    "related_requirement_ids": [
+      "BR002"
+    ],
+    "title": "Verify account creation is rejected with password of 7 characters",
     "priority": "Medium",
     "preconditions": [
-      "User is on the account registration page",
-      "Maximum password length requirement is known (e.g., 64 characters)"
+      "User is on the account creation page"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'Bob')",
-      "Enter a valid last name (e.g., 'Brown')",
-      "Enter a valid email address (e.g., 'bob.brown@example.com')",
-      "Enter a password exactly at the maximum length and meeting all other complexity requirements (e.g., a 64-character string with valid characters)",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a valid unique email address",
+      "Enter a password of exactly 7 characters",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input without error",
-      "Confirm password field matches",
-      "Account is created successfully; a success message is displayed; account is stored in the database"
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at least 8 characters",
+      "No account is created"
     ]
   },
   {
     "testcase_id": "TC008",
     "scenario_id": "SC008",
-    "title": "Account creation fails with password exceeding maximum length",
+    "related_requirement_ids": [
+      "BR004"
+    ],
+    "title": "Verify account creation is rejected with password of 51 characters",
     "priority": "Medium",
     "preconditions": [
-      "User is on the account registration page",
-      "Maximum password length requirement is known (e.g., 64 characters)"
+      "User is on the account creation page"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'Carol')",
-      "Enter a valid last name (e.g., 'Davis')",
-      "Enter a valid email address (e.g., 'carol.davis@example.com')",
-      "Enter a password exceeding the maximum length by one character (e.g., a 65-character string)",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter a valid unique email address",
+      "Enter a password of exactly 51 characters",
+      "Click the 'Create Account' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field may truncate or show validation error on submission",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed indicating the password exceeds the maximum allowed length; no account is created in the database"
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at most 50 characters",
+      "No account is created"
     ]
   },
   {
     "testcase_id": "TC009",
     "scenario_id": "SC009",
-    "title": "Account creation fails with password below minimum length",
-    "priority": "Medium",
+    "related_requirement_ids": [
+      "BR003"
+    ],
+    "title": "Verify login is blocked when email is not verified",
+    "priority": "High",
     "preconditions": [
-      "User is on the account registration page",
-      "Minimum password length requirement is known (e.g., 8 characters)"
+      "User has created an account but has not verified their email",
+      "User is on the login page"
     ],
     "test_steps": [
-      "Enter a valid first name (e.g., 'Dave')",
-      "Enter a valid last name (e.g., 'Evans')",
-      "Enter a valid email address (e.g., 'dave.evans@example.com')",
-      "Enter a password shorter than the minimum length by one character (e.g., 7 characters, but meeting other complexity if possible)",
-      "Confirm the password by re-entering the same password",
-      "Click the 'Create Account' or 'Register' button"
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
     ],
     "expected_results": [
-      "First name field accepts input without error",
-      "Last name field accepts input without error",
-      "Email field accepts input without error",
-      "Password field accepts input but shows validation error on submission",
-      "Confirm password field matches",
-      "Account creation is rejected; an error message is displayed indicating the password is too short; no account is created in the database"
+      "Login is prevented",
+      "An error message is displayed indicating that email verification is required",
+      "User is not logged in"
     ]
   },
   {
     "testcase_id": "TC010",
     "scenario_id": "SC010",
-    "title": "Account creation with identity or contact verification step (if applicable)",
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "BR005"
+    ],
+    "title": "Verify successful login after email verification within 24 hours",
     "priority": "High",
     "preconditions": [
-      "User is on the account registration page",
-      "System requires email verification for account activation"
+      "User has created an account",
+      "User has verified their email within the last 24 hours",
+      "User is on the login page"
     ],
     "test_steps": [
-      "Enter all valid mandatory fields (first name, last name, email, password, confirm password)",
-      "Click the 'Create Account' or 'Register' button",
-      "Observe the post-registration screen",
-      "Check the email inbox associated with the registered email address",
-      "Click the verification link in the email",
-      "Attempt to log in with the created credentials before verification",
-      "Attempt to log in after verification"
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
     ],
     "expected_results": [
-      "All fields accept valid input without error",
-      "Account is created but marked as 'pending verification'; a success message is displayed indicating that a verification email has been sent",
-      "Post-registration screen shows a message to check email for verification",
-      "A verification email is received at the registered email address within a reasonable time",
-      "Clicking the verification link redirects to a confirmation page; account status changes to 'active'",
-      "Login attempt before verification fails with an error message indicating account is not yet verified",
-      "Login attempt after verification succeeds; user is redirected to the account dashboard"
+      "Login is successful",
+      "User is redirected to the dashboard or home page",
+      "User is authenticated"
+    ]
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC011",
+    "related_requirement_ids": [
+      "BR003",
+      "BR005"
+    ],
+    "title": "Verify login is blocked when verification link has expired",
+    "priority": "High",
+    "preconditions": [
+      "User has created an account but did not verify email within 24 hours",
+      "Verification link has expired",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
+    ],
+    "expected_results": [
+      "Login is prevented",
+      "An error message is displayed indicating that the email is not verified or the verification link has expired",
+      "User is not logged in"
     ]
   }
 ]

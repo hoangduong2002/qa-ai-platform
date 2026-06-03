@@ -1,0 +1,52 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What is the exact email format validation rule (e.g., must contain '@' and a domain, regex pattern)?",
+      "reason": "The requirement analysis lists missing information about email format validation, but no specific rule is defined. Without this, test cases cannot verify valid/invalid email addresses.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "Are there any password complexity requirements beyond minimum length (e.g., must include uppercase, lowercase, digit, special character)?",
+      "reason": "The risks section highlights weak passwords due to lack of complexity rules, but the requirements do not specify any. This ambiguity affects security testing.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is email verification required before the account is activated or usable?",
+      "reason": "The missing information list mentions this, but no requirement or business rule addresses it. This impacts the account creation flow and test scenarios.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What is the maximum allowed password length?",
+      "reason": "Only a minimum length is specified. Without a maximum, boundary testing and input validation cannot be fully defined.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "What error messages should be displayed for duplicate email, invalid email format, or invalid password?",
+      "reason": "Error messages are listed as missing information. They are critical for user experience and validation testing.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Does the registration form include a password confirmation field?",
+      "reason": "The missing information list mentions this, but no requirement confirms it. This affects the user interface and validation logic.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q007",
+      "question": "Should the system allow special characters or spaces in the email address?",
+      "reason": "Email format validation is not defined, so it is unclear whether special characters (e.g., +, .) or spaces are permitted. This impacts test data preparation.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q008",
+      "question": "Is there a limit on the number of account creation attempts from the same IP or device to prevent abuse?",
+      "reason": "No such rule is mentioned, but it is a common security concern. Without clarification, security testing may be incomplete.",
+      "impact": "Low"
+    }
+  ]
+}

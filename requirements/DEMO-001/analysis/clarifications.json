@@ -2,63 +2,63 @@
   "clarification_questions": [
     {
       "question_id": "Q001",
-      "question": "What specific fields are mandatory for account creation?",
-      "reason": "The requirement states 'collect and store customer information' but does not list the fields, making it impossible to define validation rules or test coverage.",
+      "question": "What are the specific password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "reason": "The requirement only specifies minimum and maximum length, but not any character type rules, which are critical for security and test coverage.",
       "impact": "High"
     },
     {
       "question_id": "Q002",
-      "question": "Is identity verification or email confirmation required before the account is considered active?",
-      "reason": "The business rule says 'may require verification', which is ambiguous. This affects test scenarios for account states (e.g., pending, active).",
+      "question": "How is the email verification link sent to the user (e.g., via SMTP, third-party service)?",
+      "reason": "The process of sending the verification link is not described, which affects testing of delivery, delays, and failure scenarios.",
       "impact": "High"
     },
     {
       "question_id": "Q003",
-      "question": "What are the exact password complexity requirements (minimum length, required character types, etc.)?",
-      "reason": "The validation mentions 'complexity requirements' but provides no specifics, leaving test cases incomplete.",
+      "question": "What happens after the verification link expires? Can the user request a new link, and if so, what is the process?",
+      "reason": "The business rule states the link expires after 24 hours, but there is no detail on recovery or re-verification flow.",
       "impact": "High"
     },
     {
       "question_id": "Q004",
-      "question": "Are there any age or eligibility restrictions for creating an account?",
-      "reason": "This is listed as missing information and could affect legal compliance and validation logic.",
+      "question": "What error message or feedback is displayed to the user when they attempt to create an account with a duplicate email?",
+      "reason": "The requirement does not specify error handling for duplicate email, which is essential for user experience and validation testing.",
       "impact": "Medium"
     },
     {
       "question_id": "Q005",
-      "question": "What error messages or user feedback should be displayed when validation fails (e.g., invalid email, duplicate username)?",
-      "reason": "Without this, testers cannot verify user experience or error handling correctness.",
+      "question": "What error message or feedback is displayed to the user when the password does not meet length or complexity requirements?",
+      "reason": "The validation rules only state that password is required, but not how invalid passwords are communicated to the user.",
       "impact": "Medium"
     },
     {
       "question_id": "Q006",
-      "question": "Is there a limit on the number of accounts per user or per email address?",
-      "reason": "This is listed as missing information and could impact uniqueness enforcement and business rules.",
+      "question": "What is the success feedback to the user after account creation (e.g., confirmation message, redirect to verification page)?",
+      "reason": "The requirement does not describe what the user sees upon successful account creation, which is needed for UI and flow testing.",
       "impact": "Medium"
     },
     {
       "question_id": "Q007",
-      "question": "What is the data retention or privacy policy for account information?",
-      "reason": "This affects test scenarios related to data deletion, consent, and compliance (e.g., GDPR).",
-      "impact": "Medium"
+      "question": "What happens if the user tries to login before verifying their email? Is there a specific error message or redirect?",
+      "reason": "Business rule BR003 states verification is required before login, but the behavior when a user attempts login without verification is not defined.",
+      "impact": "High"
     },
     {
       "question_id": "Q008",
-      "question": "Should the system allow account creation using a username, email, or both as the unique identifier?",
-      "reason": "The business rule says 'by email or username' but does not specify which is used, affecting uniqueness checks and test data.",
-      "impact": "High"
+      "question": "Are there any restrictions on the email format beyond being required and unique (e.g., must match a standard email pattern)?",
+      "reason": "The validation only says email is required, but typical systems validate email format; this is missing from the requirements.",
+      "impact": "Medium"
     },
     {
       "question_id": "Q009",
-      "question": "What is the expected behavior if the database or email service is unavailable during account creation?",
-      "reason": "The dependency mentions availability but does not specify fallback or error handling, which is critical for robustness testing.",
-      "impact": "High"
+      "question": "Is there a limit on the number of account creation attempts from the same IP or device within a time period (rate limiting)?",
+      "reason": "No mention of rate limiting or anti-abuse measures, which could be a security risk and affect test scenarios.",
+      "impact": "Low"
     },
     {
       "question_id": "Q010",
-      "question": "Are there any specific requirements for handling duplicate account creation attempts (e.g., retry limits, cooldown)?",
-      "reason": "The risk mentions duplicate accounts, but no business rule defines how to handle repeated attempts.",
-      "impact": "Medium"
+      "question": "What is the expected behavior if the email verification link is clicked after it has expired?",
+      "reason": "The requirement only states the link expires, but not the user experience or system response upon clicking an expired link.",
+      "impact": "High"
     }
   ]
 }

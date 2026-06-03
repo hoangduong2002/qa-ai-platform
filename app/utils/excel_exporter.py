@@ -9,6 +9,87 @@ from openpyxl.styles import (
     Side
 )
 
+def _build_requirement_coverage_matrix(
+    analysis: dict,
+    scenarios: list,
+    testcases: list
+):
+    requirement_items = analysis.get(
+        "requirement_items",
+        []
+    )
+
+    matrix = []
+
+    for item in requirement_items:
+        req_id = item.get(
+            "requirement_id",
+            ""
+        )
+
+        related_scenarios = [
+            scenario
+            for scenario in scenarios
+            if req_id in scenario.get(
+                "related_requirement_ids",
+                []
+            )
+        ]
+
+        related_scenario_ids = [
+            scenario.get(
+                "scenario_id",
+                ""
+            )
+            for scenario in related_scenarios
+        ]
+
+        related_testcases = [
+            testcase
+            for testcase in testcases
+            if req_id in testcase.get(
+                "related_requirement_ids",
+                []
+            )
+        ]
+
+        related_testcase_ids = [
+            testcase.get(
+                "testcase_id",
+                ""
+            )
+            for testcase in related_testcases
+        ]
+
+        matrix.append(
+            {
+                "requirement_id": req_id,
+                "type": item.get(
+                    "type",
+                    ""
+                ),
+                "description": item.get(
+                    "description",
+                    ""
+                ),
+                "covered": (
+                    "Yes"
+                    if related_testcases
+                    else "No"
+                ),
+                "scenario_count": len(
+                    related_scenarios
+                ),
+                "testcase_count": len(
+                    related_testcases
+                ),
+                "scenario_ids": related_scenario_ids,
+                "testcase_ids": related_testcase_ids
+            }
+        )
+
+    return matrix
+
 
 def _build_requirement_lookup(
     analysis: dict
@@ -102,6 +183,8 @@ def export_testcases_to_excel(
     testcases: list,
     coverage_review: dict,
     final_review: dict,
+    clarifications: dict | None = None,
+    clarification_answers: dict | None = None,
     version: str = "latest"
 ):
 
@@ -150,8 +233,134 @@ def export_testcases_to_excel(
                 item.get("description", "")
             ]
         )
+    
+    # Sheet 2: Clarifications 
+    ws_clarifications = wb.create_sheet(
+        "Clarifications"
+    )
 
-    # Sheet 2: Scenarios
+    ws_clarifications.append(
+        [
+            "Question ID",
+            "Question",
+            "Impact",
+            "Answer",
+            "Status"
+        ]
+    )
+
+    clarifications = clarifications or {}
+    clarification_answers = clarification_answers or {}
+
+    questions = clarifications.get(
+        "clarification_questions",
+        []
+    )
+
+    answers = clarification_answers.get(
+        "answers",
+        {}
+    )
+
+    for question in questions:
+
+        question_id = question.get(
+            "question_id",
+            ""
+        )
+
+        answer = answers.get(
+            question_id,
+            ""
+        )
+
+        ws_clarifications.append(
+            [
+                question_id,
+                question.get(
+                    "question",
+                    ""
+                ),
+                question.get(
+                    "impact",
+                    ""
+                ),
+                answer,
+                (
+                    "Answered"
+                    if answer
+                    else "Open"
+                )
+            ]
+        )
+        
+    # Sheet 3: Requirement Coverage Matrix
+    ws_matrix = wb.create_sheet(
+        "Requirement Coverage Matrix"
+    )
+
+    ws_matrix.append(
+        [
+            "Requirement ID",
+            "Type",
+            "Description",
+            "Covered",
+            "Scenario Count",
+            "Test Case Count",
+            "Scenario IDs",
+            "Test Case IDs"
+        ]
+    )
+
+    coverage_matrix = _build_requirement_coverage_matrix(
+        analysis,
+        scenarios,
+        testcases
+    )
+
+    for row in coverage_matrix:
+        ws_matrix.append(
+            [
+                row.get(
+                    "requirement_id",
+                    ""
+                ),
+                row.get(
+                    "type",
+                    ""
+                ),
+                row.get(
+                    "description",
+                    ""
+                ),
+                row.get(
+                    "covered",
+                    ""
+                ),
+                row.get(
+                    "scenario_count",
+                    0
+                ),
+                row.get(
+                    "testcase_count",
+                    0
+                ),
+                "\n".join(
+                    row.get(
+                        "scenario_ids",
+                        []
+                    )
+                ),
+                "\n".join(
+                    row.get(
+                        "testcase_ids",
+                        []
+                    )
+                )
+            ]
+        )
+
+    # Sheet 4: Scenarios
     ws_scenario = wb.create_sheet(
         "Scenarios"
     )
@@ -187,7 +396,7 @@ def export_testcases_to_excel(
             ]
         )
 
-    # Sheet 3: Test Cases
+    # Sheet 5: Test Cases
     ws_tc = wb.create_sheet(
         "Test Cases"
     )
@@ -248,7 +457,7 @@ def export_testcases_to_excel(
             ]
         )
 
-    # Sheet 4: Coverage Review
+    # Sheet 6: Coverage Review
     ws_review = wb.create_sheet(
         "Coverage Review"
     )
@@ -294,7 +503,7 @@ def export_testcases_to_excel(
         ]
     )
 
-    # Sheet 5: Final Review
+    # Sheet 7: Final Review
     ws_final = wb.create_sheet(
         "Final Review"
     )

@@ -1,0 +1,93 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "category": "Positive",
+    "description": "Verify that a user can successfully create an account by providing a valid email and a password that meets the minimum length requirement of 8 characters.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Account creation with duplicate email is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the email provided already exists in the system, enforcing the unique email business rule.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ]
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Account creation with password less than 8 characters is rejected",
+    "category": "Negative",
+    "description": "Verify that account creation fails when the password length is less than 8 characters, enforcing the minimum password length validation.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Account creation with password exactly 8 characters is accepted",
+    "category": "Boundary",
+    "description": "Verify that a user can successfully create an account when the password is exactly 8 characters long, testing the lower boundary of the password length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Account creation with password of 7 characters is rejected",
+    "category": "Boundary",
+    "description": "Verify that account creation fails when the password is 7 characters long, testing just below the minimum boundary of the password length requirement.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ]
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "SQL injection attempt in email field during account creation",
+    "category": "Security",
+    "description": "Verify that the system handles SQL injection attempts in the email field securely and does not allow account creation with malicious SQL payloads.",
+    "related_requirement_ids": [
+      "FR001"
+    ]
+  },
+  {
+    "scenario_id": "SC007",
+    "title": "Cross-site scripting (XSS) attempt in email field during account creation",
+    "category": "Security",
+    "description": "Verify that the system handles XSS attempts in the email field securely and does not allow account creation with malicious script payloads.",
+    "related_requirement_ids": [
+      "FR001"
+    ]
+  },
+  {
+    "scenario_id": "SC008",
+    "title": "SQL injection attempt in password field during account creation",
+    "category": "Security",
+    "description": "Verify that the system handles SQL injection attempts in the password field securely and does not allow account creation with malicious SQL payloads.",
+    "related_requirement_ids": [
+      "FR001"
+    ]
+  },
+  {
+    "scenario_id": "SC009",
+    "title": "Cross-site scripting (XSS) attempt in password field during account creation",
+    "category": "Security",
+    "description": "Verify that the system handles XSS attempts in the password field securely and does not allow account creation with malicious script payloads.",
+    "related_requirement_ids": [
+      "FR001"
+    ]
+  }
+]

@@ -12,6 +12,19 @@ Important rules:
 - If adding new test cases, use new testcase IDs continuing from the existing sequence.
 - Return ONLY valid JSON array.
 
+## Human Review Comments
+
+{review_comments}
+
+Important rules for review comments:
+- Each human review comment has a comment_id such as RC001, RC002.
+- Treat each review comment as an additional testing requirement.
+- If you create or update test cases based on a review comment, include the corresponding comment_id in related_requirement_ids.
+- Example:
+  "related_requirement_ids": ["REQ001", "RC001"]
+- Do not remove existing valid traceability.
+- Preserve JSON output only.
+
 Requirement Analysis:
 
 {analysis}

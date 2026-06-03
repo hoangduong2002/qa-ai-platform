@@ -1,0 +1,374 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "title": "Verify successful account creation with valid email and 12-character password",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a unique valid email address in the email field",
+      "Enter a password of exactly 12 characters meeting all requirements",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the email verification page or notified to verify email"
+    ]
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "title": "Verify account creation is rejected when email field is empty",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Leave the email field empty",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that email is required",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "title": "Verify account creation is rejected when password field is empty",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Leave the password field empty",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password is required",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "title": "Verify account creation is rejected when email already exists",
+    "priority": "High",
+    "preconditions": [
+      "An existing account with email 'test@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter email 'test@example.com' in the email field",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that the email is already in use",
+      "No new account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC005",
+    "title": "Verify account creation with password of exactly 8 characters",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a unique valid email address",
+      "Enter a password of exactly 8 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the email verification page or notified to verify email",
+      "Password meets minimum length requirement"
+    ]
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC006",
+    "title": "Verify account creation with password of exactly 50 characters",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a unique valid email address",
+      "Enter a password of exactly 50 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message",
+      "User is redirected to the email verification page or notified to verify email",
+      "Password meets maximum length requirement"
+    ]
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC007",
+    "title": "Verify account creation is rejected with password of 7 characters",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Enter a password of exactly 7 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at least 8 characters",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC008",
+    "title": "Verify account creation is rejected with password of 51 characters",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Enter a password of exactly 51 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at most 50 characters",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC009",
+    "scenario_id": "SC009",
+    "title": "Verify login is blocked when email is not verified",
+    "priority": "High",
+    "preconditions": [
+      "User has created an account but has not verified their email",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
+    ],
+    "expected_results": [
+      "Login is prevented",
+      "An error message is displayed indicating that email verification is required",
+      "User is not logged in"
+    ]
+  },
+  {
+    "testcase_id": "TC010",
+    "scenario_id": "SC010",
+    "title": "Verify successful login after email verification within 24 hours",
+    "priority": "High",
+    "preconditions": [
+      "User has created an account",
+      "User has verified their email within the last 24 hours",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
+    ],
+    "expected_results": [
+      "Login is successful",
+      "User is redirected to the dashboard or home page",
+      "User is authenticated"
+    ]
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC011",
+    "title": "Verify login is blocked when verification link has expired",
+    "priority": "High",
+    "preconditions": [
+      "User has created an account but did not verify email within 24 hours",
+      "Verification link has expired",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address",
+      "Enter the correct password",
+      "Click the 'Login' button"
+    ],
+    "expected_results": [
+      "Login is prevented",
+      "An error message is displayed indicating that the email is not verified or the verification link has expired",
+      "User is not logged in"
+    ]
+  },
+  {
+    "testcase_id": "TC012",
+    "scenario_id": "SC011",
+    "title": "Verify error message when clicking expired verification link",
+    "priority": "Medium",
+    "preconditions": [
+      "User has created an account",
+      "Verification link has expired (more than 24 hours old)"
+    ],
+    "test_steps": [
+      "Open the expired verification link from the email",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "An error message is displayed indicating that the verification link has expired",
+      "User is not verified",
+      "Option to request a new verification link is provided (if applicable)"
+    ]
+  },
+  {
+    "testcase_id": "TC013",
+    "scenario_id": "SC010",
+    "title": "Verify successful email verification within 24 hours",
+    "priority": "High",
+    "preconditions": [
+      "User has created an account",
+      "User has a valid verification link (less than 24 hours old)"
+    ],
+    "test_steps": [
+      "Open the verification link from the email",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "Email is verified successfully",
+      "User receives a confirmation message",
+      "User is redirected to the login page or dashboard"
+    ]
+  },
+  {
+    "testcase_id": "TC014",
+    "scenario_id": "SC012",
+    "title": "Verify account creation success feedback includes confirmation message and redirection to verification page",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a unique valid email address",
+      "Enter a valid password of 12 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "A confirmation message is displayed (e.g., 'Account created successfully. Please verify your email.')",
+      "User is redirected to the email verification page or a notification to verify email is shown"
+    ]
+  },
+  {
+    "testcase_id": "TC015",
+    "scenario_id": "SC013",
+    "title": "Verify error message for duplicate email is specific and clear",
+    "priority": "Medium",
+    "preconditions": [
+      "An existing account with email 'existing@test.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter email 'existing@test.com' in the email field",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that the email is already in use (e.g., 'This email is already registered.')",
+      "No new account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC016",
+    "scenario_id": "SC014",
+    "title": "Verify error message for invalid password length (too short) is specific and clear",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Enter a password of 7 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at least 8 characters (e.g., 'Password must be at least 8 characters long.')",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC017",
+    "scenario_id": "SC015",
+    "title": "Verify error message for invalid password length (too long) is specific and clear",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Enter a password of 51 characters",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password must be at most 50 characters (e.g., 'Password must be at most 50 characters long.')",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC018",
+    "scenario_id": "SC016",
+    "title": "Verify error message for empty email field is specific and clear",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Leave the email field empty",
+      "Enter a valid password meeting length requirements",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that email is required (e.g., 'Email is required.')",
+      "No account is created"
+    ]
+  },
+  {
+    "testcase_id": "TC019",
+    "scenario_id": "SC017",
+    "title": "Verify error message for empty password field is specific and clear",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid unique email address",
+      "Leave the password field empty",
+      "Click the 'Create Account' button"
+    ],
+    "expected_results": [
+      "Account creation is rejected",
+      "An error message is displayed indicating that password is required (e.g., 'Password is required.')",
+      "No account is created"
+    ]
+  }
+]

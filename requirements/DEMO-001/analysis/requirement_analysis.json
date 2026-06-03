@@ -1,38 +1,93 @@
 {
   "actors": [
-    "Customer",
-    "System"
+    "User"
   ],
   "functional_requirements": [
-    "The system shall allow a customer to create a new account.",
-    "The system shall collect and store customer information required for account creation."
+    {
+      "id": "FR001",
+      "description": "User can create account using email and password."
+    }
   ],
   "business_rules": [
-    "Each customer account must be uniquely identifiable (e.g., by email or username).",
-    "Account creation may require verification of customer identity or contact information."
+    {
+      "id": "BR001",
+      "description": "Email must be unique."
+    },
+    {
+      "id": "BR002",
+      "description": "Password minimum 8 characters."
+    },
+    {
+      "id": "BR003",
+      "description": "User must verify email before login."
+    },
+    {
+      "id": "BR004",
+      "description": "Password maximum length is 50."
+    },
+    {
+      "id": "BR005",
+      "description": "Verification link expires after 24 hours."
+    }
   ],
   "validations": [
-    "All mandatory fields must be provided and valid before account creation.",
-    "Email address format must be valid.",
-    "Password must meet complexity requirements (e.g., length, character types).",
-    "Username or email must not already exist in the system."
+    {
+      "id": "VAL001",
+      "description": "Email is required."
+    },
+    {
+      "id": "VAL002",
+      "description": "Password is required."
+    }
   ],
-  "dependencies": [
-    "Database or user store must be available and operational.",
-    "Email service or verification system may be required for account activation."
-  ],
-  "risks": [
-    "Incomplete or ambiguous requirements may lead to missing validation or security gaps.",
-    "Potential for duplicate accounts if uniqueness checks are not enforced.",
-    "Risk of data loss or corruption if database transactions are not handled properly."
-  ],
+  "dependencies": [],
+  "risks": [],
   "missing_information": [
-    "What specific fields are required for account creation (e.g., name, email, password, phone)?",
-    "Is there any identity verification or email confirmation step?",
-    "What are the password complexity rules?",
-    "Are there any age or eligibility restrictions?",
-    "What is the expected error handling or user feedback on failure?",
-    "Is there a limit on the number of accounts per user or per email?",
-    "What is the data retention or privacy policy for account information?"
+    "No details on password complexity requirements (e.g., special characters, uppercase, numbers).",
+    "No details on email verification process (e.g., how the link is sent, what happens after expiration).",
+    "No details on error handling for duplicate email or invalid password.",
+    "No details on account creation success/failure feedback to the user."
+  ],
+  "requirement_items": [
+    {
+      "requirement_id": "FR001",
+      "type": "Functional Requirement",
+      "description": "User can create account using email and password."
+    },
+    {
+      "requirement_id": "BR001",
+      "type": "Business Rule",
+      "description": "Email must be unique."
+    },
+    {
+      "requirement_id": "BR002",
+      "type": "Business Rule",
+      "description": "Password minimum 8 characters."
+    },
+    {
+      "requirement_id": "BR003",
+      "type": "Business Rule",
+      "description": "User must verify email before login."
+    },
+    {
+      "requirement_id": "BR004",
+      "type": "Business Rule",
+      "description": "Password maximum length is 50."
+    },
+    {
+      "requirement_id": "BR005",
+      "type": "Business Rule",
+      "description": "Verification link expires after 24 hours."
+    },
+    {
+      "requirement_id": "VAL001",
+      "type": "Validation",
+      "description": "Email is required."
+    },
+    {
+      "requirement_id": "VAL002",
+      "type": "Validation",
+      "description": "Password is required."
+    }
   ]
 }

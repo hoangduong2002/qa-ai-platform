@@ -1,0 +1,400 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Successful account creation with valid email and password meeting minimum length",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of at least 8 characters (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard"
+    ]
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL001"
+    ],
+    "title": "Account creation with duplicate email is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page",
+      "An existing account with email 'existing@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter an email that already exists in the system (e.g., existing@example.com) in the email field",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the email is already in use (e.g., 'Email already registered')",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password less than 8 characters is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of 7 characters or less (e.g., Pass123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password exactly 8 characters is accepted",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of exactly 8 characters (e.g., Pass1234) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard"
+    ]
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC005",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password of 7 characters is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of exactly 7 characters (e.g., Pass123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at least 8 characters long",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC006",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "SQL injection attempt in email field during account creation",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a SQL injection payload in the email field (e.g., ' OR 1=1; -- )",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "The system does not execute the SQL injection payload",
+      "An appropriate error message is displayed (e.g., 'Invalid email format') or the input is sanitized",
+      "No data breach or unauthorized access occurs"
+    ]
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC007",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Cross-site scripting (XSS) attempt in email field during account creation",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter an XSS payload in the email field (e.g., <script>alert('XSS')</script>@example.com)",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "The system does not execute the XSS payload",
+      "The input is sanitized or an error message is displayed (e.g., 'Invalid email format')",
+      "No script execution occurs in the browser"
+    ]
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC008",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "SQL injection attempt in password field during account creation",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a SQL injection payload in the password field (e.g., ' OR 1=1; -- )",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "The system does not execute the SQL injection payload",
+      "An appropriate error message is displayed (e.g., 'Invalid password format') or the input is sanitized",
+      "No data breach or unauthorized access occurs"
+    ]
+  },
+  {
+    "testcase_id": "TC009",
+    "scenario_id": "SC009",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Cross-site scripting (XSS) attempt in password field during account creation",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter an XSS payload in the password field (e.g., <script>alert('XSS')</script>)",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "The system does not execute the XSS payload",
+      "The input is sanitized or an error message is displayed (e.g., 'Invalid password format')",
+      "No script execution occurs in the browser"
+    ]
+  },
+  {
+    "testcase_id": "TC010",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Account creation with email missing '@' symbol is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter an email address without '@' symbol (e.g., 'testuserexample.com') in the email field",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating invalid email format",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Account creation with email missing domain is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter an email address without domain (e.g., 'testuser@') in the email field",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating invalid email format",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC012",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Account creation with empty email field is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Leave the email field empty",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that email is required",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC013",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Account creation with empty password field is rejected",
+    "priority": "High",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Leave the password field empty",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that password is required",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC014",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001"
+    ],
+    "title": "Account creation with email containing leading/trailing spaces is handled correctly",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the trimmed email"
+    ],
+    "test_steps": [
+      "Enter an email address with leading and trailing spaces (e.g., '  testuser@example.com  ') in the email field",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully (spaces are trimmed) OR account creation fails with an error message about invalid email format",
+      "If successful, the account is created with the trimmed email address"
+    ]
+  },
+  {
+    "testcase_id": "TC015",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001"
+    ],
+    "title": "Account creation with email case sensitivity is handled correctly",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "An existing account with email 'testuser@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter the same email but with different case (e.g., 'TestUser@Example.com') in the email field",
+      "Enter a valid password (e.g., Password123) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails (email uniqueness is case-insensitive)",
+      "An error message is displayed indicating that the email is already in use",
+      "User remains on the account creation page"
+    ]
+  },
+  {
+    "testcase_id": "TC016",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password of exactly 12 characters is accepted",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page",
+      "No existing account with the provided email"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of exactly 12 characters (e.g., Pass12345678) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account is created successfully",
+      "User receives a confirmation message (e.g., 'Account created successfully')",
+      "User is redirected to the login page or dashboard"
+    ]
+  },
+  {
+    "testcase_id": "TC017",
+    "scenario_id": "SC001",
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "title": "Account creation with password of 13 characters is rejected",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the account creation page"
+    ],
+    "test_steps": [
+      "Enter a valid email address (e.g., testuser@example.com) in the email field",
+      "Enter a password of 13 characters (e.g., Pass123456789) in the password field",
+      "Click the 'Create Account' or 'Submit' button"
+    ],
+    "expected_results": [
+      "Account creation fails",
+      "An error message is displayed indicating that the password must be at most 12 characters long",
+      "User remains on the account creation page"
+    ]
+  }
+]

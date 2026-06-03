@@ -1,0 +1,46 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What is the exact email format validation rule (e.g., must contain '@' and a domain, regex pattern)?",
+      "reason": "The requirement analysis lists email format validation as missing information, and the risk notes that invalid emails could be allowed without it.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "Are there any password complexity requirements beyond minimum length (e.g., must include uppercase, lowercase, digit, special character)?",
+      "reason": "The risk section explicitly identifies weak passwords as a concern, and missing information includes password complexity rules.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Is there a maximum password length? If so, what is it?",
+      "reason": "Maximum password length is listed as missing information, which affects both validation and security considerations.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q004",
+      "question": "Is a password confirmation field required during account creation (e.g., re-enter password)?",
+      "reason": "Password confirmation is listed as missing information; without it, users may accidentally mistype their password.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q005",
+      "question": "What error messages should be displayed for duplicate email, invalid email format, or invalid password?",
+      "reason": "Error handling for these scenarios is listed as missing information, which is critical for user experience and testing.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q006",
+      "question": "Is there an account verification process (e.g., email confirmation link) after account creation?",
+      "reason": "Account verification is listed as missing information; this affects the account lifecycle and test scenarios.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q007",
+      "question": "What characters are allowed in the email and password fields (e.g., Unicode, special characters)?",
+      "reason": "Allowed characters for email and password are listed as missing information, which impacts validation and security.",
+      "impact": "Medium"
+    }
+  ]
+}

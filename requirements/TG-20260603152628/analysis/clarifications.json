@@ -1,0 +1,40 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "question": "What specific email format validation rules should be applied (e.g., presence of '@', domain format, allowed characters)?",
+      "reason": "The requirement analysis lists email format validation as missing information, and the risk notes that invalid email addresses could be accepted without it.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q002",
+      "question": "Are there any password complexity requirements beyond minimum length, such as requiring uppercase, lowercase, numbers, or special characters?",
+      "reason": "The risk section explicitly identifies weak passwords as a concern due to lack of complexity rules, and the missing information list includes this item.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q003",
+      "question": "Should the account creation process include a password confirmation field (e.g., re-enter password) to prevent typos?",
+      "reason": "Password confirmation is listed as missing information and is a common practice to ensure data accuracy.",
+      "impact": "Medium"
+    },
+    {
+      "question_id": "Q004",
+      "question": "Is there an account verification process required after registration, such as sending an email verification link?",
+      "reason": "Account verification is listed as missing information and affects the completeness of the user registration flow.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q005",
+      "question": "What error handling and user feedback should be provided for scenarios like duplicate email or invalid password?",
+      "reason": "Error handling is listed as missing information; without it, test coverage for negative scenarios is incomplete.",
+      "impact": "High"
+    },
+    {
+      "question_id": "Q006",
+      "question": "After successful account creation, should the user be automatically logged in, or should they be redirected to a login page?",
+      "reason": "Session management after account creation is listed as missing information and impacts the user experience and subsequent test cases.",
+      "impact": "Medium"
+    }
+  ]
+}

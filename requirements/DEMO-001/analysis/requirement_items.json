@@ -1,0 +1,42 @@
+[
+  {
+    "requirement_id": "FR001",
+    "type": "Functional Requirement",
+    "description": "User can create account using email and password."
+  },
+  {
+    "requirement_id": "BR001",
+    "type": "Business Rule",
+    "description": "Email must be unique."
+  },
+  {
+    "requirement_id": "BR002",
+    "type": "Business Rule",
+    "description": "Password minimum 8 characters."
+  },
+  {
+    "requirement_id": "BR003",
+    "type": "Business Rule",
+    "description": "User must verify email before login."
+  },
+  {
+    "requirement_id": "BR004",
+    "type": "Business Rule",
+    "description": "Password maximum length is 50."
+  },
+  {
+    "requirement_id": "BR005",
+    "type": "Business Rule",
+    "description": "Verification link expires after 24 hours."
+  },
+  {
+    "requirement_id": "VAL001",
+    "type": "Validation",
+    "description": "Email is required."
+  },
+  {
+    "requirement_id": "VAL002",
+    "type": "Validation",
+    "description": "Password is required."
+  }
+]

@@ -48,6 +48,14 @@ def improve_testcases(state):
                 ensure_ascii=False
             )
         )
+        .replace(
+            "{review_comments}",
+            json.dumps(
+                state.get("review_comments", []),
+                indent=2,
+                ensure_ascii=False
+            )
+        )
     )
 
     response = llm.invoke(
