@@ -102,6 +102,16 @@ def load_ticket_artifacts(ticket_id: str):
         review_comments
     )
     
+    requirement_qa = load_json_file(
+        root / "analysis" / "requirement_qa.json",
+        {}
+    )
+
+    requirement_summary = load_json_file(
+        root / "analysis" / "requirement_summary.json",
+        {}
+    )
+    
     test_scope = load_json_file(
         root / "analysis" / "test_scope.json",
         {}
@@ -147,8 +157,10 @@ def load_ticket_artifacts(ticket_id: str):
     return {
         "ticket_id": ticket_id,
         "analysis": analysis,
+        "requirement_qa": requirement_qa,
         "clarifications": clarifications,
         "clarification_answers": clarification_answers,
+        "requirement_summary": requirement_summary,
         "review_comments": review_comments,
         "test_scope": test_scope,
         "scenarios": scenarios,

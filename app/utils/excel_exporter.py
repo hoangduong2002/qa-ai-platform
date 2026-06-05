@@ -9,6 +9,36 @@ from openpyxl.styles import (
     Side
 )
 
+def _to_text(value):
+
+    if value is None:
+        return ""
+
+    if isinstance(value, str):
+        return value
+
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+
+    if isinstance(value, dict):
+        return "\n".join(
+            [
+                f"{key}: {_to_text(val)}"
+                for key, val in value.items()
+            ]
+        )
+
+    if isinstance(value, list):
+        return "\n".join(
+            [
+                _to_text(item)
+                for item in value
+            ]
+        )
+
+    return str(value)
+
+
 def _build_requirement_coverage_matrix(
     analysis: dict,
     scenarios: list,
@@ -126,7 +156,7 @@ def _format_requirement_details(
         else:
             details.append(req_id)
 
-    return "\n".join(details)
+    return _to_text(details)
 
 
 def _apply_styles(wb: Workbook):
@@ -346,13 +376,13 @@ def export_testcases_to_excel(
                     "testcase_count",
                     0
                 ),
-                "\n".join(
+                _to_text(
                     row.get(
                         "scenario_ids",
                         []
                     )
                 ),
-                "\n".join(
+                _to_text(
                     row.get(
                         "testcase_ids",
                         []
@@ -389,7 +419,7 @@ def export_testcases_to_excel(
                 scenario.get("title", ""),
                 scenario.get("category", ""),
                 scenario.get("description", ""),
-                "\n".join(related_ids),
+                _to_text(related_ids),
                 _format_requirement_details(
                     related_ids,
                     requirement_lookup
@@ -422,8 +452,20 @@ def export_testcases_to_excel(
             []
         )
         
+        #print(
+        #    "DEBUG related_ids =",
+        #    related_ids
+        #)
+        
+        #traceability = ", ".join(
+        #    related_ids
+        #)
+        
         traceability = ", ".join(
-            related_ids
+            item["id"]
+            if isinstance(item, dict)
+            else str(item)
+            for item in related_ids
         )
 
         ws_tc.append(
@@ -437,19 +479,19 @@ def export_testcases_to_excel(
                 ),
                 testcase.get("title", ""),
                 testcase.get("priority", ""),
-                "\n".join(
+                _to_text(
                     testcase.get(
                         "preconditions",
                         []
                     )
                 ),
-                "\n".join(
+                _to_text(
                     testcase.get(
                         "test_steps",
                         []
                     )
                 ),
-                "\n".join(
+                _to_text(
                     testcase.get(
                         "expected_results",
                         []
@@ -483,7 +525,7 @@ def export_testcases_to_excel(
     ws_review.append(
         [
             "Missing Coverage",
-            "\n".join(
+            _to_text(
                 coverage_review.get(
                     "missing_coverage",
                     []
@@ -495,7 +537,7 @@ def export_testcases_to_excel(
     ws_review.append(
         [
             "Recommendations",
-            "\n".join(
+            _to_text(
                 coverage_review.get(
                     "recommendations",
                     []
@@ -549,7 +591,7 @@ def export_testcases_to_excel(
     ws_final.append(
         [
             "Remaining Gaps",
-            "\n".join(
+            _to_text(
                 final_review.get(
                     "remaining_gaps",
                     []
@@ -561,7 +603,7 @@ def export_testcases_to_excel(
     ws_final.append(
         [
             "Recommendations",
-            "\n".join(
+            _to_text(
                 final_review.get(
                     "recommendations",
                     []

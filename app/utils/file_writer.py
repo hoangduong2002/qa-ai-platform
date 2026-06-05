@@ -51,6 +51,33 @@ def save_requirement_items(
         / "requirement_items.json",
         requirement_items
     )
+    
+def save_requirement_qa(
+    ticket_id,
+    qa
+):
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "requirement_qa.json"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        json.dumps(
+            qa,
+            indent=2,
+            ensure_ascii=False
+        ),
+        encoding="utf-8"
+    )
+
+    return str(output_file)
 
 
 def save_clarifications(
@@ -65,6 +92,33 @@ def save_clarifications(
         / "clarifications.json",
         clarifications
     )
+    
+def save_requirement_summary(
+    ticket_id,
+    summary
+):
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "requirement_summary.json"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        json.dumps(
+            summary,
+            indent=2,
+            ensure_ascii=False
+        ),
+        encoding="utf-8"
+    )
+
+    return str(output_file)
 
 
 def save_test_scope(
@@ -89,7 +143,7 @@ def save_scenarios(
     return save_json(
         Path("requirements")
         / ticket_id
-        / "scenarios"
+        / "analysis"
         / "scenarios.json",
         scenarios
     )

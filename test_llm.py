@@ -1,7 +1,17 @@
-from app.services.llm_service import llm
+from app.services.llm_service import get_llm
+
+llm = get_llm()
 
 response = llm.invoke(
-    "Generate 3 test scenarios for login functionality."
+    "say hello"
 )
 
-print(response.content)
+print(response)
+
+print("------")
+
+print(response.response_metadata)
+
+print("------")
+
+print(response.usage_metadata)

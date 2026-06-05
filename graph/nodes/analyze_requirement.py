@@ -1,5 +1,3 @@
-import json
-
 from app.services.llm_service import get_llm
 from app.utils.prompt_loader import load_prompt
 from app.utils.file_writer import (
@@ -19,15 +17,16 @@ def analyze_requirement(state):
 
     final_prompt = prompt.replace(
         "{requirement_context}",
-        state["requirement_context"]
+        state.get("requirement_context", "")
     )
 
     response = llm.invoke(
-        final_prompt
+        final_prompt,
+        ticket_id=state.get("ticket_id", ""),
+        node_name="analyze_requirement"
     )
 
     try:
-
         analysis = parse_json(
             response.content
         )
@@ -48,7 +47,6 @@ def analyze_requirement(state):
         )
 
     except Exception:
-
         analysis = {
             "raw_response": response.content
         }

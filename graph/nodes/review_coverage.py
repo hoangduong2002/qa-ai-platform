@@ -24,30 +24,33 @@ def review_coverage(state):
     final_prompt = (
         prompt
         .replace(
-            "{analysis}",
+            "{requirement_summary}",
             json.dumps(
-                state["analysis"],
-                indent=2
-            )
-        )
-        .replace(
-            "{scenarios}",
-            json.dumps(
-                state["scenarios"],
-                indent=2
+                state.get(
+                    "requirement_summary",
+                    {}
+                ),
+                indent=2,
+                ensure_ascii=False
             )
         )
         .replace(
             "{testcases}",
             json.dumps(
-                state["testcases"],
-                indent=2
+                state.get(
+                    "testcases",
+                    []
+                ),
+                indent=2,
+                ensure_ascii=False
             )
         )
     )
 
     response = llm.invoke(
-        final_prompt
+        final_prompt,
+        ticket_id=state.get("ticket_id", ""),
+        node_name="review_coverage"
     )
 
     content = (

@@ -20,8 +20,12 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 
-from graph.requirement_understanding_graph import (
-    requirement_understanding_graph
+from graph.requirement_question_graph import (
+    requirement_question_graph
+)
+
+from graph.requirement_summary_graph import (
+    requirement_summary_graph
 )
 
 from graph.test_generation_graph import (
@@ -29,12 +33,17 @@ from graph.test_generation_graph import (
 )
 
 from app.utils.excel_exporter import export_testcases_to_excel
+from app.utils.requirement_intelligence_exporter import (
+    export_requirement_intelligence_to_excel
+)
+
 from app.utils.workspace_writer import create_workspace_from_text
 from app.utils.file_extractors import extract_file_text
 from app.utils.artifact_loader import load_ticket_artifacts
 
 from app.utils.clarification_session import (
-    save_clarification_answers
+    save_clarification_answers,
+    save_clarification_questions_snapshot
 )
 
 from app.services.improve_cycle_service import run_improve_cycle
@@ -47,11 +56,6 @@ from app.utils.review_session import (
     can_improve_again
 )
 
-from app.utils.clarification_session import (
-    save_clarification_answers,
-    save_clarification_questions_snapshot
-)
-
 from app.utils.review_comment_session import (
     save_review_comment
 )
@@ -60,10 +64,48 @@ from app.utils.improvement_history import (
     save_improvement_history_item
 )
 
+from app.services.requirement_workspace_service import (
+    create_requirement_from_text
+)
+
+from app.services.requirement_list_service import (
+    list_requirements
+)
+
+from app.services.requirement_status_service import (
+    get_requirement_status
+)
+
+from app.services.requirement_metadata_service import (
+    get_requirement_metadata
+)
+
+from app.services.requirement_delete_service import (
+    delete_requirement,
+    delete_all_requirements
+)
+
+from app.services.requirement_rename_service import (
+    rename_requirement
+)
+
+from app.services.requirement_resolver import (
+    resolve_requirement_id
+)
+
+from app.services.requirement_update_service import (
+    apply_clarification_answers_to_requirement
+)
+
+from app.services.report_service import generate_system_report
+
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+ADD_TEXT_STATE = "add_text"
+ADD_FILE_STATE = "add_file"
 
 
 def build_review_keyboard(ticket_id: str):
@@ -128,18 +170,21 @@ def build_excel_keyboard(
     return InlineKeyboardMarkup(keyboard)
 
 
-def build_clarification_keyboard(ticket_id: str):
+def build_clarification_keyboard(
+    ticket_id: str,
+    mode: str
+):
     keyboard = [
         [
             InlineKeyboardButton(
                 "✍️ Answer Clarifications",
-                callback_data=f"answer_clarifications:{ticket_id}"
+                callback_data=f"answer_clarifications:{mode}:{ticket_id}"
             )
         ],
         [
             InlineKeyboardButton(
                 "⏭️ Skip Clarifications",
-                callback_data=f"skip_clarifications:{ticket_id}"
+                callback_data=f"skip_clarifications:{mode}:{ticket_id}"
             )
         ]
     ]
@@ -161,19 +206,187 @@ async def start(
     context: ContextTypes.DEFAULT_TYPE
 ):
     await update.message.reply_text(
-        "QA AI Bot ready.\n\n"
-        "Commands:\n"
-        "/generate DEMO-001\n"
-        "/generate_text <requirement>\n"
-        "/status <ticket_id>\n\n"
-        "Or upload requirement files...\n"
+        """
+        🤖 QA AI Platform Bot
+
+        Recommended Workflow
+        --------------------
+        1. Create or analyze a requirement
+        2. Answer clarification questions
+        3. Review Requirement Intelligence Excel
+        4. Generate test cases
+        5. Review coverage
+        6. Improve or accept test cases
+
+
+        Requirement Intelligence
+        ------------------------
+        /analyze <ticket_id>
+        Analyze an existing requirement and generate clarification questions.
+
+        /analyze_text <requirement>
+        Create a new requirement from text, then analyze it.
+
+        When clarification questions appear:
+        - Answer Clarifications: provide answers like:
+        Q001: answer...
+        Q002: answer...
+        - Skip Clarifications: continue with open questions.
+
+
+        Test Case Generation
+        --------------------
+        /generate <ticket_id>
+        Generate test cases from an existing requirement.
+        If the requirement was already analyzed and answered, it will continue from the existing analysis.
+
+        /generate_text <requirement>
+        Create a new requirement from text, analyze it, then generate test cases.
+
+
+        Requirement Updates
+        -------------------
+        /add_text <ticket_id>
+        Add more requirement information as an additional note.
+        This invalidates current analysis and test case artifacts.
+
+        /add_file <ticket_id>
+        Upload an additional requirement file.
+        Supported files: TXT, DOCX, PPTX, PNG, JPG, JPEG, WebP.
+        This invalidates current analysis and test case artifacts.
+
+        /rename <ticket_id>
+        Rename the requirement display name.
+
+
+        Requirement Management
+        ----------------------
+        /requirements
+        List all requirements with name, created date, current status, and quick commands.
+
+        /status <ticket_id>
+        Show detailed status, coverage, improvement progress, and downloadable Excel files.
+
+        /delete <ticket_id>
+        Delete one requirement.
+
+        /delete_all
+        Delete all requirements. Confirmation is required.
+        
+        /report
+        Generate system report: requirements, test cases, improvements, AI usage, model, runtime, and tokens.
+
+
+        Review & Improvement Buttons
+        ----------------------------
+        Improve Again
+        AI improves test cases using coverage review.
+
+        Comment & Improve
+        You provide review comments, and AI improves test cases based on your comment.
+
+        Accept
+        Mark the current test cases as accepted.
+
+
+        Upload Behavior
+        ---------------
+        You can upload requirement files directly.
+        By default, uploaded files create a new requirement and start the generate flow.
+
+        For adding a file to an existing requirement:
+        1. Run /add_file <ticket_id>
+        2. Upload the file
+        """
+    )
+    
+
+async def report(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    await update.message.reply_text(
+        "Generating QA AI system report..."
+    )
+
+    report_file = generate_system_report()
+
+    await send_excel_file_from_message(
+        update.message,
+        "SYSTEM",
+        report_file,
+        caption="QA AI Platform Usage Report"
+    )
+
+    
+async def add_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+
+        await update.message.reply_text(
+            "Usage:\n"
+            "/add_text TG-20260604080006"
+        )
+
+        return
+
+    raw_id = " ".join(context.args)
+
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+
+    context.user_data[
+        "add_text_ticket_id"
+    ] = ticket_id
+
+    await update.message.reply_text(
+        f"Please send additional requirement text for {ticket_id}"
+    )
+    
+async def add_file(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+
+        await update.message.reply_text(
+            "Usage:\n"
+            "/add_file TG-20260604080006"
+        )
+
+        return
+
+    raw_id = " ".join(context.args)
+
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+
+    context.user_data[
+        "add_file_ticket_id"
+    ] = ticket_id
+
+    await update.message.reply_text(
+        f"Please upload file for {ticket_id}"
     )
 
 
 async def send_excel_file_from_message(
     message,
     ticket_id: str,
-    excel_file: str
+    excel_file: str,
+    caption: str | None = None
 ):
     excel_path = Path(excel_file)
 
@@ -189,7 +402,7 @@ async def send_excel_file_from_message(
                 file,
                 filename=excel_path.name
             ),
-            caption=f"Generated testcases Excel file: {ticket_id}"
+            caption=caption or f"Generated Excel file: {ticket_id}"
         )
 
 
@@ -197,7 +410,8 @@ async def send_excel_file_to_chat(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
     ticket_id: str,
-    excel_file: str
+    excel_file: str,
+    caption: str | None = None
 ):
     excel_path = Path(excel_file)
 
@@ -215,14 +429,48 @@ async def send_excel_file_to_chat(
                 file,
                 filename=excel_path.name
             ),
-            caption=f"Generated testcases Excel file: {ticket_id}"
+            caption=caption or f"Generated Excel file: {ticket_id}"
         )
+
+
+async def export_requirement_intelligence(
+    message,
+    ticket_id: str
+):
+    artifacts = load_ticket_artifacts(ticket_id)
+
+    excel_file = export_requirement_intelligence_to_excel(
+        ticket_id=ticket_id,
+        analysis=artifacts.get("analysis", {}),
+        clarifications=artifacts.get("clarifications", {}),
+        clarification_answers=artifacts.get("clarification_answers", {}),
+        requirement_summary=artifacts.get("requirement_summary", {})
+    )
+
+    await send_excel_file_from_message(
+        message,
+        ticket_id,
+        excel_file,
+        caption=f"Requirement Intelligence Excel file: {ticket_id}"
+    )
+
+
+async def run_requirement_summary(
+    ticket_id: str
+):
+    requirement_summary_graph.invoke(
+        {
+            "ticket_id": ticket_id
+        }
+    )
+
+    return load_ticket_artifacts(ticket_id)
 
 
 async def run_generation(
     message,
     ticket_id: str,
-    understanding_result: dict
+    generation_state: dict
 ):
     if not hasattr(message, "reply_text"):
         raise TypeError(
@@ -230,7 +478,7 @@ async def run_generation(
         )
 
     result = test_generation_graph.invoke(
-        understanding_result
+        generation_state
     )
 
     save_review_session(
@@ -252,7 +500,7 @@ async def run_generation(
 
     review = result.get("coverage_review", {})
     final_review = result.get("final_coverage_review", {})
-    
+
     save_improvement_history_item(
         ticket_id=ticket_id,
         version="v0",
@@ -291,10 +539,8 @@ async def run_generation(
         summary_message,
         reply_markup=build_review_keyboard(ticket_id)
     )
-    
-    artifacts = load_ticket_artifacts(
-        ticket_id
-    )
+
+    artifacts = load_ticket_artifacts(ticket_id)
 
     excel_file = export_testcases_to_excel(
         ticket_id,
@@ -303,14 +549,8 @@ async def run_generation(
         testcases,
         review,
         final_review,
-        clarifications=artifacts.get(
-            "clarifications",
-            {}
-        ),
-        clarification_answers=artifacts.get(
-            "clarification_answers",
-            {}
-        ),
+        clarifications=artifacts.get("clarifications", {}),
+        clarification_answers=artifacts.get("clarification_answers", {}),
         improvement_history=artifacts.get("improvement_history", []),
         version="v0"
     )
@@ -318,65 +558,270 @@ async def run_generation(
     await send_excel_file_from_message(
         message,
         ticket_id,
-        excel_file
+        excel_file,
+        caption=f"Generated testcases Excel file: {ticket_id}"
     )
+
+
+async def ask_clarifications(
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    ticket_id: str,
+    questions: list,
+    mode: str
+):
+    clarification_message = (
+        f"❓ Clarifications found for {ticket_id}\n\n"
+    )
+
+    for item in questions:
+        clarification_message += (
+            f"{item.get('question_id', '')}: "
+            f"{item.get('question', '')}\n"
+            f"Impact: {item.get('impact', 'N/A')}\n\n"
+        )
+
+    clarification_message += (
+        f"Total clarification questions: {len(questions)}\n\n"
+        "Do you want to answer these clarifications?"
+    )
+
+    await message.reply_text(
+        clarification_message,
+        reply_markup=build_clarification_keyboard(
+            ticket_id,
+            mode
+        )
+    )
+
+
+async def run_requirement_questions(
+    ticket_id: str
+):
+    result = requirement_question_graph.invoke(
+        {
+            "ticket_id": ticket_id
+        }
+    )
+
+    save_clarification_questions_snapshot(
+        ticket_id,
+        result.get("clarifications", {})
+    )
+
+    return result
 
 
 async def process_ticket(
     update: Update,
     ticket_id: str
 ):
-    understanding_result = requirement_understanding_graph.invoke(
-        {
-            "ticket_id": ticket_id
-        }
+    artifacts = load_ticket_artifacts(
+        ticket_id
     )
 
-    questions = extract_clarification_questions(
-        understanding_result
+    questions = (
+        artifacts
+        .get("clarifications", {})
+        .get("clarification_questions", [])
     )
 
-    if questions:
-        
-        save_clarification_questions_snapshot(
-            ticket_id,
-            understanding_result.get(
-                "clarifications",
-                {}
-            )
+    has_answers = bool(
+        artifacts.get(
+            "clarification_answers",
+            {}
         )
-        
-        clarification_message = (
-            f"❓ Clarifications found for {ticket_id}\n\n"
-        )
+    )
 
-        for item in questions:
-            clarification_message += (
-                f"{item.get('question_id', '')}: "
-                f"{item.get('question', '')}\n"
-                f"Impact: {item.get('impact', 'N/A')}\n\n"
-            )
-            
-        clarification_message += (
-            f"Total clarification questions: {len(questions)}\n\n"
-        )
-
-        clarification_message += (
-            "Do you want to answer these clarifications "
-            "before generating test cases?"
-        )
+    #
+    # Existing clarification questions
+    #
+    if questions and not has_answers:
 
         await update.message.reply_text(
-            clarification_message,
-            reply_markup=build_clarification_keyboard(ticket_id)
+            f"Existing clarification questions found for {ticket_id}.\n"
+            f"Please answer them before generating test cases."
+        )
+
+        await ask_clarifications(
+            update.message,
+            None,
+            ticket_id,
+            questions,
+            mode="generate"
         )
 
         return
 
+    #
+    # No clarification generated yet
+    #
+    if not questions:
+
+        result = await run_requirement_questions(
+            ticket_id
+        )
+
+        questions = extract_clarification_questions(
+            result
+        )
+
+        if questions:
+
+            await ask_clarifications(
+                update.message,
+                None,
+                ticket_id,
+                questions,
+                mode="generate"
+            )
+
+            return
+
+    #
+    # Has clarification answers
+    #
+    generation_state = await run_requirement_summary(
+        ticket_id
+    )
+
     await run_generation(
         update.message,
         ticket_id,
-        understanding_result
+        generation_state
+    )
+    
+async def analyze_existing_ticket(
+    message,
+    context: ContextTypes.DEFAULT_TYPE,
+    ticket_id: str
+):
+    result = await run_requirement_questions(
+        ticket_id
+    )
+
+    analysis = result.get(
+        "analysis",
+        {}
+    )
+
+    questions = extract_clarification_questions(
+        result
+    )
+
+    response_text = (
+        f"✅ Requirement analysis completed: {ticket_id}\n\n"
+        f"Requirement Items: "
+        f"{len(analysis.get('requirement_items', []))}\n"
+        f"Clarification Questions: {len(questions)}\n\n"
+    )
+
+    if questions:
+        response_text += (
+            "Please answer these clarification questions:\n\n"
+        )
+
+        for item in questions:
+            response_text += (
+                f"{item.get('question_id', '')}: "
+                f"{item.get('question', '')}\n"
+                f"Impact: {item.get('impact', 'N/A')}\n\n"
+            )
+
+        response_text += (
+            f"Total clarification questions: {len(questions)}\n\n"
+            "Do you want to answer these clarifications?"
+        )
+
+        await message.reply_text(
+            response_text,
+            reply_markup=build_clarification_keyboard(
+                ticket_id,
+                "analyze"
+            )
+        )
+
+        return
+
+    response_text += (
+        "No clarification questions found. "
+        "Generating requirement summary..."
+    )
+
+    await message.reply_text(
+        response_text
+    )
+
+    await run_requirement_summary(
+        ticket_id
+    )
+
+    await export_requirement_intelligence(
+        message,
+        ticket_id
+    )
+
+
+async def analyze(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /analyze TG-20260603120000"
+        )
+        return
+
+    raw_id = " ".join(context.args)
+
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+
+    await update.message.reply_text(
+        f"Analyzing requirement for {ticket_id}..."
+    )
+
+    await analyze_existing_ticket(
+        update.message,
+        context,
+        ticket_id
+    )
+    
+async def analyze_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+        await update.message.reply_text(
+            "Usage:\n"
+            "/analyze_text User can create account using email and password"
+        )
+        return
+
+    requirement_text = " ".join(
+        context.args
+    )
+
+    ticket_id = create_requirement_from_text(
+        requirement_text,
+        source="telegram_analyze_text"
+    )
+
+    await update.message.reply_text(
+        f"Requirement created.\n"
+        f"Generated ID: {ticket_id}\n"
+        f"Analyzing..."
+    )
+
+    await analyze_existing_ticket(
+        update.message,
+        context,
+        ticket_id
     )
 
 
@@ -390,7 +835,15 @@ async def generate(
         )
         return
 
-    ticket_id = context.args[0]
+    raw_id = " ".join(context.args)
+
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
 
     await update.message.reply_text(
         f"Generating testcases for {ticket_id}..."
@@ -413,20 +866,17 @@ async def generate_text(
         )
         return
 
-    requirement_text = " ".join(context.args)
-
-    ticket_id = (
-        "TG-"
-        + datetime.now().strftime("%Y%m%d%H%M%S")
+    requirement_text = " ".join(
+        context.args
     )
 
-    create_workspace_from_text(
-        ticket_id,
-        requirement_text
+    ticket_id = create_requirement_from_text(
+        requirement_text,
+        source="telegram_generate_text"
     )
 
     await update.message.reply_text(
-        f"Requirement received.\n"
+        f"Requirement created.\n"
         f"Generated ID: {ticket_id}\n"
         f"Processing..."
     )
@@ -441,6 +891,56 @@ async def handle_requirement_file(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    
+    add_file_ticket_id = (
+        context.user_data.get(
+            "add_file_ticket_id"
+        )
+    )
+
+    if add_file_ticket_id:
+
+        from app.services.requirement_update_service import (
+            add_requirement_file
+        )
+
+        document = update.message.document
+
+        telegram_file = await document.get_file()
+
+        temp_dir = Path("temp")
+        temp_dir.mkdir(
+            exist_ok=True
+        )
+
+        temp_file = (
+            temp_dir
+            / document.file_name
+        )
+
+        await telegram_file.download_to_drive(
+            custom_path=str(temp_file)
+        )
+
+        add_requirement_file(
+            add_file_ticket_id,
+            temp_file,
+            document.file_name
+        )
+
+        context.user_data.pop(
+            "add_file_ticket_id",
+            None
+        )
+
+        await update.message.reply_text(
+            f"File added to requirement: {add_file_ticket_id}\n\n"
+            f"Analysis artifacts invalidated.\n"
+            f"Please run /analyze again."
+        )
+
+        return
+    
     document = update.message.document
 
     if not document:
@@ -539,6 +1039,110 @@ async def handle_text_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    
+    if context.user_data.get(
+        "confirm_delete_all"
+    ):
+
+        if (
+            update.message.text.strip()
+            == "CONFIRM DELETE ALL"
+        ):
+
+            count = (
+                delete_all_requirements()
+            )
+
+            context.user_data.pop(
+                "confirm_delete_all",
+                None
+            )
+
+            await update.message.reply_text(
+                f"🗑 Deleted {count} requirements."
+            )
+
+            return
+
+        context.user_data.pop(
+            "confirm_delete_all",
+            None
+        )
+
+        await update.message.reply_text(
+            "Delete all cancelled."
+        )
+
+        return
+    
+    rename_ticket_id = (
+        context.user_data.get(
+            "rename_ticket_id"
+        )
+    )
+
+    if rename_ticket_id:
+
+        new_name = (
+            update.message.text.strip()
+        )
+
+        success = rename_requirement(
+            rename_ticket_id,
+            new_name
+        )
+
+        context.user_data.pop(
+            "rename_ticket_id",
+            None
+        )
+
+        if success:
+
+            await update.message.reply_text(
+                f"✏️ Requirement renamed.\n\n"
+                f"Ticket: {rename_ticket_id}\n"
+                f"New Name: {new_name}"
+            )
+
+        else:
+
+            await update.message.reply_text(
+                "Failed to rename requirement."
+            )
+
+        return
+    
+    add_text_ticket_id = (
+        context.user_data.get(
+            "add_text_ticket_id"
+        )
+    )
+
+    if add_text_ticket_id:
+
+        from app.services.requirement_update_service import (
+            append_requirement_text
+        )
+
+        append_requirement_text(
+            add_text_ticket_id,
+            update.message.text
+        )
+
+        context.user_data.pop(
+            "add_text_ticket_id",
+            None
+        )
+
+        await update.message.reply_text(
+            f"Requirement updated: {add_text_ticket_id}\n\n"
+            f"Analysis artifacts invalidated.\n"
+            f"Please run /analyze again."
+        )
+
+        return
+    
     comment_ticket_id = context.user_data.get(
         "comment_improve_for"
     )
@@ -552,10 +1156,7 @@ async def handle_text_message(
 
         save_review_comment(
             comment_ticket_id,
-            session.get(
-                "improve_iterations",
-                0
-            ),
+            session.get("improve_iterations", 0),
             comment_text
         )
 
@@ -591,22 +1192,13 @@ async def handle_text_message(
         )
 
         version = f"v{session.get('improve_iterations', 0)}"
-        
+
         save_improvement_history_item(
             ticket_id=comment_ticket_id,
             version=version,
-            iteration=session.get(
-                "improve_iterations",
-                0
-            ),
-            coverage_score=final_review.get(
-                "coverage_score",
-                ""
-            ),
-            improvement_score=final_review.get(
-                "improvement_score",
-                ""
-            ),
+            iteration=session.get("improve_iterations", 0),
+            coverage_score=final_review.get("coverage_score", ""),
+            improvement_score=final_review.get("improvement_score", ""),
             note="Comment-based improvement"
         )
 
@@ -630,9 +1222,7 @@ async def handle_text_message(
         else:
             improve_message += "- None\n"
 
-        if can_improve_again(
-            comment_ticket_id
-        ):
+        if can_improve_again(comment_ticket_id):
             improve_message += (
                 "\nDo you want AI to improve test cases again?"
             )
@@ -659,14 +1249,8 @@ async def handle_text_message(
             testcases,
             review,
             final_review,
-            clarifications=artifacts.get(
-                "clarifications",
-                {}
-            ),
-            clarification_answers=artifacts.get(
-                "clarification_answers",
-                {}
-            ),
+            clarifications=artifacts.get("clarifications", {}),
+            clarification_answers=artifacts.get("clarification_answers", {}),
             improvement_history=artifacts.get("improvement_history", []),
             version=version
         )
@@ -674,7 +1258,8 @@ async def handle_text_message(
         await send_excel_file_from_message(
             update.message,
             comment_ticket_id,
-            excel_file
+            excel_file,
+            caption=f"Generated testcases Excel file: {comment_ticket_id}"
         )
 
         return
@@ -692,27 +1277,46 @@ async def handle_text_message(
         ticket_id,
         answer_text
     )
+    
+    apply_clarification_answers_to_requirement(
+        ticket_id
+    )
+
+    next_action = context.user_data.get(
+        "clarification_next_action",
+        "generate"
+    )
 
     context.user_data.pop(
         "answering_clarifications_for",
         None
     )
 
-    await update.message.reply_text(
-        f"Clarification answers saved for {ticket_id}.\n"
-        f"Re-running requirement understanding..."
+    context.user_data.pop(
+        "clarification_next_action",
+        None
     )
 
-    understanding_result = requirement_understanding_graph.invoke(
-        {
-            "ticket_id": ticket_id
-        }
+    await update.message.reply_text(
+        f"Clarification answers saved for {ticket_id}.\n"
+        f"Generating requirement summary..."
     )
+
+    generation_state = await run_requirement_summary(
+        ticket_id
+    )
+
+    if next_action == "analyze":
+        await export_requirement_intelligence(
+            update.message,
+            ticket_id
+        )
+        return
 
     await run_generation(
         update.message,
         ticket_id,
-        understanding_result
+        generation_state
     )
 
 
@@ -733,41 +1337,64 @@ async def handle_review_action(
         return
 
     action = parts[0]
+
+    if action in [
+        "answer_clarifications",
+        "skip_clarifications"
+    ]:
+        if len(parts) < 3:
+            await query.message.reply_text(
+                "Invalid clarification action."
+            )
+            return
+
+        mode = parts[1]
+        ticket_id = parts[2]
+
+        if action == "answer_clarifications":
+            context.user_data[
+                "answering_clarifications_for"
+            ] = ticket_id
+
+            context.user_data[
+                "clarification_next_action"
+            ] = mode
+
+            await query.message.reply_text(
+                "Please reply with clarification answers in this format:\n\n"
+                "Q001: answer...\n"
+                "Q002: answer...\n\n"
+                "After receiving your answers, I will continue the workflow."
+            )
+
+            return
+
+        if action == "skip_clarifications":
+            await query.edit_message_text(
+                f"⏭️ Clarifications skipped for {ticket_id}.\n\n"
+                f"Generating requirement summary..."
+            )
+
+            generation_state = await run_requirement_summary(
+                ticket_id
+            )
+
+            if mode == "analyze":
+                await export_requirement_intelligence(
+                    query.message,
+                    ticket_id
+                )
+                return
+
+            await run_generation(
+                query.message,
+                ticket_id,
+                generation_state
+            )
+
+            return
+
     ticket_id = parts[1]
-
-    if action == "answer_clarifications":
-        context.user_data[
-            "answering_clarifications_for"
-        ] = ticket_id
-
-        await query.message.reply_text(
-            "Please reply with clarification answers in this format:\n\n"
-            "Q001: answer...\n"
-            "Q002: answer...\n\n"
-            "After receiving your answers, I will re-run the requirement understanding step."
-        )
-
-        return
-
-    if action == "skip_clarifications":
-        await query.edit_message_text(
-            f"⏭️ Clarifications skipped for {ticket_id}.\n\n"
-            f"Generating test cases..."
-        )
-
-        understanding_result = requirement_understanding_graph.invoke(
-            {
-                "ticket_id": ticket_id
-            }
-        )
-
-        await run_generation(
-            query.message,
-            ticket_id,
-            understanding_result
-        )
-
-        return
 
     if action == "download":
         if len(parts) < 3:
@@ -802,12 +1429,9 @@ async def handle_review_action(
             )
 
         return
-    
-    if action == "comment_improve":
 
-        if not can_improve_again(
-            ticket_id
-        ):
+    if action == "comment_improve":
+        if not can_improve_again(ticket_id):
             await query.edit_message_text(
                 f"⚠️ Maximum improvement iterations reached for {ticket_id}.\n\n"
                 f"Please review manually or accept the current version."
@@ -843,9 +1467,7 @@ async def handle_review_action(
         return
 
     if action == "improve":
-        if not can_improve_again(
-            ticket_id
-        ):
+        if not can_improve_again(ticket_id):
             await query.edit_message_text(
                 f"⚠️ Maximum improvement iterations reached for {ticket_id}.\n\n"
                 f"Please review manually or accept the current version."
@@ -878,7 +1500,7 @@ async def handle_review_action(
         session = load_review_session(ticket_id)
 
         version = f"v{session.get('improve_iterations', 0)}"
-        
+
         save_improvement_history_item(
             ticket_id=ticket_id,
             version=version,
@@ -922,7 +1544,7 @@ async def handle_review_action(
             text=improve_message,
             reply_markup=build_review_keyboard(ticket_id)
         )
-        
+
         artifacts = load_ticket_artifacts(
             ticket_id
         )
@@ -934,14 +1556,8 @@ async def handle_review_action(
             testcases,
             review,
             final_review,
-            clarifications=artifacts.get(
-                "clarifications",
-                {}
-            ),
-            clarification_answers=artifacts.get(
-                "clarification_answers",
-                {}
-            ),
+            clarifications=artifacts.get("clarifications", {}),
+            clarification_answers=artifacts.get("clarification_answers", {}),
             improvement_history=artifacts.get("improvement_history", []),
             version=version
         )
@@ -950,7 +1566,8 @@ async def handle_review_action(
             context,
             query.message.chat_id,
             ticket_id,
-            excel_file
+            excel_file,
+            caption=f"Generated testcases Excel file: {ticket_id}"
         )
 
 
@@ -964,7 +1581,25 @@ async def status(
         )
         return
 
-    ticket_id = context.args[0]
+    raw_id = " ".join(context.args)
+
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+    
+    metadata = get_requirement_metadata(
+        ticket_id
+    )
+
+    status_icon, status_text = (
+        get_requirement_status(
+            ticket_id
+        )
+    )
 
     data = load_ticket_artifacts(ticket_id)
 
@@ -991,7 +1626,14 @@ async def status(
         )
 
     status_message = (
-        f"📊 Status: {ticket_id}\n\n"
+        f"📊 Requirement Status\n\n"
+        f"Ticket ID: {ticket_id}\n"
+        f"Summary: "
+        f"{metadata.get('summary', '')}\n"
+        f"Created: "
+        f"{metadata.get('created_at', '')}\n"
+        f"Status: "
+        f"{status_icon} {status_text}\n\n"
         f"Scenarios: {len(scenarios)}\n"
         f"Testcases: {len(testcases)}\n\n"
         f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
@@ -1016,6 +1658,138 @@ async def status(
             excel_files
         )
     )
+    
+async def requirements(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    items = list_requirements()
+
+    if not items:
+
+        await update.message.reply_text(
+            "No requirements found."
+        )
+
+        return
+
+    message = (
+        "📋 Requirements\n\n"
+    )
+
+    for item in items[:30]:
+
+        message += (
+            f"{item['status_icon']} "
+            f"{item['ticket_id']}\n"
+            f"{item['summary']}\n"
+            f"Created: {item['created_at']}\n"
+            f"Status: {item['status']}\n\n"
+            f"Commands:\n"
+            f"/status {item['ticket_id']}\n"
+            f"/generate {item['ticket_id']}\n"
+            f"/rename {item['ticket_id']}\n"
+            f"/delete {item['ticket_id']}\n\n"
+        )
+
+    if len(items) > 30:
+
+        message += (
+            f"... showing first 30 of "
+            f"{len(items)} requirements"
+        )
+
+    await update.message.reply_text(
+        message
+    )
+    
+
+async def rename(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+
+        await update.message.reply_text(
+            "Usage:\n"
+            "/rename TG-20260604114533"
+        )
+
+        return
+
+    raw_id = " ".join(context.args)
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+
+    context.user_data[
+        "rename_ticket_id"
+    ] = ticket_id
+
+    await update.message.reply_text(
+        f"Please enter new name for:\n"
+        f"{ticket_id}"
+    )
+
+
+async def delete(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.args:
+
+        await update.message.reply_text(
+            "Usage:\n"
+            "/delete TG-20260604114533"
+        )
+
+        return
+
+    raw_id = " ".join(context.args)
+    ticket_id = resolve_requirement_id(raw_id)
+
+    if not ticket_id:
+        await update.message.reply_text(
+            f"Requirement not found: {raw_id}"
+        )
+        return
+
+    success = delete_requirement(
+        ticket_id
+    )
+
+    if not success:
+
+        await update.message.reply_text(
+            f"Requirement not found: {ticket_id}"
+        )
+
+        return
+
+    await update.message.reply_text(
+        f"🗑 Requirement deleted:\n"
+        f"{ticket_id}"
+    )
+    
+
+async def delete_all(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    context.user_data[
+        "confirm_delete_all"
+    ] = True
+
+    await update.message.reply_text(
+        "⚠️ WARNING\n\n"
+        "This will delete ALL requirements.\n\n"
+        "Type:\n"
+        "CONFIRM DELETE ALL"
+    )
 
 
 def main():
@@ -1032,30 +1806,78 @@ def main():
     )
 
     app.add_handler(
+        CommandHandler("start", start)
+    )
+    
+    app.add_handler(
         CommandHandler(
-            "start",
-            start
+            "add_text",
+            add_text
         )
     )
 
     app.add_handler(
         CommandHandler(
-            "generate",
-            generate
+            "add_file",
+            add_file
+        )
+    )
+
+    app.add_handler(
+        CommandHandler("analyze", analyze)
+    )
+    
+    app.add_handler(
+        CommandHandler(
+            "analyze_text",
+            analyze_text
+        )
+    )
+
+    app.add_handler(
+        CommandHandler("generate", generate)
+    )
+
+    app.add_handler(
+        CommandHandler("generate_text", generate_text)
+    )
+
+    app.add_handler(
+        CommandHandler("status", status)
+    )
+    
+    app.add_handler(
+        CommandHandler(
+            "rename",
+            rename
+        )
+    )
+    
+    app.add_handler(
+        CommandHandler(
+            "delete",
+            delete
         )
     )
 
     app.add_handler(
         CommandHandler(
-            "generate_text",
-            generate_text
+            "delete_all",
+            delete_all
         )
     )
-
+    
     app.add_handler(
         CommandHandler(
-            "status",
-            status
+            "requirements",
+            requirements
+        )
+    )
+    
+    app.add_handler(
+        CommandHandler(
+            "report",
+            report
         )
     )
 

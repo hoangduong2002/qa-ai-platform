@@ -2,11 +2,36 @@ import json
 
 from app.services.llm_service import get_llm
 from app.utils.prompt_loader import load_prompt
-from app.utils.scenario_writer import save_scenarios
+from app.utils.llm_json import parse_json
+
+from app.utils.file_writer import (
+    save_scenarios
+)
+
+
+def normalize_scenarios(data):
+
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, dict):
+        for key in [
+            "scenarios",
+            "test_scenarios",
+            "testScenarios"
+        ]:
+            if isinstance(data.get(key), list):
+                return data[key]
+
+    return [
+        {
+            "raw_response": data
+        }
+    ]
 
 
 def generate_scenarios(state):
-    
+
     llm = get_llm()
 
     prompt = load_prompt(
@@ -16,9 +41,9 @@ def generate_scenarios(state):
     final_prompt = (
         prompt
         .replace(
-            "{analysis}",
+            "{requirement_summary}",
             json.dumps(
-                state["analysis"],
+                state.get("requirement_summary", {}),
                 indent=2,
                 ensure_ascii=False
             )
@@ -26,7 +51,7 @@ def generate_scenarios(state):
         .replace(
             "{test_scope}",
             json.dumps(
-                state["test_scope"],
+                state.get("test_scope", {}),
                 indent=2,
                 ensure_ascii=False
             )
@@ -34,34 +59,32 @@ def generate_scenarios(state):
     )
 
     response = llm.invoke(
-        final_prompt
-    )
-
-    content = (
-        response.content
-        .replace("```json", "")
-        .replace("```", "")
-        .strip()
+        final_prompt,
+        ticket_id=state.get("ticket_id", ""),
+        node_name="generate_scenarios"
     )
 
     try:
-
-        scenarios = json.loads(
-            content
+        parsed = parse_json(
+            response.content
         )
 
-        save_scenarios(
-            state["ticket_id"],
-            scenarios
+        scenarios = normalize_scenarios(
+            parsed
         )
 
-    except Exception:
-
+    except Exception as error:
         scenarios = [
             {
-                "raw_response": content
+                "raw_response": response.content,
+                "parse_error": str(error)
             }
         ]
+
+    save_scenarios(
+        state["ticket_id"],
+        scenarios
+    )
 
     return {
         "scenarios": scenarios

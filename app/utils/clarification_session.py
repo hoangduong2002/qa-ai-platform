@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from datetime import datetime
 
 
 def get_clarification_file(
@@ -12,6 +13,18 @@ def get_clarification_file(
         / ticket_id
         / "analysis"
         / "clarification_answers.json"
+    )
+
+
+def get_clarifications_file(
+    ticket_id: str
+) -> Path:
+
+    return (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "clarifications.json"
     )
 
 
@@ -45,6 +58,81 @@ def parse_clarification_answers(
     return answers
 
 
+def load_clarifications(
+    ticket_id: str
+) -> dict:
+
+    input_file = get_clarifications_file(
+        ticket_id
+    )
+
+    if not input_file.exists():
+        return {}
+
+    return json.loads(
+        input_file.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def build_answered_clarifications(
+    ticket_id: str,
+    parsed_answers: dict
+) -> list:
+
+    clarifications = load_clarifications(
+        ticket_id
+    )
+
+    questions = clarifications.get(
+        "clarification_questions",
+        []
+    )
+
+    question_map = {
+        item.get("question_id", "").upper(): item
+        for item in questions
+    }
+
+    answered = []
+
+    now = datetime.now().isoformat()
+
+    for question_id, answer in parsed_answers.items():
+
+        question = question_map.get(
+            question_id,
+            {}
+        )
+
+        answered.append(
+            {
+                "question_id": question_id,
+                "question": question.get(
+                    "question",
+                    ""
+                ),
+                "category": question.get(
+                    "category",
+                    ""
+                ),
+                "impact": question.get(
+                    "impact",
+                    ""
+                ),
+                "reason": question.get(
+                    "reason",
+                    ""
+                ),
+                "answer": answer,
+                "answered_at": now
+            }
+        )
+
+    return answered
+
+
 def save_clarification_answers(
     ticket_id: str,
     raw_answers: str
@@ -54,9 +142,15 @@ def save_clarification_answers(
         raw_answers
     )
 
+    answered_clarifications = build_answered_clarifications(
+        ticket_id,
+        parsed_answers
+    )
+
     output = {
         "raw_answers": raw_answers,
-        "answers": parsed_answers
+        "answers": parsed_answers,
+        "answered_clarifications": answered_clarifications
     }
 
     output_file = get_clarification_file(
@@ -96,7 +190,8 @@ def load_clarification_answers(
             encoding="utf-8"
         )
     )
-    
+
+
 def get_clarification_questions_snapshot_file(
     ticket_id: str
 ) -> Path:

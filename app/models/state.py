@@ -9,7 +9,11 @@ class QAState(TypedDict):
 
     analysis: dict
     
+    requirement_qa: dict
+    
     clarifications: dict
+    
+    requirement_summary: dict
     
     test_scope: dict
 

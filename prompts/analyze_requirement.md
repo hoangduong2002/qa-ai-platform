@@ -13,6 +13,9 @@ Extract:
 8. Requirement Items with stable IDs
 
 Rules:
+- Treat answered clarifications as confirmed requirement information.
+- Integrate answered clarifications into the analysis.
+- Do not mark already answered items as missing information.
 - Do not invent business rules.
 - Only extract what is stated or clearly implied.
 - Requirement IDs must be stable and readable:
@@ -20,7 +23,8 @@ Rules:
   - Business Rule: BR001, BR002
   - Validation: VAL001, VAL002
   - Dependency: DEP001, DEP002
-- Return ONLY valid JSON.
+
+Return ONLY valid JSON.
 
 Format:
 
@@ -52,5 +56,4 @@ Format:
 }
 
 Requirement:
-
 {requirement_context}

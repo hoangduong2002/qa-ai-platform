@@ -10,6 +10,14 @@ Important rules:
 - Remove or merge duplicate test cases.
 - Keep traceability to scenario_id when possible.
 - If adding new test cases, use new testcase IDs continuing from the existing sequence.
+- Improve only weak, missing, or impacted test cases.
+- Do NOT regenerate the entire test suite unless necessary.
+
+Return only:
+- new test cases
+- modified test cases
+
+Do not return unchanged test cases.
 - Return ONLY valid JSON array.
 
 ## Human Review Comments
@@ -25,20 +33,13 @@ Important rules for review comments:
 - Do not remove existing valid traceability.
 - Preserve JSON output only.
 
-Requirement Analysis:
-
-{analysis}
-
-Scenarios:
-
-{scenarios}
+Human Review Comments:
+{review_comments}
 
 Original Test Cases:
-
 {testcases}
 
 Coverage Review:
-
 {coverage_review}
 
 Return format:

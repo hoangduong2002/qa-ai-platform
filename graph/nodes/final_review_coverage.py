@@ -18,18 +18,14 @@ def final_review_coverage(state):
 
     final_prompt = (
         prompt
+        
         .replace(
-            "{analysis}",
+            "{requirement_summary}",
             json.dumps(
-                state.get("analysis", {}),
-                indent=2,
-                ensure_ascii=False
-            )
-        )
-        .replace(
-            "{scenarios}",
-            json.dumps(
-                state.get("scenarios", []),
+                state.get(
+                    "requirement_summary",
+                    {}
+                ),
                 indent=2,
                 ensure_ascii=False
             )
@@ -45,21 +41,12 @@ def final_review_coverage(state):
                 ensure_ascii=False
             )
         )
-        .replace(
-            "{coverage_review}",
-            json.dumps(
-                state.get(
-                    "coverage_review",
-                    {}
-                ),
-                indent=2,
-                ensure_ascii=False
-            )
-        )
     )
 
     response = llm.invoke(
-        final_prompt
+        final_prompt,
+        ticket_id=state.get("ticket_id", ""),
+        node_name="final_review_coverage"
     )
 
     try:

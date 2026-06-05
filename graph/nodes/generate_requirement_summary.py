@@ -2,29 +2,34 @@ import json
 
 from app.services.llm_service import get_llm
 from app.utils.prompt_loader import load_prompt
-from app.utils.file_writer import save_clarifications
 from app.utils.llm_json import parse_json
+
+from app.utils.file_writer import (
+    save_requirement_summary
+)
 
 from app.utils.clarification_session import (
     load_clarification_answers
 )
 
 
-def generate_clarifications(state):
+def generate_requirement_summary(state):
 
     llm = get_llm()
 
     prompt = load_prompt(
-        "prompts/generate_clarifications.md"
+        "prompts/generate_requirement_summary.md"
     )
 
     clarification_answers = load_clarification_answers(
         state["ticket_id"]
     )
 
-    answered_clarifications = clarification_answers.get(
-        "answered_clarifications",
-        []
+    answered_clarifications = (
+        clarification_answers.get(
+            "answered_clarifications",
+            []
+        )
     )
 
     final_prompt = (
@@ -38,7 +43,15 @@ def generate_clarifications(state):
             )
         )
         .replace(
-            "{answered_clarifications}",
+            "{clarifications}",
+            json.dumps(
+                state.get("clarifications", {}),
+                indent=2,
+                ensure_ascii=False
+            )
+        )
+        .replace(
+            "{clarification_answers}",
             json.dumps(
                 answered_clarifications,
                 indent=2,
@@ -50,26 +63,24 @@ def generate_clarifications(state):
     response = llm.invoke(
         final_prompt,
         ticket_id=state.get("ticket_id", ""),
-        node_name="generate_clarifications"
+        node_name="generate_requirement_summary"
     )
 
     try:
-        clarifications = parse_json(
+        summary = parse_json(
             response.content
         )
 
-    except Exception as error:
-        clarifications = {
-            "clarification_questions": [],
-            "raw_response": response.content,
-            "parse_error": str(error)
+        save_requirement_summary(
+            state["ticket_id"],
+            summary
+        )
+
+    except Exception:
+        summary = {
+            "raw_response": response.content
         }
 
-    save_clarifications(
-        state["ticket_id"],
-        clarifications
-    )
-
     return {
-        "clarifications": clarifications
+        "requirement_summary": summary
     }
