@@ -1,8 +1,0 @@
-{
-  "comments": [
-    {
-      "iteration": 1,
-      "comment": "Add more test cases for password length (max = 12)"
-    }
-  ]
-}

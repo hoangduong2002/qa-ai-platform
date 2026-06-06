@@ -1,1 +1,0 @@
-User can create account using email and password. Email must be unique. Password minimum 8 characters.

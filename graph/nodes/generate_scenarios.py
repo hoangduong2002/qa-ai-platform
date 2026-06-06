@@ -56,6 +56,20 @@ def generate_scenarios(state):
                 ensure_ascii=False
             )
         )
+        .replace(
+            "{requirement_items}",
+            json.dumps(
+                state.get(
+                    "analysis",
+                    {}
+                ).get(
+                    "requirement_items",
+                    []
+                ),
+                indent=2,
+                ensure_ascii=False
+            )
+        )
     )
 
     response = llm.invoke(

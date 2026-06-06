@@ -1,9 +1,0 @@
-{
-  "comments": [
-    {
-      "comment_id": "RC001",
-      "iteration": 2,
-      "comment": "Add more negative test cases for duplicate email."
-    }
-  ]
-}
