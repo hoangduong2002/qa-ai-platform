@@ -4,172 +4,248 @@ AI-powered Requirement Analysis and Test Case Generation Platform
 
 ---
 
-# Overview
+# 🚀 Quick Start
 
-QA AI Platform is an AI-assisted system that helps QA teams transform requirements into structured test assets.
+## Prerequisites
 
-The platform supports:
+* Python 3.11+
+* Telegram Bot Token
+* DeepSeek API Key or Local LLM Gateway
 
-* Requirement Analysis
-* Clarification Question Generation
-* Requirement Refinement
-* Test Scope Definition
-* Scenario Generation
-* Test Case Generation
-* Coverage Review
-* AI-assisted Test Case Improvement
-* Traceability Matrix
-* Excel Export
-* Requirement Lifecycle Management
+## Installation
 
-The platform is designed to reduce manual effort in test design while improving requirement coverage and traceability.
+```powershell
+git clone <repository>
 
----
+cd qa-ai-platform
 
-# Business Goal
+python -m venv .venv
 
-Traditional test design activities are time-consuming and heavily dependent on QA experience.
+.venv\Scripts\activate
 
-QA AI Platform aims to:
-
-* Accelerate test design
-* Improve requirement coverage
-* Reduce missed test scenarios
-* Improve traceability
-* Standardize QA outputs
-* Enable requirement refinement before implementation
-* Support QA teams without requiring AI expertise
+pip install -r requirements.txt
+```
 
 ---
 
-# Current Features
+## Configuration
 
-## Requirement Management
+Create `.env`
 
-* Create requirement from text
-* Create requirement from Jira ticket
-* Upload supporting documents
-* Add additional notes
-* Rename requirement
-* Delete requirement
-* List all requirements
-* Requirement status tracking
+```env
+LLM_PROVIDER=DEEPSEEK
 
-## Supported Requirement Sources
+DEEPSEEK_API_KEY=xxxxx
 
-### Text
+DEEPSEEK_MODEL=deepseek-v4-flash
+
+TELEGRAM_BOT_TOKEN=xxxxx
+```
+
+---
+
+## Run Telegram Bot
+
+```powershell
+python -m bot.telegram_bot
+```
+
+---
+
+## Verify LLM Connection
+
+```powershell
+python test_llm.py
+```
+
+---
+
+# 📱 Available Commands
+
+## Requirement Creation
 
 ```text
 /generate_text
 ```
 
-### Jira
-
-```text
-/generate TICKET-ID
-```
-
-### Documents
-
-Supported formats:
-
-* TXT
-* MD
-* DOCX
-* PPTX
-* PNG
-* JPG
-* WEBP
+Create requirement from text.
 
 ---
 
-# Requirement Intelligence
+```text
+/generate <ticket_id>
+```
+
+Create requirement from Jira ticket.
+
+---
 
 ## Requirement Analysis
 
-Extract:
+```text
+/analyze <ticket_id>
+```
 
-* Actors
-* Functional Requirements
-* Business Rules
-* Validations
-* Dependencies
-* Risks
-* Missing Information
+Run:
 
-Generate stable requirement IDs:
+* Requirement Analysis
+* Clarification Generation
+* Requirement Summary
+
+---
+
+## Requirement Management
 
 ```text
-FR001
-BR001
-VAL001
-DEP001
+/requirements
+```
+
+List requirements.
+
+```text
+/status <ticket_id>
+```
+
+Show status.
+
+```text
+/rename <ticket_id>
+```
+
+Rename requirement.
+
+```text
+/delete <ticket_id>
+```
+
+Delete requirement.
+
+```text
+/delete_all
+```
+
+Delete all requirements.
+
+---
+
+## Requirement Refinement
+
+```text
+/add_text <ticket_id>
+```
+
+Add additional requirement notes.
+
+---
+
+## Reporting
+
+```text
+/report
+```
+
+Show:
+
+* AI usage
+* Token usage
+* Processing time
+* Generated assets
+
+---
+
+# 🎯 Business Overview
+
+QA AI Platform helps QA teams:
+
+* Analyze requirements
+* Identify requirement gaps
+* Generate clarification questions
+* Build test coverage
+* Generate test cases
+* Maintain traceability
+* Improve test quality
+
+Goal:
+
+```text
+Requirement
+    ↓
+Coverage
+    ↓
+Quality Test Cases
 ```
 
 ---
 
-## Clarification Generation
+# ✨ Core Features
 
-Automatically identify:
+## Requirement Intelligence
 
-* Missing business rules
-* Validation gaps
-* Edge cases
-* Security concerns
-* Error handling gaps
-* Integration questions
+* Requirement Analysis
+* Requirement Items
+* Clarifications
+* Requirement Summary
 
-Example:
+## Test Design
 
-```text
-Q001
-What is the maximum allowed email length?
-```
+* Test Scope Generation
+* Scenario Generation
+* Test Case Generation
 
----
+## Quality Review
 
-## Clarification Answers
+* Coverage Review
+* Test Case Improvement
+* Final Coverage Review
 
-Users can answer clarification questions.
-
-Answers become part of the requirement source.
-
-Example:
+## Traceability
 
 ```text
-Q001: 255 characters
+Requirement
+    ↓
+Scenario
+    ↓
+Test Case
 ```
 
-The platform automatically:
+## Export
 
-* Updates requirement knowledge
-* Regenerates analysis
-* Avoids asking the same question again
-
----
-
-## Requirement Summary
-
-Creates consolidated requirement knowledge including:
-
-* Executive Summary
-* Functional Summary
-* Confirmed Business Rules
-* Validation Rules
-* Open Questions
-* Assumptions
-* Risks
+* Excel Export
+* Coverage Matrix
 
 ---
 
-# Test Design Workflow
+# 🏗 System Architecture
+
+## Main Components
+
+```text
+Telegram Bot
+      ↓
+FastAPI
+      ↓
+LangGraph Workflow
+      ↓
+LLM Provider
+      ↓
+Requirement Artifacts
+```
+
+See:
+
+* Architecture Diagram.md
+* Requirement Lifecycle State Machine.md
+
+---
+
+# 🔄 Workflow
 
 ```text
 Requirement
     ↓
 Requirement Analysis
     ↓
-Clarification Generation
+Clarification Questions
     ↓
 Requirement Summary
     ↓
@@ -183,143 +259,14 @@ Coverage Review
     ↓
 Improve Test Cases
     ↓
-Final Coverage Review
+Final Review
     ↓
 Excel Export
 ```
 
 ---
 
-# Traceability
-
-The platform supports:
-
-```text
-Requirement
-    ↓
-Scenario
-    ↓
-Test Case
-```
-
-Each artifact contains:
-
-### Requirement IDs
-
-```text
-FR001
-BR001
-VAL001
-```
-
-### Scenario IDs
-
-```text
-SC001
-SC002
-```
-
-### Test Case IDs
-
-```text
-TC001
-TC002
-```
-
----
-
-# Excel Export
-
-Generated workbook contains:
-
-## Requirements
-
-Requirement inventory
-
-## Clarifications
-
-Questions
-Answers
-Status
-
-## Requirement Summary
-
-Business view
-
-## Scenarios
-
-Scenario inventory
-
-## Test Cases
-
-Generated test cases
-
-## Requirement Coverage Matrix
-
-Requirement → Scenario → Test Case mapping
-
----
-
-# AI Architecture
-
-## Core Framework
-
-* LangGraph
-* LangChain
-
-## API
-
-* FastAPI
-
-## Bot Interface
-
-* Telegram Bot
-
-Future:
-
-* Microsoft Teams
-
----
-
-# LLM Providers
-
-Supported:
-
-## DeepSeek
-
-```env
-LLM_PROVIDER=DEEPSEEK
-DEEPSEEK_MODEL=deepseek-v4-flash
-DEEPSEEK_API_KEY=xxxx
-```
-
-## Local Enterprise Gateway
-
-```env
-LLM_PROVIDER=LOCAL
-
-LOCAL_LLM_URL=http://localhost:xxxx/v1/chat/completions
-
-LOCAL_LLM_MODEL=claude-sonnet-4.6
-```
-
-Example payload:
-
-```json
-{
-  "messages": [
-    {
-      "role": "user",
-      "content": "Generate test cases"
-    }
-  ],
-  "model": "claude-sonnet-4.6"
-}
-```
-
----
-
-# Project Structure
+# 📂 Project Structure
 
 ```text
 qa-ai-platform
@@ -344,192 +291,101 @@ qa-ai-platform
 
 ---
 
-# Installation
+# 🤖 Supported LLM Providers
 
-## Python
-
-Recommended:
-
-```text
-Python 3.11+
-```
-
-## Create Virtual Environment
-
-```powershell
-python -m venv .venv
-```
-
-Activate:
-
-```powershell
-.venv\Scripts\activate
-```
-
-## Install Dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
----
-
-# Configuration
-
-Create:
-
-```text
-.env
-```
-
-Example:
+## DeepSeek
 
 ```env
 LLM_PROVIDER=DEEPSEEK
-
-DEEPSEEK_API_KEY=xxxxx
-
 DEEPSEEK_MODEL=deepseek-v4-flash
+```
 
-TELEGRAM_BOT_TOKEN=xxxxx
+## Local Enterprise Gateway
+
+```env
+LLM_PROVIDER=LOCAL
+
+LOCAL_LLM_URL=http://localhost:xxxx/v1/chat/completions
+
+LOCAL_LLM_MODEL=claude-sonnet-4.6
 ```
 
 ---
 
-# Run Telegram Bot
+# 📊 Metrics & Reporting
 
-```powershell
-python -m bot.telegram_bot
-```
+Tracked metrics:
 
----
-
-# Available Commands
-
-## Create Requirement
-
-```text
-/generate_text
-```
-
-## Analyze Requirement
-
-```text
-/analyze <ticket_id>
-```
-
-## Generate Test Cases
-
-```text
-/generate <ticket_id>
-```
-
-## Requirement Status
-
-```text
-/status <ticket_id>
-```
-
-## List Requirements
-
-```text
-/requirements
-```
-
-## Add Additional Notes
-
-```text
-/add_text <ticket_id>
-```
-
-## Rename Requirement
-
-```text
-/rename <ticket_id>
-```
-
-## Delete Requirement
-
-```text
-/delete <ticket_id>
-```
-
-## Delete All Requirements
-
-```text
-/delete_all
-```
-
-## AI Usage Report
-
-```text
-/report
-```
-
----
-
-# Metrics & Reporting
-
-The platform tracks:
-
-* Number of requirements
-* Number of scenarios
-* Number of test cases
-* Number of improvements
+* Requirements generated
+* Scenarios generated
+* Test cases generated
+* Improvement cycles
 * AI requests
-* AI models used
+* Model usage
 * Token consumption
 * Processing duration
-* Requirement lifecycle status
 
 ---
 
-# Roadmap
+# 🗺 Roadmap
 
-## MVP1 (Completed)
+## MVP1 (Current)
 
-* Requirement Analysis
-* Clarifications
-* Requirement Summary
-* Test Scope
-* Scenario Generation
-* Test Case Generation
-* Excel Export
-* Coverage Review
-* Improve Test Cases
-* Traceability Matrix
-* Telegram Integration
+✅ Requirement Analysis
+
+✅ Clarifications
+
+✅ Requirement Summary
+
+✅ Test Scope
+
+✅ Scenario Generation
+
+✅ Test Case Generation
+
+✅ Coverage Review
+
+✅ Improve Test Cases
+
+✅ Traceability Matrix
+
+✅ Excel Export
+
+✅ Telegram Integration
+
+---
 
 ## MVP2
 
-* Jira Integration Enhancement
+* Enhanced Jira Integration
 * Requirement Change Impact Analysis
-* Multi-file Requirement Intelligence
 * AI Test Data Generation
-* Test Suite Optimization
 * Teams Integration
-* Requirement Knowledge Base
-
-## MVP3
-
-* Auto Jira Sync
-* Test Execution Recommendation
-* Defect Prediction
-* Risk-based Testing
-* Regression Impact Analysis
-* Multi-agent QA Copilot
+* Knowledge Base
 
 ---
 
-# Future Vision
+## MVP3
 
-Build an enterprise-grade QA AI platform that can:
+* Auto Jira Synchronization
+* Risk-based Testing
+* Regression Impact Analysis
+* Multi-Agent QA Copilot
 
-* Understand requirements
-* Identify gaps
-* Design test coverage
-* Improve test quality
-* Maintain traceability
-* Assist QA teams throughout the SDLC
+---
 
-while keeping humans in control of final decisions.
+# 📄 Documentation
+
+Additional documents:
+
+* README.md
+* Architecture Diagram.md
+* Requirement Lifecycle State Machine.md
+* Security Policy.md
+* MVP Roadmap.md
+
+---
+
+# 📜 License
+
+Internal project.

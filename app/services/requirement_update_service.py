@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from app.utils.file_extractors import (
@@ -251,11 +252,17 @@ def invalidate_analysis(
         root / "review" / "coverage_review.json",
         root / "review" / "final_coverage_review.json",
         root / "review" / "review_session.json",
+
     ]
 
     for file_path in files_to_remove:
         if file_path.exists():
             file_path.unlink()
+
+    design_dir = root / "design"
+
+    if design_dir.exists():
+        shutil.rmtree(design_dir)
             
 def invalidate_after_clarification_promoted(ticket_id: str):
     root = Path("requirements") / ticket_id
@@ -274,3 +281,8 @@ def invalidate_after_clarification_promoted(ticket_id: str):
     for file_path in files_to_remove:
         if file_path.exists():
             file_path.unlink()
+
+    design_dir = root / "design"
+
+    if design_dir.exists():
+        shutil.rmtree(design_dir)

@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 from telegram import (
     Update,
     InputFile,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
 )
 
 from telegram.ext import (
@@ -33,20 +31,31 @@ from graph.test_generation_graph import (
 )
 
 from app.utils.excel_exporter import export_testcases_to_excel
+
 from app.utils.requirement_intelligence_exporter import (
     export_requirement_intelligence_to_excel
 )
 
-from app.utils.workspace_writer import create_workspace_from_text
-from app.utils.file_extractors import extract_file_text
-from app.utils.artifact_loader import load_ticket_artifacts
+from app.utils.workspace_writer import (
+    create_workspace_from_text
+)
+
+from app.utils.file_extractors import (
+    extract_file_text
+)
+
+from app.utils.artifact_loader import (
+    load_ticket_artifacts
+)
 
 from app.utils.clarification_session import (
     save_clarification_answers,
     save_clarification_questions_snapshot
 )
 
-from app.services.improve_cycle_service import run_improve_cycle
+from app.services.improve_cycle_service import (
+    run_improve_cycle
+)
 
 from app.utils.review_session import (
     load_review_session,
@@ -68,27 +77,6 @@ from app.services.requirement_workspace_service import (
     create_requirement_from_text
 )
 
-from app.services.requirement_list_service import (
-    list_requirements
-)
-
-from app.services.requirement_status_service import (
-    get_requirement_status
-)
-
-from app.services.requirement_metadata_service import (
-    get_requirement_metadata
-)
-
-from app.services.requirement_delete_service import (
-    delete_requirement,
-    delete_all_requirements
-)
-
-from app.services.requirement_rename_service import (
-    rename_requirement
-)
-
 from app.services.requirement_resolver import (
     resolve_requirement_id
 )
@@ -97,8 +85,67 @@ from app.services.requirement_update_service import (
     apply_clarification_answers_to_requirement
 )
 
-from app.services.report_service import generate_system_report
+from app.services.report_service import (
+    generate_system_report
+)
 
+from app.services.test_structure_service import (
+    run_initial_structure_flow
+)
+
+from app.utils.test_structure_store import (
+    load_test_case_structure_version,
+    save_approved_test_case_structure,
+    load_structure_session
+)
+
+from app.application.generation_orchestrator import (
+    prepare_generation
+)
+
+from app.application.structure_review_orchestrator import (
+    self_review_structure as self_review_structure_app,
+    comment_improve_structure as comment_improve_structure_app,
+    wait_structure as wait_structure_app,
+    approve_structure as approve_structure_app
+)
+
+from app.application.requirement_management_orchestrator import (
+    list_requirement_items,
+    get_requirement_status,
+    add_requirement_text,
+    delete_requirement,
+    delete_all_requirements,
+    rename_requirement
+)
+
+from bot.keyboards.structure_keyboards import (
+    build_structure_review_keyboard
+)
+
+from bot.keyboards.review_keyboards import (
+    build_review_keyboard
+)
+
+from bot.keyboards.clarification_keyboards import (
+    build_clarification_keyboard
+)
+
+from bot.keyboards.excel_keyboards import (
+    build_excel_keyboard
+)
+
+from bot.renderers.telegram_result_renderer import (
+    send_app_result,
+    send_excel_file_from_message,
+    send_excel_file_to_chat
+)
+
+from bot.handlers.structure_handlers import (
+    structure,
+    handle_structure_callback,
+    handle_structure_comment_text
+)
 
 load_dotenv()
 
@@ -108,88 +155,14 @@ ADD_TEXT_STATE = "add_text"
 ADD_FILE_STATE = "add_file"
 
 
-def build_review_keyboard(ticket_id: str):
-    session = load_review_session(ticket_id)
+def get_message(update):
+    if update.message:
+        return update.message
 
-    keyboard = []
+    if update.callback_query:
+        return update.callback_query.message
 
-    if can_improve_again(ticket_id):
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    (
-                        "🔄 Improve Again "
-                        f"({session.get('improve_iterations', 0)}/"
-                        f"{session.get('max_iterations', 3)})"
-                    ),
-                    callback_data=f"improve:{ticket_id}"
-                )
-            ]
-        )
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    "💬 Comment & Improve",
-                    callback_data=f"comment_improve:{ticket_id}"
-                )
-            ]
-        )
-
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                "✅ Accept",
-                callback_data=f"accept:{ticket_id}"
-            )
-        ]
-    )
-
-    return InlineKeyboardMarkup(keyboard)
-
-
-def build_excel_keyboard(
-    ticket_id: str,
-    excel_files: list[str]
-):
-    if not excel_files:
-        return None
-
-    keyboard = []
-
-    for file_name in excel_files[-5:]:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    f"📥 {file_name}",
-                    callback_data=f"download:{ticket_id}:{file_name}"
-                )
-            ]
-        )
-
-    return InlineKeyboardMarkup(keyboard)
-
-
-def build_clarification_keyboard(
-    ticket_id: str,
-    mode: str
-):
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "✍️ Answer Clarifications",
-                callback_data=f"answer_clarifications:{mode}:{ticket_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "⏭️ Skip Clarifications",
-                callback_data=f"skip_clarifications:{mode}:{ticket_id}"
-            )
-        ]
-    ]
-
-    return InlineKeyboardMarkup(keyboard)
+    return None
 
 
 def extract_clarification_questions(result: dict) -> list:
@@ -205,7 +178,9 @@ async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         """
         🤖 QA AI Platform Bot
 
@@ -233,6 +208,14 @@ async def start(
         Q002: answer...
         - Skip Clarifications: continue with open questions.
 
+        /structure <ticket_id>
+        Generate function-based test case structure, run AI self review, improve it, export Excel, and ask for human approval.
+
+        Structure Review Actions:
+        - Self Review: AI reviews and improves the current structure again.
+        - Comment: provide human feedback and let AI update the structure.
+        - Wait: pause review and resume later with /structure <ticket_id>.
+        - Approve: approve the current structure and save final approved version.
 
         Test Case Generation
         --------------------
@@ -305,7 +288,9 @@ async def report(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         "Generating QA AI system report..."
     )
 
@@ -324,20 +309,23 @@ async def add_text(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
+        message = get_message(update)
 
-        await update.message.reply_text(
-            "Usage:\n"
-            "/add_text TG-20260604080006"
+        await message.reply_text(
+            "Usage: /add_text <requirement_id>"
         )
-
         return
 
     raw_id = " ".join(context.args)
 
-    ticket_id = resolve_requirement_id(raw_id)
+    ticket_id = resolve_requirement_id(
+        raw_id
+    )
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
@@ -346,8 +334,12 @@ async def add_text(
         "add_text_ticket_id"
     ] = ticket_id
 
-    await update.message.reply_text(
-        f"Please send additional requirement text for {ticket_id}"
+    message = get_message(update)
+
+    await message.reply_text(
+        (
+            f"Please send additional requirement text for {ticket_id}."
+        )
     )
     
 async def add_file(
@@ -356,7 +348,9 @@ async def add_file(
 ):
     if not context.args:
 
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "Usage:\n"
             "/add_file TG-20260604080006"
         )
@@ -368,7 +362,9 @@ async def add_file(
     ticket_id = resolve_requirement_id(raw_id)
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
@@ -377,60 +373,11 @@ async def add_file(
         "add_file_ticket_id"
     ] = ticket_id
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"Please upload file for {ticket_id}"
     )
-
-
-async def send_excel_file_from_message(
-    message,
-    ticket_id: str,
-    excel_file: str,
-    caption: str | None = None
-):
-    excel_path = Path(excel_file)
-
-    if not excel_path.exists():
-        await message.reply_text(
-            f"Excel file was not generated: {excel_file}"
-        )
-        return
-
-    with excel_path.open("rb") as file:
-        await message.reply_document(
-            document=InputFile(
-                file,
-                filename=excel_path.name
-            ),
-            caption=caption or f"Generated Excel file: {ticket_id}"
-        )
-
-
-async def send_excel_file_to_chat(
-    context: ContextTypes.DEFAULT_TYPE,
-    chat_id: int,
-    ticket_id: str,
-    excel_file: str,
-    caption: str | None = None
-):
-    excel_path = Path(excel_file)
-
-    if not excel_path.exists():
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"Excel file was not generated: {excel_file}"
-        )
-        return
-
-    with excel_path.open("rb") as file:
-        await context.bot.send_document(
-            chat_id=chat_id,
-            document=InputFile(
-                file,
-                filename=excel_path.name
-            ),
-            caption=caption or f"Generated Excel file: {ticket_id}"
-        )
 
 
 async def export_requirement_intelligence(
@@ -465,6 +412,42 @@ async def run_requirement_summary(
     )
 
     return load_ticket_artifacts(ticket_id)
+
+
+async def self_review_structure(update, context):
+
+    if not context.args:
+        message = get_message(update)
+
+        await message.reply_text(
+            "Usage:\n/self_review_structure <ticket_id>"
+        )
+        return
+
+    ticket_id = context.args[0]
+
+    message = get_message(update)
+
+    await message.reply_text(
+        f"Running AI self review and improvement for structure: {ticket_id}"
+    )
+
+    state = run_initial_structure_flow(
+        ticket_id
+    )
+
+    message = get_message(update)
+
+    await message.reply_text(
+        "AI self review and structure improvement completed."
+    )
+
+    await send_excel_file_from_message(
+        update.message,
+        ticket_id,
+        state["structure_excel_file"],
+        caption="Updated Test Case Structure"
+    )
 
 
 async def run_generation(
@@ -638,7 +621,9 @@ async def process_ticket(
     #
     if questions and not has_answers:
 
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Existing clarification questions found for {ticket_id}.\n"
             f"Please answer them before generating test cases."
         )
@@ -767,7 +752,9 @@ async def analyze(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "Usage: /analyze TG-20260603120000"
         )
         return
@@ -777,12 +764,16 @@ async def analyze(
     ticket_id = resolve_requirement_id(raw_id)
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"Analyzing requirement for {ticket_id}..."
     )
 
@@ -797,7 +788,9 @@ async def analyze_text(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "Usage:\n"
             "/analyze_text User can create account using email and password"
         )
@@ -812,7 +805,9 @@ async def analyze_text(
         source="telegram_analyze_text"
     )
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"Requirement created.\n"
         f"Generated ID: {ticket_id}\n"
         f"Analyzing..."
@@ -829,29 +824,62 @@ async def generate(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    message = get_message(update)
+
     if not context.args:
-        await update.message.reply_text(
+        await message.reply_text(
             "Usage: /generate DEMO-001"
         )
         return
 
     raw_id = " ".join(context.args)
 
-    ticket_id = resolve_requirement_id(raw_id)
+    ticket_id = resolve_requirement_id(
+        raw_id
+    )
 
     if not ticket_id:
-        await update.message.reply_text(
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
 
-    await update.message.reply_text(
-        f"Generating testcases for {ticket_id}..."
+    await message.reply_text(
+        (
+            f"Preparing generation for {ticket_id}...\n\n"
+            f"If no approved test case structure exists, "
+            f"I will generate the structure first and ask for approval."
+        )
     )
 
-    await process_ticket(
-        update,
-        ticket_id
+    try:
+        result = prepare_generation(
+            ticket_id
+        )
+
+    except Exception as error:
+        await message.reply_text(
+            f"Failed during generation preparation:\n{error}"
+        )
+        return
+
+    if result.status == "READY_TO_GENERATE":
+
+        await message.reply_text(
+            result.message
+        )
+
+        await process_ticket(
+            update,
+            ticket_id
+        )
+
+        return
+
+    await send_app_result(
+        message,
+        ticket_id,
+        result
     )
 
 
@@ -860,7 +888,9 @@ async def generate_text(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "Usage:\n"
             "/generate_text User can create account using email and password"
         )
@@ -875,7 +905,9 @@ async def generate_text(
         source="telegram_generate_text"
     )
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"Requirement created.\n"
         f"Generated ID: {ticket_id}\n"
         f"Processing..."
@@ -933,7 +965,9 @@ async def handle_requirement_file(
             None
         )
 
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"File added to requirement: {add_file_ticket_id}\n\n"
             f"Analysis artifacts invalidated.\n"
             f"Please run /analyze again."
@@ -944,7 +978,9 @@ async def handle_requirement_file(
     document = update.message.document
 
     if not document:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "No document found."
         )
         return
@@ -954,7 +990,9 @@ async def handle_requirement_file(
         + datetime.now().strftime("%Y%m%d%H%M%S")
     )
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"File received: {document.file_name}\n"
         f"Generated ID: {ticket_id}\n"
         f"Downloading..."
@@ -987,7 +1025,9 @@ async def handle_requirement_file(
         custom_path=str(file_path)
     )
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         "File downloaded. Extracting text and image-based requirements..."
     )
 
@@ -997,13 +1037,17 @@ async def handle_requirement_file(
         )
 
     except Exception as error:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Failed to extract file content: {error}"
         )
         return
 
     if not extracted_text.strip():
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             "No readable requirement text found in the uploaded file."
         )
         return
@@ -1024,7 +1068,9 @@ async def handle_requirement_file(
         source=f"telegram_file:{document.file_name}"
     )
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         f"Requirement extracted.\n"
         f"Processing {ticket_id}..."
     )
@@ -1035,31 +1081,42 @@ async def handle_requirement_file(
     )
 
 
+
+
 async def handle_text_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
     
+    handled = await handle_structure_comment_text(
+        update,
+        context
+    )
+
+    if handled:
+        return
+
+    message = get_message(update)
+    
+    #
+    # Confirm delete all
+    #
     if context.user_data.get(
         "confirm_delete_all"
     ):
-
         if (
             update.message.text.strip()
             == "CONFIRM DELETE ALL"
         ):
-
-            count = (
-                delete_all_requirements()
-            )
-
             context.user_data.pop(
                 "confirm_delete_all",
                 None
             )
 
-            await update.message.reply_text(
-                f"🗑 Deleted {count} requirements."
+            result = delete_all_requirements()
+
+            await message.reply_text(
+                result.message
             )
 
             return
@@ -1069,80 +1126,67 @@ async def handle_text_message(
             None
         )
 
-        await update.message.reply_text(
+        await message.reply_text(
             "Delete all cancelled."
         )
 
         return
-    
-    rename_ticket_id = (
-        context.user_data.get(
-            "rename_ticket_id"
-        )
+
+    #
+    # Rename requirement
+    #
+    rename_ticket_id = context.user_data.get(
+        "rename_ticket_id"
     )
 
     if rename_ticket_id:
-
-        new_name = (
-            update.message.text.strip()
-        )
-
-        success = rename_requirement(
-            rename_ticket_id,
-            new_name
-        )
+        new_name = update.message.text.strip()
 
         context.user_data.pop(
             "rename_ticket_id",
             None
         )
 
-        if success:
+        result = rename_requirement(
+            rename_ticket_id,
+            new_name
+        )
 
-            await update.message.reply_text(
-                f"✏️ Requirement renamed.\n\n"
-                f"Ticket: {rename_ticket_id}\n"
-                f"New Name: {new_name}"
-            )
-
-        else:
-
-            await update.message.reply_text(
-                "Failed to rename requirement."
-            )
+        await message.reply_text(
+            result.message
+        )
 
         return
-    
-    add_text_ticket_id = (
-        context.user_data.get(
-            "add_text_ticket_id"
-        )
+
+    #
+    # Add text to requirement
+    #
+    add_text_ticket_id = context.user_data.get(
+        "add_text_ticket_id"
     )
 
     if add_text_ticket_id:
-
-        from app.services.requirement_update_service import (
-            append_requirement_text
-        )
-
-        append_requirement_text(
-            add_text_ticket_id,
-            update.message.text
-        )
+        text = update.message.text.strip()
 
         context.user_data.pop(
             "add_text_ticket_id",
             None
         )
 
-        await update.message.reply_text(
-            f"Requirement updated: {add_text_ticket_id}\n\n"
-            f"Analysis artifacts invalidated.\n"
-            f"Please run /analyze again."
+        result = add_requirement_text(
+            add_text_ticket_id,
+            text
+        )
+
+        await message.reply_text(
+            result.message
         )
 
         return
-    
+
+    #
+    # Comment-based test case improvement
+    #
     comment_ticket_id = context.user_data.get(
         "comment_improve_for"
     )
@@ -1165,7 +1209,7 @@ async def handle_text_message(
             None
         )
 
-        await update.message.reply_text(
+        await message.reply_text(
             f"Review comment saved for {comment_ticket_id}.\n"
             f"Improving test cases with your comment...\n"
             f"Iteration: {session.get('improve_iterations')}/"
@@ -1231,7 +1275,7 @@ async def handle_text_message(
                 "\nMaximum improvement iterations reached."
             )
 
-        await update.message.reply_text(
+        await message.reply_text(
             improve_message,
             reply_markup=build_review_keyboard(
                 comment_ticket_id
@@ -1256,7 +1300,7 @@ async def handle_text_message(
         )
 
         await send_excel_file_from_message(
-            update.message,
+            message,
             comment_ticket_id,
             excel_file,
             caption=f"Generated testcases Excel file: {comment_ticket_id}"
@@ -1264,6 +1308,9 @@ async def handle_text_message(
 
         return
 
+    #
+    # Clarification answers
+    #
     ticket_id = context.user_data.get(
         "answering_clarifications_for"
     )
@@ -1277,7 +1324,7 @@ async def handle_text_message(
         ticket_id,
         answer_text
     )
-    
+
     apply_clarification_answers_to_requirement(
         ticket_id
     )
@@ -1297,7 +1344,7 @@ async def handle_text_message(
         None
     )
 
-    await update.message.reply_text(
+    await message.reply_text(
         f"Clarification answers saved for {ticket_id}.\n"
         f"Generating requirement summary..."
     )
@@ -1308,13 +1355,13 @@ async def handle_text_message(
 
     if next_action == "analyze":
         await export_requirement_intelligence(
-            update.message,
+            message,
             ticket_id
         )
         return
 
     await run_generation(
-        update.message,
+        message,
         ticket_id,
         generation_state
     )
@@ -1324,9 +1371,20 @@ async def handle_review_action(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    
     query = update.callback_query
 
     await query.answer()
+
+    data = query.data
+
+    handled = await handle_structure_callback(
+        update,
+        context
+    )
+
+    if handled:
+        return
 
     parts = query.data.split(":")
 
@@ -1576,131 +1634,47 @@ async def status(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
-        await update.message.reply_text(
-            "Usage: /status TG-20260603120000"
+        message = get_message(update)
+
+        await message.reply_text(
+            "Usage: /status <requirement_id>"
         )
         return
 
     raw_id = " ".join(context.args)
 
-    ticket_id = resolve_requirement_id(raw_id)
+    ticket_id = resolve_requirement_id(
+        raw_id
+    )
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
-    
-    metadata = get_requirement_metadata(
+
+    result = get_requirement_status(
         ticket_id
     )
 
-    status_icon, status_text = (
-        get_requirement_status(
-            ticket_id
-        )
-    )
+    message = get_message(update)
 
-    data = load_ticket_artifacts(ticket_id)
-
-    scenarios = data.get("scenarios", [])
-    testcases = data.get("testcases", [])
-    review = data.get("coverage_review", {})
-    final_review = data.get("final_coverage_review", {})
-    session = data.get("session", {})
-
-    exports_dir = (
-        Path("requirements")
-        / ticket_id
-        / "exports"
-    )
-
-    excel_files = []
-
-    if exports_dir.exists():
-        excel_files = sorted(
-            [
-                file.name
-                for file in exports_dir.glob("*.xlsx")
-            ]
-        )
-
-    status_message = (
-        f"📊 Requirement Status\n\n"
-        f"Ticket ID: {ticket_id}\n"
-        f"Summary: "
-        f"{metadata.get('summary', '')}\n"
-        f"Created: "
-        f"{metadata.get('created_at', '')}\n"
-        f"Status: "
-        f"{status_icon} {status_text}\n\n"
-        f"Scenarios: {len(scenarios)}\n"
-        f"Testcases: {len(testcases)}\n\n"
-        f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
-        f"Final Coverage: {final_review.get('coverage_score', 'N/A')}\n\n"
-        f"Improve Iterations: "
-        f"{session.get('improve_iterations', 0)}/"
-        f"{session.get('max_iterations', 3)}\n"
-        f"Accepted: {session.get('accepted', False)}\n\n"
-        f"Excel Files:\n"
-    )
-
-    if excel_files:
-        for file_name in excel_files[-5:]:
-            status_message += f"- {file_name}\n"
-    else:
-        status_message += "- None\n"
-
-    await update.message.reply_text(
-        status_message,
-        reply_markup=build_excel_keyboard(
-            ticket_id,
-            excel_files
-        )
+    await message.reply_text(
+        result.message
     )
     
 async def requirements(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    items = list_requirements()
+    result = list_requirement_items()
 
-    if not items:
+    message = get_message(update)
 
-        await update.message.reply_text(
-            "No requirements found."
-        )
-
-        return
-
-    message = (
-        "📋 Requirements\n\n"
-    )
-
-    for item in items[:30]:
-
-        message += (
-            f"{item['status_icon']} "
-            f"{item['ticket_id']}\n"
-            f"{item['summary']}\n"
-            f"Created: {item['created_at']}\n"
-            f"Status: {item['status']}\n\n"
-            f"Commands:\n"
-            f"/status {item['ticket_id']}\n"
-            f"/generate {item['ticket_id']}\n"
-            f"/rename {item['ticket_id']}\n"
-            f"/delete {item['ticket_id']}\n\n"
-        )
-
-    if len(items) > 30:
-
-        message += (
-            f"... showing first 30 of "
-            f"{len(items)} requirements"
-        )
-
-    await update.message.reply_text(
-        message
+    await message.reply_text(
+        result.message
     )
     
 
@@ -1708,31 +1682,41 @@ async def rename(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    if not context.args:
+    if len(context.args) < 2:
+        message = get_message(update)
 
-        await update.message.reply_text(
-            "Usage:\n"
-            "/rename TG-20260604114533"
+        await message.reply_text(
+            "Usage: /rename <requirement_id> <new summary>"
         )
-
         return
 
-    raw_id = " ".join(context.args)
-    ticket_id = resolve_requirement_id(raw_id)
+    raw_id = context.args[0]
+
+    ticket_id = resolve_requirement_id(
+        raw_id
+    )
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
 
-    context.user_data[
-        "rename_ticket_id"
-    ] = ticket_id
+    new_summary = " ".join(
+        context.args[1:]
+    ).strip()
 
-    await update.message.reply_text(
-        f"Please enter new name for:\n"
-        f"{ticket_id}"
+    result = rename_requirement(
+        ticket_id,
+        new_summary
+    )
+
+    message = get_message(update)
+
+    await message.reply_text(
+        result.message
     )
 
 
@@ -1741,38 +1725,35 @@ async def delete(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if not context.args:
+        message = get_message(update)
 
-        await update.message.reply_text(
-            "Usage:\n"
-            "/delete TG-20260604114533"
+        await message.reply_text(
+            "Usage: /delete <requirement_id>"
         )
-
         return
 
     raw_id = " ".join(context.args)
-    ticket_id = resolve_requirement_id(raw_id)
+
+    ticket_id = resolve_requirement_id(
+        raw_id
+    )
 
     if not ticket_id:
-        await update.message.reply_text(
+        message = get_message(update)
+
+        await message.reply_text(
             f"Requirement not found: {raw_id}"
         )
         return
 
-    success = delete_requirement(
+    result = delete_requirement(
         ticket_id
     )
 
-    if not success:
+    message = get_message(update)
 
-        await update.message.reply_text(
-            f"Requirement not found: {ticket_id}"
-        )
-
-        return
-
-    await update.message.reply_text(
-        f"🗑 Requirement deleted:\n"
-        f"{ticket_id}"
+    await message.reply_text(
+        result.message
     )
     
 
@@ -1784,7 +1765,9 @@ async def delete_all(
         "confirm_delete_all"
     ] = True
 
-    await update.message.reply_text(
+    message = get_message(update)
+
+    await message.reply_text(
         "⚠️ WARNING\n\n"
         "This will delete ALL requirements.\n\n"
         "Type:\n"
@@ -1831,6 +1814,20 @@ def main():
         CommandHandler(
             "analyze_text",
             analyze_text
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "structure",
+            structure
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "self_review_structure",
+            self_review_structure
         )
     )
 

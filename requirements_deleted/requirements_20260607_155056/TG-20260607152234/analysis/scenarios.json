@@ -1,0 +1,223 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account registration with valid data",
+    "type": "Positive",
+    "priority": "High",
+    "description": "Fill all required fields with valid data: first name='John', last name='Doe', username='johndoe', phone='1234567890', email='john.doe@example.com', password='Pass123!', confirm password='Pass123!'. Submit the form. Verify that the account is created successfully (e.g., success message or redirect to verification page).",
+    "related_requirement_ids": [
+      "FR001",
+      "FR002",
+      "BR001",
+      "BR002",
+      "VAL001",
+      "VAL002",
+      "VAL003"
+    ],
+    "traceability": "FR001, FR002, BR001, BR002, VAL001, VAL002, VAL003"
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Submit registration with all required fields empty",
+    "type": "Validation",
+    "priority": "High",
+    "description": "Leave all fields (first name, last name, username, phone, email, password, confirm password) empty and submit the form. Verify that inline error messages appear next to each field indicating that the field is required.",
+    "related_requirement_ids": [
+      "FR002",
+      "FR004",
+      "VAL004"
+    ],
+    "traceability": "FR002, FR004, VAL004"
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Password with missing number (e.g., all letters and special)",
+    "type": "Validation",
+    "priority": "High",
+    "description": "Enter a password that contains letters and a special character but no number, e.g., 'Passport!'. Confirm password matching. Submit. Verify that an inline error message appears stating that the password must contain at least one number.",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002",
+      "FR004"
+    ],
+    "traceability": "BR002, VAL002, FR004"
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Password with missing special character (e.g., letters and numbers)",
+    "type": "Validation",
+    "priority": "High",
+    "description": "Enter a password that contains letters and numbers but no special character, e.g., 'Password1'. Confirm password matching. Submit. Verify that an inline error message appears stating that the password must contain at least one special character.",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002",
+      "FR004"
+    ],
+    "traceability": "BR002, VAL002, FR004"
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Password with missing alphabet character (e.g., only numbers and special)",
+    "type": "Validation",
+    "priority": "High",
+    "description": "Enter a password that contains numbers and a special character but no alphabet letter, e.g., '12345678!'. Confirm password matching. Submit. Verify that an inline error message appears stating that the password must contain at least one alphabet character.",
+    "related_requirement_ids": [
+      "BR002",
+      "VAL002",
+      "FR004"
+    ],
+    "traceability": "BR002, VAL002, FR004"
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "Confirm password does not match password",
+    "type": "Validation",
+    "priority": "High",
+    "description": "Enter a valid password (e.g., 'Pass123!') and enter a different value in the confirm password field (e.g., 'Pass1234!'). Submit. Verify that an inline error message appears stating that the passwords do not match.",
+    "related_requirement_ids": [
+      "VAL003",
+      "FR004"
+    ],
+    "traceability": "VAL003, FR004"
+  },
+  {
+    "scenario_id": "SC007",
+    "title": "Password length less than minimum (7 characters)",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Enter a password of 7 characters that meets other complexity requirements (e.g., 'Abc123!'). Confirm matching. Submit. Verify that an inline error message appears stating that the password must be between 8 and 12 characters.",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL002",
+      "FR004"
+    ],
+    "traceability": "BR001, VAL002, FR004"
+  },
+  {
+    "scenario_id": "SC008",
+    "title": "Password length more than maximum (13 characters)",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Enter a password of 13 characters that meets other complexity requirements (e.g., 'Abc123!?xyzw1'). Confirm matching. Submit. Verify that an inline error message appears stating that the password must be between 8 and 12 characters.",
+    "related_requirement_ids": [
+      "BR001",
+      "VAL002",
+      "FR004"
+    ],
+    "traceability": "BR001, VAL002, FR004"
+  },
+  {
+    "scenario_id": "SC009",
+    "title": "Password length exactly minimum (8 characters) and valid",
+    "type": "Boundary",
+    "priority": "Medium",
+    "description": "Enter a password of exactly 8 characters that meets all complexity requirements (e.g., 'Abc123!?'). Confirm matching. Submit. Verify that registration succeeds (account created).",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "BR002",
+      "VAL002"
+    ],
+    "traceability": "FR001, BR001, BR002, VAL002"
+  },
+  {
+    "scenario_id": "SC010",
+    "title": "Password length exactly maximum (12 characters) and valid",
+    "type": "Boundary",
+    "priority": "Medium",
+    "description": "Enter a password of exactly 12 characters that meets all complexity requirements (e.g., 'Abc123!?xyzw1'). Confirm matching. Submit. Verify that registration succeeds (account created).",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "BR002",
+      "VAL002"
+    ],
+    "traceability": "FR001, BR001, BR002, VAL002"
+  },
+  {
+    "scenario_id": "SC011",
+    "title": "Login attempt with unverified email",
+    "type": "Business Rule",
+    "priority": "High",
+    "description": "Register a new account with valid data and complete the registration (email verification not performed). Attempt to log in with the same credentials. Verify that login is rejected with a meaningful error message indicating that the email has not been verified and that the account is not active.",
+    "related_requirement_ids": [
+      "FR003",
+      "BR003"
+    ],
+    "traceability": "FR003, BR003"
+  },
+  {
+    "scenario_id": "SC012",
+    "title": "Register with an already used email address (duplicate)",
+    "type": "Business Rule",
+    "priority": "High",
+    "description": "First, register a user with email 'test@example.com'. Then attempt to register another user with the same email. Verify that the registration is rejected with a meaningful inline error message stating that the email address is already registered.",
+    "related_requirement_ids": [
+      "FR001",
+      "FR004",
+      "VAL005"
+    ],
+    "traceability": "FR001, FR004, VAL005"
+  },
+  {
+    "scenario_id": "SC013",
+    "title": "Unverified account cannot access authenticated endpoints",
+    "type": "Security",
+    "priority": "High",
+    "description": "After registration without email verification, attempt to access any authenticated endpoint (e.g., profile page, dashboard). Verify that the system returns an error indicating that the account is not active or requires email verification.",
+    "related_requirement_ids": [
+      "FR003",
+      "BR003"
+    ],
+    "traceability": "FR003, BR003"
+  },
+  {
+    "scenario_id": "SC014",
+    "title": "Inline error messages for empty fields and clearing on correction",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Submit the form with all fields empty. Verify that each field displays an inline error message (e.g., 'First name is required'). Then fill in a valid value for one field (e.g., first name) and verify that its error message disappears immediately, while others remain until corrected.",
+    "related_requirement_ids": [
+      "FR004",
+      "VAL004"
+    ],
+    "traceability": "FR004, VAL004"
+  },
+  {
+    "scenario_id": "SC015",
+    "title": "Inline error message for invalid password length and clearing",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Enter a password shorter than 8 characters (e.g., 'Abc1!'). Submit. Verify that an inline error message appears (e.g., 'Password must be 8-12 characters'). Then correct the password to a valid one (e.g., 'Abc123!?') and verify that the error message disappears.",
+    "related_requirement_ids": [
+      "FR004",
+      "BR001",
+      "VAL002"
+    ],
+    "traceability": "FR004, BR001, VAL002"
+  },
+  {
+    "scenario_id": "SC016",
+    "title": "Inline error message for confirm password mismatch and clearing",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Enter a valid password and a non-matching confirm password. Submit. Verify that an inline error message appears (e.g., 'Passwords do not match'). Then correct the confirm password to match and verify that the error message disappears.",
+    "related_requirement_ids": [
+      "FR004",
+      "VAL003"
+    ],
+    "traceability": "FR004, VAL003"
+  },
+  {
+    "scenario_id": "SC017",
+    "title": "Inline error message for duplicate email and clearing",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Register a user with email 'dup@example.com'. Then attempt to register another user with the same email. Verify that an inline error message appears (e.g., 'Email already registered'). Change the email to a new one and verify that the error message disappears.",
+    "related_requirement_ids": [
+      "FR004",
+      "VAL005"
+    ],
+    "traceability": "FR004, VAL005"
+  }
+]

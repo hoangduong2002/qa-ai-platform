@@ -1,0 +1,299 @@
+[
+  {
+    "testcase_id": "TC030",
+    "scenario_id": "SC030",
+    "title": "Username uniqueness - duplicate username rejected",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "A user with username 'existinguser' already exists in the system.",
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: existinguser",
+      "Enter email: newuser@example.com",
+      "Enter phone: 1234567890",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the username is already taken."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "existinguser",
+      "email": "newuser@example.com",
+      "phone": "1234567890",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL006",
+      "FR004"
+    ],
+    "traceability": "VAL006, FR004"
+  },
+  {
+    "testcase_id": "TC031",
+    "scenario_id": "SC031",
+    "title": "Email format validation - missing @ symbol",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe31",
+      "Enter email: johndoeexample.com",
+      "Enter phone: 1234567890",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the email format is invalid (must contain @)."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe31",
+      "email": "johndoeexample.com",
+      "phone": "1234567890",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL007",
+      "FR004"
+    ],
+    "traceability": "VAL007, FR004"
+  },
+  {
+    "testcase_id": "TC032",
+    "scenario_id": "SC032",
+    "title": "Email format validation - missing domain",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe32",
+      "Enter email: johndoe@",
+      "Enter phone: 1234567890",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the email format is invalid (must have domain after @)."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe32",
+      "email": "johndoe@",
+      "phone": "1234567890",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL007",
+      "FR004"
+    ],
+    "traceability": "VAL007, FR004"
+  },
+  {
+    "testcase_id": "TC033",
+    "scenario_id": "SC033",
+    "title": "Phone number format validation - non-numeric characters",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe33",
+      "Enter email: johndoe33@example.com",
+      "Enter phone: abc1234567",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the phone number must be numeric."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe33",
+      "email": "johndoe33@example.com",
+      "phone": "abc1234567",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL008",
+      "FR004"
+    ],
+    "traceability": "VAL008, FR004"
+  },
+  {
+    "testcase_id": "TC034",
+    "scenario_id": "SC034",
+    "title": "Phone number format validation - too short (less than 10 digits)",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe34",
+      "Enter email: johndoe34@example.com",
+      "Enter phone: 123456789",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the phone number must be exactly 10 digits."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe34",
+      "email": "johndoe34@example.com",
+      "phone": "123456789",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL008",
+      "FR004"
+    ],
+    "traceability": "VAL008, FR004"
+  },
+  {
+    "testcase_id": "TC035",
+    "scenario_id": "SC035",
+    "title": "Phone number format validation - too long (more than 10 digits)",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe35",
+      "Enter email: johndoe35@example.com",
+      "Enter phone: 12345678901",
+      "Enter password: Pass123!",
+      "Enter confirm password: Pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the phone number must be exactly 10 digits."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe35",
+      "email": "johndoe35@example.com",
+      "phone": "12345678901",
+      "password": "Pass123!",
+      "confirm_password": "Pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL008",
+      "FR004"
+    ],
+    "traceability": "VAL008, FR004"
+  },
+  {
+    "testcase_id": "TC036",
+    "scenario_id": "SC036",
+    "title": "Password complexity - missing uppercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe36",
+      "Enter email: johndoe36@example.com",
+      "Enter phone: 1234567890",
+      "Enter password: pass123!",
+      "Enter confirm password: pass123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the password must contain at least one uppercase letter."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe36",
+      "email": "johndoe36@example.com",
+      "phone": "1234567890",
+      "password": "pass123!",
+      "confirm_password": "pass123!"
+    },
+    "related_requirement_ids": [
+      "VAL009",
+      "FR004"
+    ],
+    "traceability": "VAL009, FR004"
+  },
+  {
+    "testcase_id": "TC037",
+    "scenario_id": "SC037",
+    "title": "Password complexity - missing lowercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page."
+    ],
+    "test_steps": [
+      "Enter first name: John",
+      "Enter last name: Doe",
+      "Enter username: johndoe37",
+      "Enter email: johndoe37@example.com",
+      "Enter phone: 1234567890",
+      "Enter password: PASS123!",
+      "Enter confirm password: PASS123!",
+      "Click Submit."
+    ],
+    "expected_results": [
+      "An inline error message appears indicating that the password must contain at least one lowercase letter."
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "username": "johndoe37",
+      "email": "johndoe37@example.com",
+      "phone": "1234567890",
+      "password": "PASS123!",
+      "confirm_password": "PASS123!"
+    },
+    "related_requirement_ids": [
+      "VAL009",
+      "FR004"
+    ],
+    "traceability": "VAL009, FR004"
+  }
+]

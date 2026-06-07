@@ -1,0 +1,107 @@
+{
+  "actors": [
+    "User"
+  ],
+  "functional_requirements": [
+    "User can create an account using email and password.",
+    "Registration form must include fields: first name, last name, username, phone number, email, password, and confirm password.",
+    "System shall require email verification before first login.",
+    "System shall provide meaningful inline error messages for invalid inputs."
+  ],
+  "business_rules": [
+    "Password must be between 8 and 12 characters in length.",
+    "Password must contain at least one number, one special character, and one alphabet character.",
+    "Account is not considered active until email is verified."
+  ],
+  "validations": [
+    "Email format must be valid (exact regex not specified).",
+    "Password must meet complexity requirements (8-12 chars, include number, special, alphabet).",
+    "Confirm password must match password.",
+    "Required fields (first name, last name, username, phone number, email, password, confirm password) cannot be empty.",
+    "Duplicate email address must be detected and rejected with a meaningful error."
+  ],
+  "dependencies": [
+    "Email verification service (e.g., sending verification email with link).",
+    "User interface for registration form."
+  ],
+  "risks": [
+    "Unclear email verification process (expiry, link format) may lead to user confusion.",
+    "Password special character set not defined, may cause inconsistency.",
+    "Lack of email format specification may lead to validation issues.",
+    "Phone number format not specified.",
+    "Username uniqueness not specified.",
+    "HTTP status codes for error responses not defined."
+  ],
+  "missing_information": [
+    "Exact email format validation regex or rules.",
+    "List of allowed special characters in password.",
+    "Whether username must be unique.",
+    "Phone number format and validation rules.",
+    "First name and last name character limits.",
+    "Email verification process details (e.g., link expiration, resend mechanism).",
+    "Whether a password blacklist is required.",
+    "HTTP status codes for different error scenarios."
+  ],
+  "requirement_items": [
+    {
+      "requirement_id": "FR001",
+      "type": "Functional Requirement",
+      "description": "User can create an account using email and password."
+    },
+    {
+      "requirement_id": "FR002",
+      "type": "Functional Requirement",
+      "description": "Registration form must include fields: first name, last name, username, phone number, email, password, and confirm password."
+    },
+    {
+      "requirement_id": "FR003",
+      "type": "Functional Requirement",
+      "description": "System shall require email verification before first login."
+    },
+    {
+      "requirement_id": "FR004",
+      "type": "Functional Requirement",
+      "description": "System shall provide meaningful inline error messages for invalid inputs."
+    },
+    {
+      "requirement_id": "BR001",
+      "type": "Business Rule",
+      "description": "Password must be between 8 and 12 characters in length."
+    },
+    {
+      "requirement_id": "BR002",
+      "type": "Business Rule",
+      "description": "Password must contain at least one number, one special character, and one alphabet character."
+    },
+    {
+      "requirement_id": "BR003",
+      "type": "Business Rule",
+      "description": "Account is not considered active until email is verified."
+    },
+    {
+      "requirement_id": "VAL001",
+      "type": "Validation",
+      "description": "Email format must be valid (exact regex not specified)."
+    },
+    {
+      "requirement_id": "VAL002",
+      "type": "Validation",
+      "description": "Password must meet complexity requirements (8-12 chars, include number, special, alphabet)."
+    },
+    {
+      "requirement_id": "VAL003",
+      "type": "Validation",
+      "description": "Confirm password must match password."
+    },
+    {
+      "requirement_id": "VAL004",
+      "type": "Validation",
+      "description": "Required fields (first name, last name, username, phone number, email, password, confirm password) cannot be empty."
+    },
+    {
+      "requirement_id": "VAL005",
+      "type": "Validation",
+      "description": "Duplicate email address must be detected and rejected with a meaningful error."
+    }
+  ]
+}
