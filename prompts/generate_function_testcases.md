@@ -32,18 +32,39 @@ Rules:
 - test_steps must be clear, executable QA steps.
 - expected_results must be specific and verifiable.
 - Do not use vague expected results such as "works correctly".
-- All string values must be valid JSON strings.
-- Escape double quotes inside string values.
-- Do not use trailing commas.
-- Do not use comments inside JSON.
 
-Return ONLY a valid JSON array.
-The first character must be [
-The last character must be ]
-Do not use markdown.
-Do not wrap in ```json.
-Do not return an object.
-Do not add explanation.
+Test data rules:
+- test_data must be a valid JSON object.
+- Every test_data value must be valid JSON.
+- Do not write comments or explanations after a JSON value.
+- Do not write values like: "password": "abc" (example only).
+- If a value is illustrative, put the entire explanation inside the string.
+- Prefer placeholders for very long boundary data.
+- For boundary passwords, use values like:
+  - "password": "8_char_valid_password"
+  - "password": "128_char_valid_password"
+  - "password_note": "Actual password must contain exactly 128 characters and satisfy all complexity rules"
+- Do not generate extremely long repeated strings if it increases JSON error risk.
+- Do not append text outside string quotes.
+
+JSON safety rules:
+- Return ONLY a valid JSON array.
+- The first character must be [
+- The last character must be ]
+- Do not use markdown.
+- Do not wrap in ```json.
+- Do not return an object.
+- Do not add explanation.
+- Do not use comments inside JSON.
+- Do not use trailing commas.
+- Every string must start and end on the same line.
+- Do not insert raw newline characters inside a JSON string.
+- Escape double quotes inside string values.
+- Prefer single quotes inside string values when quoting messages or input values.
+- Do not leave an unfinished string.
+- Do not leave unfinished objects.
+- Every object inside an array must end with }.
+- Every array must end with ].
 
 Each test case must follow this schema:
 [

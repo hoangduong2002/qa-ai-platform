@@ -33,6 +33,87 @@ def normalize_testcases(data):
     )
 
 
+def repair_json_with_llm(
+    ticket_id: str,
+    function_id: str,
+    malformed_json_text: str,
+    original_error: Exception,
+):
+    """
+    Repair malformed JSON returned by function-level test case generation.
+
+    Common issues:
+    - notes after JSON values, e.g. "password": "abc" (example only)
+    - unescaped double quotes inside strings
+    - raw newlines inside strings
+    - missing quotes
+    - trailing commas
+    """
+
+    logger.warning(
+        "Attempting to repair malformed testcases JSON. ticket_id=%s, function_id=%s, error=%s",
+        ticket_id,
+        function_id,
+        original_error,
+    )
+
+    repair_prompt = f"""
+You are a JSON repair tool.
+
+Fix the malformed JSON below.
+
+Rules:
+- Return ONLY valid JSON.
+- Return a JSON array.
+- Do not add explanation.
+- Do not use markdown.
+- Do not wrap in ```json.
+- Preserve all valid test cases and fields as much as possible.
+- Fix missing quotes.
+- Fix unescaped double quotes inside JSON strings.
+- Fix unescaped newlines inside strings.
+- Fix trailing commas.
+- Fix invalid comments or notes after JSON values.
+- Example malformed: "password": "abc" (example only)
+- Example fixed: "password": "abc", "password_note": "example only"
+- Example malformed: "password": "A1a!" (example – actual must be exactly 128 chars)
+- Example fixed: "password": "A1a!", "password_note": "actual must be exactly 128 chars"
+- Do not invent new test cases.
+- Do not remove valid test cases.
+- Every string must start and end on the same line.
+- Every object inside arrays must be closed with }} before the next comma or closing ].
+
+Original parse error:
+{original_error}
+
+Malformed JSON:
+{malformed_json_text}
+"""
+
+    llm = get_llm()
+
+    response = llm.invoke(
+        repair_prompt,
+        ticket_id=ticket_id,
+        node_name=f"generate_testcases_{function_id}_json_repair",
+    )
+
+    repaired_raw_file = save_raw_response(
+        ticket_id,
+        f"generate_testcases_{function_id}_repaired_raw",
+        response.content,
+    )
+
+    logger.info(
+        "Repaired testcases JSON response saved. ticket_id=%s, function_id=%s, file=%s",
+        ticket_id,
+        function_id,
+        repaired_raw_file,
+    )
+
+    return parse_json(response.content)
+
+
 def _as_list(value: Any) -> list:
     if value is None:
         return []
@@ -346,7 +427,16 @@ def _generate_testcases_for_function(
     )
 
     try:
-        parsed = parse_json(response.content)
+        try:
+            parsed = parse_json(response.content)
+        except Exception as parse_error:
+            parsed = repair_json_with_llm(
+                ticket_id=ticket_id,
+                function_id=function_id,
+                malformed_json_text=response.content,
+                original_error=parse_error,
+            )
+
         testcases = normalize_testcases(parsed)
 
         expected_scenario_ids = {
