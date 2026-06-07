@@ -516,22 +516,29 @@ def export_generated_testcases_excel(
         or {}
     )
 
-    excel_file = export_generation_result_to_excel(
+    excel_file = export_function_based_testcases_to_excel(
         ticket_id=ticket_id,
-        result=result,
-        version=version,
+        testcases=testcases,
+        coverage_review=coverage_review,
+        final_coverage_review=final_coverage_review,
+        approved_structure=approved_structure,
     )
 
-    if version:
-        source_file = Path(excel_file)
-        versioned_file = (
-            source_file.parent
-            / f"{ticket_id}_function_based_testcases_{version}.xlsx"
-        )
-        shutil.copyfile(source_file, versioned_file)
-        return str(versioned_file)
+    if not version or version == "latest":
+        return excel_file
 
-    return excel_file
+    source_file = Path(excel_file)
+    versioned_file = (
+        source_file.parent
+        / f"{ticket_id}_function_based_testcases_{version}.xlsx"
+    )
+
+    if source_file.resolve() == versioned_file.resolve():
+        return str(source_file)
+
+    shutil.copyfile(source_file, versioned_file)
+
+    return str(versioned_file)
 
 
 async def continue_generation_with_structure_gate(
