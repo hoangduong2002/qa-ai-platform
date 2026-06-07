@@ -37,6 +37,23 @@ def _structure_actions(ticket_id: str) -> list[AppAction]:
     ]
 
 
+def _extract_main_functions(structure: dict) -> list:
+    if not isinstance(structure, dict):
+        return []
+
+    functions = (
+        structure.get("main_functions")
+        or structure.get("functions")
+        or structure.get("test_functions")
+        or []
+    )
+
+    if not isinstance(functions, list):
+        return []
+
+    return functions
+
+
 def _build_structure_message(
     ticket_id: str,
     state: dict,
@@ -46,11 +63,7 @@ def _build_structure_message(
     review = state.get("test_case_structure_review", {})
     structure_data = state.get("test_case_structure", {})
 
-    main_functions = (
-        structure_data.get("main_functions")
-        or structure_data.get("functions")
-        or []
-    )
+    main_functions = _extract_main_functions(structure_data)
 
     title = (
         "Resuming test case structure review"
@@ -73,28 +86,27 @@ def _build_structure_message(
 
 def build_structured_generation_state(ticket_id: str) -> dict:
     """
-    Build the generation state for the future default pipeline:
+    Build the state required by the structured test generation graph.
 
-    Requirement artifacts
-        + approved_test_case_structure
-        -> scenario/testcase generation
-
-    This function must only be used after structure approval.
+    This function is intentionally separated from Telegram so FastAPI/Teams
+    can reuse the same logic later.
     """
+
     approved_structure = load_approved_test_case_structure(ticket_id)
 
     if not approved_structure:
         raise ValueError(
             f"No approved test case structure found for {ticket_id}. "
-            f"Please approve the test case structure before generating test cases."
+            f"Please approve the structure before generating test cases."
         )
 
-    state = load_ticket_artifacts(ticket_id)
-    state["ticket_id"] = ticket_id
-    state["approved_test_case_structure"] = approved_structure
-    state["generation_mode"] = "STRUCTURED"
+    artifacts = load_ticket_artifacts(ticket_id)
 
-    return state
+    artifacts["ticket_id"] = ticket_id
+    artifacts["generation_mode"] = "STRUCTURED_FUNCTION_BASED"
+    artifacts["approved_test_case_structure"] = approved_structure
+
+    return artifacts
 
 
 def prepare_generation(ticket_id: str) -> AppResult:
@@ -102,37 +114,30 @@ def prepare_generation(ticket_id: str) -> AppResult:
     Structure-first generation gate.
 
     Rules:
-    1. If approved structure exists:
-       allow structured test case generation.
-    2. If structure exists but is not approved:
+    1. Approved structure exists:
+       allow structured generation.
+    2. Structure exists but not approved:
        resume structure review.
-    3. If no structure exists:
-       generate structure, run AI review/improve, export Excel,
+    3. No structure:
+       create structure, run AI review/improve, export Excel,
        then wait for human approval.
-
-    Legacy generation is intentionally not used here.
     """
 
     if has_approved_test_case_structure(ticket_id):
         approved_structure = load_approved_test_case_structure(ticket_id)
-
-        main_functions = (
-            approved_structure.get("main_functions")
-            or approved_structure.get("functions")
-            or []
-        )
+        main_functions = _extract_main_functions(approved_structure)
 
         return AppResult(
             status="READY_TO_GENERATE",
             message=(
                 f"Approved test case structure found for {ticket_id}.\n"
-                f"Generation Mode: STRUCTURED\n"
+                f"Generation Mode: STRUCTURED_FUNCTION_BASED\n"
                 f"Main Functions: {len(main_functions)}\n\n"
                 f"Generating test cases from approved structure..."
             ),
             data={
                 "ticket_id": ticket_id,
-                "generation_mode": "STRUCTURED",
+                "generation_mode": "STRUCTURED_FUNCTION_BASED",
                 "approved_test_case_structure": approved_structure,
             },
         )

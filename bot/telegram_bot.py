@@ -104,6 +104,15 @@ from app.application.generation_orchestrator import (
     build_structured_generation_state,
 )
 
+from app.application.export_orchestrator import (
+    export_generation_result_to_excel,
+    save_generation_history,
+)
+
+from app.application.export_orchestrator import (
+    export_generation_result_to_excel,
+)
+
 from app.application.structure_review_orchestrator import (
     self_review_structure as self_review_structure_app,
     comment_improve_structure as comment_improve_structure_app,
@@ -146,10 +155,6 @@ from bot.handlers.structure_handlers import (
     structure,
     handle_structure_callback,
     handle_structure_comment_text
-)
-
-from app.exporters.function_based_excel_exporter import (
-    export_function_based_testcases_to_excel,
 )
 
 load_dotenv()
@@ -419,6 +424,56 @@ async def run_requirement_summary(
     return load_ticket_artifacts(ticket_id)
 
 
+async def continue_generation_with_structure_gate(
+    message,
+    ticket_id: str,
+):
+    await message.reply_text(
+        f"Checking approved test case structure for {ticket_id}..."
+    )
+
+    generation_gate_result = prepare_generation(ticket_id)
+
+    if generation_gate_result.status != "READY_TO_GENERATE":
+        await send_app_result(
+            message,
+            ticket_id,
+            generation_gate_result,
+        )
+        return
+
+    await message.reply_text(generation_gate_result.message)
+
+    await message.reply_text(
+        "Preparing requirement summary and generation context..."
+    )
+
+    await run_requirement_summary(ticket_id)
+
+    generation_state = build_structured_generation_state(ticket_id)
+
+    if not generation_state.get("approved_test_case_structure"):
+        raise ValueError(
+            "approved_test_case_structure was not added to generation_state."
+        )
+
+    await message.reply_text(
+        "Starting structured generation pipeline:\n"
+        "1. Generate scenarios\n"
+        "2. Generate test cases by main function\n"
+        "3. Coverage review by main function\n"
+        "4. Improve test cases by main function\n"
+        "5. Final review by main function\n"
+        "6. Export Excel"
+    )
+
+    await run_generation(
+        message,
+        ticket_id,
+        generation_state,
+    )
+
+
 def export_generated_testcases_excel(
     ticket_id: str,
     result: dict,
@@ -461,12 +516,10 @@ def export_generated_testcases_excel(
         or {}
     )
 
-    excel_file = export_function_based_testcases_to_excel(
+    excel_file = export_generation_result_to_excel(
         ticket_id=ticket_id,
-        testcases=testcases,
-        coverage_review=coverage_review,
-        final_coverage_review=final_coverage_review,
-        approved_structure=approved_structure,
+        result=result,
+        version=version,
     )
 
     if version:
@@ -601,22 +654,31 @@ async def run_generation(
         }
     )
 
-    analysis = result.get("analysis", {})
-    scenarios = result.get("scenarios", [])
+    merged_result = {
+        **generation_state,
+        **result,
+    }
 
-    original_testcases = result.get("testcases", [])
-    improved_testcases = result.get("improved_testcases", [])
+    analysis = merged_result.get("analysis", {})
+    scenarios = merged_result.get("scenarios", [])
+
+    original_testcases = merged_result.get("testcases", [])
+    improved_testcases = merged_result.get("improved_testcases", [])
 
     testcases = improved_testcases or original_testcases
 
-    review = result.get("coverage_review", {})
-    final_review = result.get("final_coverage_review", {})
+    review = merged_result.get("coverage_review", {})
+    final_review = merged_result.get("final_coverage_review", {})
 
     save_improvement_history_item(
         ticket_id=ticket_id,
         version="v0",
         iteration=0,
-        coverage_score=final_review.get("coverage_score", ""),
+        coverage_score=(
+            final_review.get("final_coverage_score")
+            or final_review.get("coverage_score")
+            or ""
+        ),
         improvement_score=final_review.get("improvement_score", ""),
         note="Initial generation"
     )
@@ -626,13 +688,15 @@ async def run_generation(
         f"Scenarios: {len(scenarios)}\n"
         f"Testcases: {len(testcases)}\n\n"
         f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
-        f"Final Coverage: {final_review.get('coverage_score', 'N/A')}\n\n"
+        f"Final Coverage: "
+        f"{final_review.get('final_coverage_score') or final_review.get('coverage_score', 'N/A')}\n\n"
         f"Remaining Gaps:\n"
     )
 
     gaps = (
         final_review.get("remaining_gaps")
         or review.get("missing_coverage")
+        or review.get("missing_scenarios")
         or []
     )
 
@@ -653,7 +717,7 @@ async def run_generation(
 
     excel_file = export_generated_testcases_excel(
         ticket_id=ticket_id,
-        result=result,
+        result=merged_result,
         version="v0",
     )
 
@@ -663,7 +727,6 @@ async def run_generation(
         excel_file,
         caption=f"Generated testcases Excel file: {ticket_id}"
     )
-
 
 async def ask_clarifications(
     message,
@@ -762,7 +825,7 @@ async def process_ticket(update: Update, ticket_id: str):
 
     # From this point onward, test case generation must go through structure gate.
     await continue_generation_with_structure_gate(
-        message,
+        get_message(update),
         ticket_id,
     )
 
