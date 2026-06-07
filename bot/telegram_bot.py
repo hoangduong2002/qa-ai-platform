@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -30,7 +31,6 @@ from graph.test_generation_graph import (
     test_generation_graph
 )
 
-from app.utils.excel_exporter import export_testcases_to_excel
 
 from app.utils.requirement_intelligence_exporter import (
     export_requirement_intelligence_to_excel
@@ -100,7 +100,8 @@ from app.utils.test_structure_store import (
 )
 
 from app.application.generation_orchestrator import (
-    prepare_generation
+    prepare_generation,
+    build_structured_generation_state,
 )
 
 from app.application.structure_review_orchestrator import (
@@ -145,6 +146,10 @@ from bot.handlers.structure_handlers import (
     structure,
     handle_structure_callback,
     handle_structure_comment_text
+)
+
+from app.exporters.function_based_excel_exporter import (
+    export_function_based_testcases_to_excel,
 )
 
 load_dotenv()
@@ -414,6 +419,123 @@ async def run_requirement_summary(
     return load_ticket_artifacts(ticket_id)
 
 
+def export_generated_testcases_excel(
+    ticket_id: str,
+    result: dict,
+    version: str = "latest"
+) -> str:
+    """
+    Export the latest generated/improved test cases using the
+    function-based multi-sheet Excel exporter.
+
+    The exporter creates the base function-based workbook.
+    This wrapper keeps the Telegram flow simple and also creates
+    a versioned copy for each generation/improvement cycle.
+    """
+
+    artifacts = load_ticket_artifacts(ticket_id)
+
+    testcases = (
+        result.get("improved_testcases")
+        or result.get("testcases")
+        or artifacts.get("improved_testcases")
+        or artifacts.get("testcases")
+        or []
+    )
+
+    coverage_review = (
+        result.get("coverage_review")
+        or artifacts.get("coverage_review")
+        or {}
+    )
+
+    final_coverage_review = (
+        result.get("final_coverage_review")
+        or artifacts.get("final_coverage_review")
+        or {}
+    )
+
+    approved_structure = (
+        result.get("approved_test_case_structure")
+        or artifacts.get("approved_test_case_structure")
+        or {}
+    )
+
+    excel_file = export_function_based_testcases_to_excel(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        coverage_review=coverage_review,
+        final_coverage_review=final_coverage_review,
+        approved_structure=approved_structure,
+    )
+
+    if version:
+        source_file = Path(excel_file)
+        versioned_file = (
+            source_file.parent
+            / f"{ticket_id}_function_based_testcases_{version}.xlsx"
+        )
+        shutil.copyfile(source_file, versioned_file)
+        return str(versioned_file)
+
+    return excel_file
+
+
+async def continue_generation_with_structure_gate(
+    message,
+    ticket_id: str,
+):
+    """
+    The only allowed gateway to structured test case generation.
+
+    Flow:
+    1. Check structure approval first.
+    2. If not approved, return structure review action.
+    3. If approved, then run requirement summary and generation.
+    """
+
+    await message.reply_text(
+        f"Checking approved test case structure for {ticket_id}..."
+    )
+
+    generation_gate_result = prepare_generation(ticket_id)
+
+    if generation_gate_result.status != "READY_TO_GENERATE":
+        await send_app_result(
+            message,
+            ticket_id,
+            generation_gate_result,
+        )
+        return
+
+    await message.reply_text(generation_gate_result.message)
+
+    await message.reply_text(
+        "Preparing requirement summary and generation context..."
+    )
+
+    generation_state = await run_requirement_summary(ticket_id)
+
+    structured_generation_state = build_structured_generation_state(ticket_id)
+    generation_state.update(structured_generation_state)
+
+    await message.reply_text(
+        "Starting structured generation pipeline:\n"
+        "1. Generate scenarios\n"
+        "2. Generate test cases by main function\n"
+        "3. Coverage review\n"
+        "4. Improve test cases\n"
+        "5. Final review\n"
+        "6. Export Excel"
+    )
+
+    await run_generation(
+        message,
+        ticket_id,
+        generation_state,
+    )
+
+
 async def self_review_structure(update, context):
 
     if not context.args:
@@ -460,8 +582,14 @@ async def run_generation(
             f"run_generation expected Telegram Message, got {type(message)}"
         )
 
-    result = test_generation_graph.invoke(
-        generation_state
+    await message.reply_text(
+        f"Running test generation graph for {ticket_id}..."
+    )
+
+    result = test_generation_graph.invoke(generation_state)
+
+    await message.reply_text(
+        f"Test generation graph completed for {ticket_id}."
     )
 
     save_review_session(
@@ -523,19 +651,10 @@ async def run_generation(
         reply_markup=build_review_keyboard(ticket_id)
     )
 
-    artifacts = load_ticket_artifacts(ticket_id)
-
-    excel_file = export_testcases_to_excel(
-        ticket_id,
-        analysis,
-        scenarios,
-        testcases,
-        review,
-        final_review,
-        clarifications=artifacts.get("clarifications", {}),
-        clarification_answers=artifacts.get("clarification_answers", {}),
-        improvement_history=artifacts.get("improvement_history", []),
-        version="v0"
+    excel_file = export_generated_testcases_excel(
+        ticket_id=ticket_id,
+        result=result,
+        version="v0",
     )
 
     await send_excel_file_from_message(
@@ -595,13 +714,10 @@ async def run_requirement_questions(
     return result
 
 
-async def process_ticket(
-    update: Update,
-    ticket_id: str
-):
-    artifacts = load_ticket_artifacts(
-        ticket_id
-    )
+async def process_ticket(update: Update, ticket_id: str):
+    message = get_message(update)
+
+    artifacts = load_ticket_artifacts(ticket_id)
 
     questions = (
         artifacts
@@ -610,71 +726,46 @@ async def process_ticket(
     )
 
     has_answers = bool(
-        artifacts.get(
-            "clarification_answers",
-            {}
-        )
+        artifacts.get("clarification_answers", {})
     )
 
-    #
-    # Existing clarification questions
-    #
+    # Existing clarification questions must be answered first.
     if questions and not has_answers:
-
-        message = get_message(update)
-
         await message.reply_text(
             f"Existing clarification questions found for {ticket_id}.\n"
             f"Please answer them before generating test cases."
         )
 
         await ask_clarifications(
-            update.message,
+            message,
             None,
             ticket_id,
             questions,
-            mode="generate"
+            mode="generate",
         )
-
         return
 
-    #
-    # No clarification generated yet
-    #
+    # If no clarification questions exist yet, analyze requirement first.
     if not questions:
-
-        result = await run_requirement_questions(
-            ticket_id
-        )
-
-        questions = extract_clarification_questions(
-            result
-        )
+        result = await run_requirement_questions(ticket_id)
+        questions = extract_clarification_questions(result)
 
         if questions:
-
             await ask_clarifications(
-                update.message,
+                message,
                 None,
                 ticket_id,
                 questions,
-                mode="generate"
+                mode="generate",
             )
-
             return
 
-    #
-    # Has clarification answers
-    #
-    generation_state = await run_requirement_summary(
-        ticket_id
+    # From this point onward, test case generation must go through structure gate.
+    await continue_generation_with_structure_gate(
+        message,
+        ticket_id,
     )
 
-    await run_generation(
-        update.message,
-        ticket_id,
-        generation_state
-    )
     
 async def analyze_existing_ticket(
     message,
@@ -822,7 +913,7 @@ async def analyze_text(
 
 async def generate(
     update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+    context: ContextTypes.DEFAULT_TYPE,
 ):
     message = get_message(update)
 
@@ -833,10 +924,7 @@ async def generate(
         return
 
     raw_id = " ".join(context.args)
-
-    ticket_id = resolve_requirement_id(
-        raw_id
-    )
+    ticket_id = resolve_requirement_id(raw_id)
 
     if not ticket_id:
         await message.reply_text(
@@ -845,42 +933,16 @@ async def generate(
         return
 
     await message.reply_text(
-        (
-            f"Preparing generation for {ticket_id}...\n\n"
-            f"If no approved test case structure exists, "
-            f"I will generate the structure first and ask for approval."
-        )
+        f"Preparing structured generation for {ticket_id}...\n\n"
+        f"Generation now requires an approved test case structure."
     )
 
     try:
-        result = prepare_generation(
-            ticket_id
-        )
-
+        await process_ticket(update, ticket_id)
     except Exception as error:
         await message.reply_text(
-            f"Failed during generation preparation:\n{error}"
+            f"Failed during structured generation:\n{error}"
         )
-        return
-
-    if result.status == "READY_TO_GENERATE":
-
-        await message.reply_text(
-            result.message
-        )
-
-        await process_ticket(
-            update,
-            ticket_id
-        )
-
-        return
-
-    await send_app_result(
-        message,
-        ticket_id,
-        result
-    )
 
 
 async def generate_text(
@@ -1282,21 +1344,10 @@ async def handle_text_message(
             )
         )
 
-        artifacts = load_ticket_artifacts(
-            comment_ticket_id
-        )
-
-        excel_file = export_testcases_to_excel(
-            comment_ticket_id,
-            analysis,
-            scenarios,
-            testcases,
-            review,
-            final_review,
-            clarifications=artifacts.get("clarifications", {}),
-            clarification_answers=artifacts.get("clarification_answers", {}),
-            improvement_history=artifacts.get("improvement_history", []),
-            version=version
+        excel_file = export_generated_testcases_excel(
+            ticket_id=comment_ticket_id,
+            result=result,
+            version=version,
         )
 
         await send_excel_file_from_message(
@@ -1349,21 +1400,17 @@ async def handle_text_message(
         f"Generating requirement summary..."
     )
 
-    generation_state = await run_requirement_summary(
-        ticket_id
-    )
-
     if next_action == "analyze":
+        await run_requirement_summary(ticket_id)
         await export_requirement_intelligence(
             message,
-            ticket_id
+            ticket_id,
         )
         return
 
-    await run_generation(
+    await continue_generation_with_structure_gate(
         message,
         ticket_id,
-        generation_state
     )
 
 
@@ -1433,23 +1480,18 @@ async def handle_review_action(
                 f"Generating requirement summary..."
             )
 
-            generation_state = await run_requirement_summary(
-                ticket_id
-            )
-
             if mode == "analyze":
+                await run_requirement_summary(ticket_id)
                 await export_requirement_intelligence(
                     query.message,
-                    ticket_id
+                    ticket_id,
                 )
                 return
 
-            await run_generation(
+            await continue_generation_with_structure_gate(
                 query.message,
                 ticket_id,
-                generation_state
             )
-
             return
 
     ticket_id = parts[1]
@@ -1603,21 +1645,10 @@ async def handle_review_action(
             reply_markup=build_review_keyboard(ticket_id)
         )
 
-        artifacts = load_ticket_artifacts(
-            ticket_id
-        )
-
-        excel_file = export_testcases_to_excel(
-            ticket_id,
-            analysis,
-            scenarios,
-            testcases,
-            review,
-            final_review,
-            clarifications=artifacts.get("clarifications", {}),
-            clarification_answers=artifacts.get("clarification_answers", {}),
-            improvement_history=artifacts.get("improvement_history", []),
-            version=version
+        excel_file = export_generated_testcases_excel(
+            ticket_id=ticket_id,
+            result=result,
+            version=version,
         )
 
         await send_excel_file_to_chat(
