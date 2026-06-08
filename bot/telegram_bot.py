@@ -167,6 +167,10 @@ from bot.renderers.testcase_review_text_renderer import (
     render_testcase_review_chat_summary,
 )
 
+from app.services.jira_requirement_service import (
+    create_requirement_from_jira,
+)
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
@@ -1888,6 +1892,50 @@ async def delete_all(
     )
 
 
+async def analyze_jira(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    message = get_message(update)
+
+    if not context.args:
+        await message.reply_text(
+            "Usage:\n/analyze_jira <jira_ticket_number>"
+        )
+        return
+
+    issue_key = " ".join(context.args).strip()
+
+    await message.reply_text(
+        f"Creating requirement from Jira ticket {issue_key}..."
+    )
+
+    try:
+        ticket_id = create_requirement_from_jira(issue_key)
+
+        await message.reply_text(
+            f"Requirement created from Jira.\n"
+            f"Requirement ID: {ticket_id}\n\n"
+            f"Analyzing requirement..."
+        )
+
+        await analyze_existing_ticket(
+            message,
+            context,
+            ticket_id,
+        )
+
+    except Exception as error:
+        logger.exception(
+            "Failed to analyze Jira ticket. issue_key=%s",
+            issue_key,
+        )
+
+        await message.reply_text(
+            f"Failed to analyze Jira ticket:\n{error}"
+        )
+
+
 def main():
     if not BOT_TOKEN:
         raise RuntimeError(
@@ -1931,6 +1979,13 @@ def main():
         CommandHandler(
             "analyze_text",
             analyze_text
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "analyze_jira",
+            analyze_jira,
         )
     )
 
