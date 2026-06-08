@@ -1,0 +1,39 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "category": "Security",
+      "question": "What are the password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "impact": "High",
+      "reason": "Missing password complexity rules affect security and test coverage for valid/invalid passwords."
+    },
+    {
+      "question_id": "Q002",
+      "category": "Validation",
+      "question": "What is the exact email format validation rule (e.g., RFC 5322, simple regex, or specific domain restrictions)?",
+      "impact": "High",
+      "reason": "Email format validation is critical for positive and negative test cases and error handling."
+    },
+    {
+      "question_id": "Q003",
+      "category": "Error Handling",
+      "question": "What error messages should be displayed for duplicate email, invalid email format, and invalid password length?",
+      "impact": "Medium",
+      "reason": "Error messages are needed for UX validation and negative test scenarios."
+    },
+    {
+      "question_id": "Q004",
+      "category": "Security",
+      "question": "What is the email verification mechanism (e.g., time-limited token, link expiration, resend policy)?",
+      "impact": "High",
+      "reason": "Verification flow details affect security, edge cases, and integration testing."
+    },
+    {
+      "question_id": "Q005",
+      "category": "Boundary Values",
+      "question": "Are passwords of exactly 8 and exactly 12 characters allowed, and what about leading/trailing spaces?",
+      "impact": "Medium",
+      "reason": "Boundary values and whitespace handling are essential for precise validation testing."
+    }
+  ]
+}

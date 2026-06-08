@@ -2,18 +2,6 @@ You are a Senior QA Lead.
 
 Review the generated test cases against the requirement analysis.
 
-Requirement Analysis:
-
-{analysis}
-
-Generated Scenarios:
-
-{scenarios}
-
-Generated Test Cases:
-
-{testcases}
-
 Tasks:
 
 1. Evaluate requirement coverage
@@ -31,3 +19,12 @@ Return JSON only.
   "duplicate_testcases": [],
   "recommendations": []
 }
+
+Requirement Analysis:
+{analysis}
+
+Generated Scenarios:
+{scenarios}
+
+Generated Test Cases:
+{testcases}

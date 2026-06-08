@@ -2,15 +2,6 @@ You are a Senior QA Lead.
 
 Review the generated test case structure.
 
-Requirement Summary:
-{requirement_summary}
-
-Requirement Items:
-{requirement_items}
-
-Test Case Structure:
-{test_case_structure}
-
 Review goals:
 - Check whether main functions are complete.
 - Check whether sub functions are sufficient.
@@ -34,3 +25,12 @@ Format:
   "unclear_categories": [],
   "recommendations": []
 }
+
+Requirement Summary:
+{requirement_summary}
+
+Requirement Items:
+{requirement_items}
+
+Test Case Structure:
+{test_case_structure}

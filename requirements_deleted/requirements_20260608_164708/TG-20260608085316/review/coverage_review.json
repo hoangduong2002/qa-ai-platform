@@ -1,0 +1,855 @@
+{
+  "generation_mode": "FUNCTION_BASED_PARALLEL_COVERAGE_REVIEW",
+  "coverage_score": 70,
+  "approved_by_ai": false,
+  "summary": "Function-level coverage review completed for 3 main functions. Average coverage score: 70.",
+  "function_count": 3,
+  "scenario_count": 50,
+  "testcase_count": 50,
+  "parallel_workers": 3,
+  "function_reviews": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "User Registration",
+      "coverage_score": 100,
+      "approved_by_ai": true,
+      "summary": "All provided scenarios for the User Registration function are covered by test cases. Test cases are traceable to requirement IDs, clear, executable, and verifiable. Coverage includes positive, negative, validation, boundary, business rule, security, UX/UI, and integration categories as per the test scope. No missing scenarios or weak test cases identified.",
+      "covered_scenarios": [
+        {
+          "scenario_id": "SC001",
+          "testcase_ids": [
+            "TC001"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC002",
+          "testcase_ids": [
+            "TC002"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC003",
+          "testcase_ids": [
+            "TC003"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC004",
+          "testcase_ids": [
+            "TC004"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC005",
+          "testcase_ids": [
+            "TC005"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC006",
+          "testcase_ids": [
+            "TC006"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC007",
+          "testcase_ids": [
+            "TC007"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC008",
+          "testcase_ids": [
+            "TC008"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC009",
+          "testcase_ids": [
+            "TC009"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC010",
+          "testcase_ids": [
+            "TC010"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC011",
+          "testcase_ids": [
+            "TC011"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC012",
+          "testcase_ids": [
+            "TC012"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC013",
+          "testcase_ids": [
+            "TC013"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC014",
+          "testcase_ids": [
+            "TC014"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC015",
+          "testcase_ids": [
+            "TC015"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC016",
+          "testcase_ids": [
+            "TC016"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC017",
+          "testcase_ids": [
+            "TC017"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC018",
+          "testcase_ids": [
+            "TC018"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC019",
+          "testcase_ids": [
+            "TC019"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC032",
+          "testcase_ids": [
+            "TC020"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC033",
+          "testcase_ids": [
+            "TC021"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC034",
+          "testcase_ids": [
+            "TC022"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC035",
+          "testcase_ids": [
+            "TC023"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC036",
+          "testcase_ids": [
+            "TC024"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC037",
+          "testcase_ids": [
+            "TC025"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC038",
+          "testcase_ids": [
+            "TC026"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC041",
+          "testcase_ids": [
+            "TC027"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC042",
+          "testcase_ids": [
+            "TC028"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC043",
+          "testcase_ids": [
+            "TC029"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC044",
+          "testcase_ids": [
+            "TC030"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC050",
+          "testcase_ids": [
+            "TC031"
+          ],
+          "status": "Covered"
+        }
+      ],
+      "missing_scenarios": [],
+      "weak_testcases": [],
+      "missing_testcases": [],
+      "traceability_issues": [],
+      "recommendations": [],
+      "scenario_count": 31,
+      "testcase_count": 31
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "coverage_score": 100,
+      "approved_by_ai": true,
+      "summary": "All 18 scenarios for the Email Verification function are fully covered by 18 test cases. Test cases are traceable to requirement IDs, clear, executable, and verifiable. Coverage includes positive, negative, validation, boundary, business rule, security, UX/UI, and integration categories as per the test scope. No missing scenarios or weak test cases identified.",
+      "covered_scenarios": [
+        {
+          "scenario_id": "SC020",
+          "testcase_ids": [
+            "TC032"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC021",
+          "testcase_ids": [
+            "TC033"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC022",
+          "testcase_ids": [
+            "TC034"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC023",
+          "testcase_ids": [
+            "TC035"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC024",
+          "testcase_ids": [
+            "TC036"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC025",
+          "testcase_ids": [
+            "TC037"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC026",
+          "testcase_ids": [
+            "TC038"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC027",
+          "testcase_ids": [
+            "TC039"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC028",
+          "testcase_ids": [
+            "TC040"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC029",
+          "testcase_ids": [
+            "TC041"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC030",
+          "testcase_ids": [
+            "TC042"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC039",
+          "testcase_ids": [
+            "TC043"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC040",
+          "testcase_ids": [
+            "TC044"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC045",
+          "testcase_ids": [
+            "TC045"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC046",
+          "testcase_ids": [
+            "TC046"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC047",
+          "testcase_ids": [
+            "TC047"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC048",
+          "testcase_ids": [
+            "TC048"
+          ],
+          "status": "Covered"
+        },
+        {
+          "scenario_id": "SC049",
+          "testcase_ids": [
+            "TC049"
+          ],
+          "status": "Covered"
+        }
+      ],
+      "missing_scenarios": [],
+      "weak_testcases": [],
+      "missing_testcases": [],
+      "traceability_issues": [],
+      "recommendations": [],
+      "scenario_count": 18,
+      "testcase_count": 18
+    },
+    {
+      "function_id": "FUNC003",
+      "function_name": "Account Login",
+      "coverage_score": 10,
+      "approved_by_ai": false,
+      "summary": "Only one positive scenario and one test case are provided for the Account Login function. The test scope includes positive, negative, validation, boundary, business rule, security, UX/UI, and integration categories, but the current coverage is extremely limited. Many required test categories are missing, and the single test case lacks traceability to all relevant requirement IDs.",
+      "covered_scenarios": [
+        {
+          "scenario_id": "SC031",
+          "testcase_ids": [
+            "TC050"
+          ],
+          "status": "Covered"
+        }
+      ],
+      "missing_scenarios": [
+        {
+          "scenario_id": "SC032",
+          "reason": "No negative scenario for login with unverified email (user must verify before first login).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC033",
+          "reason": "No negative scenario for login with incorrect password.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC034",
+          "reason": "No negative scenario for login with non-existent email.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC035",
+          "reason": "No boundary scenario for login with password exactly 8 characters (valid).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC036",
+          "reason": "No boundary scenario for login with password exactly 12 characters (valid).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC037",
+          "reason": "No business rule scenario for login after verification link has expired (24 hours).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC038",
+          "reason": "No security scenario for brute-force login attempts (e.g., multiple failed logins).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC039",
+          "reason": "No UX/UI scenario for inline error messages on login failure (e.g., invalid credentials).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "scenario_id": "SC040",
+          "reason": "No integration scenario for login when email verification service is down (though login itself may not depend on email service, the verification status check is server-side).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        }
+      ],
+      "weak_testcases": [
+        {
+          "testcase_id": "TC050",
+          "issue": "Test data uses a hardcoded email and password; no mention of how the user is verified (precondition assumes verification but no step to confirm).",
+          "recommendation": "Add a precondition step to confirm the user's email is verified in the system (e.g., via database state).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        }
+      ],
+      "missing_testcases": [
+        {
+          "title": "Login with unverified email should fail",
+          "reason": "Requirement states email verification is mandatory before first login.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "High",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login with incorrect password should show error",
+          "reason": "Negative test for invalid credentials is standard for login function.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "High",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login with non-existent email should show error",
+          "reason": "Negative test for non-existent user.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "High",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login with password exactly 8 characters (valid) should succeed",
+          "reason": "Boundary test for minimum password length.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "Medium",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login with password exactly 12 characters (valid) should succeed",
+          "reason": "Boundary test for maximum password length.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "Medium",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login after verification link has expired should fail",
+          "reason": "Business rule: verification link expires after 24 hours.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "High",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login with multiple failed attempts should trigger lockout or rate limiting",
+          "reason": "Security test for brute-force prevention (traceable to test scope security category).",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "Medium",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "title": "Login failure should display meaningful inline error message",
+          "reason": "UX/UI test for error messages on login failure.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "suggested_priority": "Medium",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        }
+      ],
+      "traceability_issues": [
+        {
+          "item_id": "TC050",
+          "issue": "Test case TC050 is traceable only to FR002, but the scenario SC031 also references FR002. No other requirement IDs are present.",
+          "recommendation": "Ensure all related requirement IDs from the requirement summary are included if applicable (e.g., FR002 is the only one for login). No change needed.",
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        }
+      ],
+      "recommendations": [
+        {
+          "recommendation_id": "REC001",
+          "type": "Add Missing Test Cases",
+          "description": "Add test cases for negative, boundary, business rule, security, and UX/UI scenarios as listed in missing_testcases.",
+          "related_testcase_ids": [],
+          "related_scenario_ids": [
+            "SC032",
+            "SC033",
+            "SC034",
+            "SC035",
+            "SC036",
+            "SC037",
+            "SC038",
+            "SC039"
+          ],
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        },
+        {
+          "recommendation_id": "REC002",
+          "type": "Improve Existing Test Case",
+          "description": "In TC050, add a precondition step to explicitly confirm the user's email verification status in the system (e.g., via database query or API call).",
+          "related_testcase_ids": [
+            "TC050"
+          ],
+          "related_scenario_ids": [
+            "SC031"
+          ],
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "function_id": "FUNC003",
+          "function_name": "Account Login"
+        }
+      ],
+      "scenario_count": 1,
+      "testcase_count": 1
+    }
+  ],
+  "missing_scenarios": [
+    {
+      "scenario_id": "SC032",
+      "reason": "No negative scenario for login with unverified email (user must verify before first login).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC033",
+      "reason": "No negative scenario for login with incorrect password.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC034",
+      "reason": "No negative scenario for login with non-existent email.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC035",
+      "reason": "No boundary scenario for login with password exactly 8 characters (valid).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC036",
+      "reason": "No boundary scenario for login with password exactly 12 characters (valid).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC037",
+      "reason": "No business rule scenario for login after verification link has expired (24 hours).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC038",
+      "reason": "No security scenario for brute-force login attempts (e.g., multiple failed logins).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC039",
+      "reason": "No UX/UI scenario for inline error messages on login failure (e.g., invalid credentials).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "scenario_id": "SC040",
+      "reason": "No integration scenario for login when email verification service is down (though login itself may not depend on email service, the verification status check is server-side).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    }
+  ],
+  "weak_testcases": [
+    {
+      "testcase_id": "TC050",
+      "issue": "Test data uses a hardcoded email and password; no mention of how the user is verified (precondition assumes verification but no step to confirm).",
+      "recommendation": "Add a precondition step to confirm the user's email is verified in the system (e.g., via database state).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    }
+  ],
+  "missing_testcases": [
+    {
+      "title": "Login with unverified email should fail",
+      "reason": "Requirement states email verification is mandatory before first login.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "High",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login with incorrect password should show error",
+      "reason": "Negative test for invalid credentials is standard for login function.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "High",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login with non-existent email should show error",
+      "reason": "Negative test for non-existent user.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "High",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login with password exactly 8 characters (valid) should succeed",
+      "reason": "Boundary test for minimum password length.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "Medium",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login with password exactly 12 characters (valid) should succeed",
+      "reason": "Boundary test for maximum password length.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "Medium",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login after verification link has expired should fail",
+      "reason": "Business rule: verification link expires after 24 hours.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "High",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login with multiple failed attempts should trigger lockout or rate limiting",
+      "reason": "Security test for brute-force prevention (traceable to test scope security category).",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "Medium",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "title": "Login failure should display meaningful inline error message",
+      "reason": "UX/UI test for error messages on login failure.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "suggested_priority": "Medium",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    }
+  ],
+  "traceability_issues": [
+    {
+      "item_id": "TC050",
+      "issue": "Test case TC050 is traceable only to FR002, but the scenario SC031 also references FR002. No other requirement IDs are present.",
+      "recommendation": "Ensure all related requirement IDs from the requirement summary are included if applicable (e.g., FR002 is the only one for login). No change needed.",
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "REC001",
+      "type": "Add Missing Test Cases",
+      "description": "Add test cases for negative, boundary, business rule, security, and UX/UI scenarios as listed in missing_testcases.",
+      "related_testcase_ids": [],
+      "related_scenario_ids": [
+        "SC032",
+        "SC033",
+        "SC034",
+        "SC035",
+        "SC036",
+        "SC037",
+        "SC038",
+        "SC039"
+      ],
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    },
+    {
+      "recommendation_id": "REC002",
+      "type": "Improve Existing Test Case",
+      "description": "In TC050, add a precondition step to explicitly confirm the user's email verification status in the system (e.g., via database query or API call).",
+      "related_testcase_ids": [
+        "TC050"
+      ],
+      "related_scenario_ids": [
+        "SC031"
+      ],
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "function_id": "FUNC003",
+      "function_name": "Account Login"
+    }
+  ]
+}

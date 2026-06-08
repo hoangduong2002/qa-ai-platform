@@ -51,7 +51,8 @@ def repair_json_with_llm(
     """
 
     logger.warning(
-        "Attempting to repair malformed testcases JSON. ticket_id=%s, function_id=%s, error=%s",
+        "Attempting to repair malformed testcases JSON. "
+        "ticket_id=%s, function_id=%s, error=%s",
         ticket_id,
         function_id,
         original_error,
@@ -105,7 +106,8 @@ Malformed JSON:
     )
 
     logger.info(
-        "Repaired testcases JSON response saved. ticket_id=%s, function_id=%s, file=%s",
+        "Repaired testcases JSON response saved. "
+        "ticket_id=%s, function_id=%s, file=%s",
         ticket_id,
         function_id,
         repaired_raw_file,
@@ -133,7 +135,7 @@ def _unique_ids(values: list) -> list[str]:
             continue
 
         if not isinstance(value, str):
-            continue
+            value = str(value)
 
         clean_value = value.strip()
 
@@ -273,6 +275,270 @@ def _group_scenarios_by_function(
     return groups, unmatched_scenarios
 
 
+def _normalize_requirement_ids(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [
+            item.strip()
+            for item in value.split(",")
+            if item.strip()
+        ]
+
+    if isinstance(value, list):
+        return _unique_ids(value)
+
+    return []
+
+
+def _build_scenario_index(scenarios: list) -> dict:
+    """
+    Build a mapping from scenario_id to all metadata that test cases can derive.
+
+    This allows LLM test case output to stay compact:
+    - no function_id
+    - no sub_function_id
+    - no test_area_id
+    - no related_requirement_ids
+    - no traceability
+    """
+
+    index = {}
+
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+
+        scenario_id = scenario.get("scenario_id")
+
+        if not scenario_id:
+            continue
+
+        related_requirement_ids = _normalize_requirement_ids(
+            scenario.get("related_requirement_ids")
+        )
+
+        index[scenario_id] = {
+            "scenario_id": scenario_id,
+            "function_id": scenario.get("function_id", ""),
+            "sub_function_id": scenario.get("sub_function_id", ""),
+            "test_area_id": scenario.get("test_area_id", ""),
+            "related_requirement_ids": related_requirement_ids,
+            "traceability": (
+                scenario.get("traceability")
+                or ", ".join(related_requirement_ids)
+            ),
+        }
+
+    return index
+
+
+def _normalize_list_field(value: Any) -> list:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        return [value]
+
+    return [str(value)]
+
+
+ALLOWED_TEST_DESIGN_TECHNIQUES = {
+    "EP",
+    "BVA",
+    "Decision Table",
+    "State Transition",
+    "Pairwise",
+    "Error Guessing",
+    "Use Case",
+    "Security",
+    "UX",
+}
+
+
+def _infer_technique_from_type(testcase_type: str) -> str:
+    normalized_type = str(testcase_type or "").strip().lower()
+
+    if normalized_type in ["boundary", "boundary value", "bva"]:
+        return "BVA"
+
+    if normalized_type in ["business rule", "decision", "decision table"]:
+        return "Decision Table"
+
+    if normalized_type in ["state", "state transition", "workflow"]:
+        return "State Transition"
+
+    if normalized_type in ["security", "permission", "permissions"]:
+        return "Security"
+
+    if normalized_type in ["ux", "ui", "ux_ui", "usability"]:
+        return "UX"
+
+    if normalized_type in ["positive", "negative", "validation"]:
+        return "EP"
+
+    return "Use Case"
+
+
+def _normalize_technique(
+    technique: Any,
+    testcase_type: str = "",
+) -> str:
+    if technique is None:
+        return _infer_technique_from_type(testcase_type)
+
+    value = str(technique).strip()
+
+    aliases = {
+        "equivalence partitioning": "EP",
+        "equivalence partition": "EP",
+        "ep": "EP",
+        "boundary value analysis": "BVA",
+        "boundary value": "BVA",
+        "bva": "BVA",
+        "decision table testing": "Decision Table",
+        "decision table": "Decision Table",
+        "state transition testing": "State Transition",
+        "state transition": "State Transition",
+        "pairwise testing": "Pairwise",
+        "pairwise": "Pairwise",
+        "combinatorial": "Pairwise",
+        "error guessing": "Error Guessing",
+        "use case": "Use Case",
+        "use-case": "Use Case",
+        "security": "Security",
+        "ux": "UX",
+        "ui": "UX",
+        "usability": "UX",
+    }
+
+    normalized = aliases.get(value.lower(), value)
+
+    if normalized in ALLOWED_TEST_DESIGN_TECHNIQUES:
+        return normalized
+
+    return _infer_technique_from_type(testcase_type)
+
+
+def _normalize_compact_testcase(
+    testcase: dict,
+    scenario_index: dict,
+) -> dict:
+    """
+    Normalize compact LLM output into the existing internal schema.
+
+    LLM compact output example:
+    {
+      "testcase_id": "TC001",
+      "scenario_id": "SC001",
+      "title": "...",
+      "type": "Positive",
+      "priority": "High",
+      "preconditions": [],
+      "steps": [],
+      "expected": []
+    }
+
+    Internal compatibility schema:
+    {
+      "testcase_id": "TC001",
+      "scenario_id": "SC001",
+      "function_id": "FUNC001",
+      "sub_function_id": "SUB001",
+      "test_area_id": "CAT001",
+      "title": "...",
+      "type": "Positive",
+      "priority": "High",
+      "preconditions": [],
+      "test_steps": [],
+      "expected_results": [],
+      "related_requirement_ids": ["FR001"],
+      "traceability": "FR001"
+    }
+    """
+
+    if not isinstance(testcase, dict):
+        return {}
+
+    scenario_id = testcase.get("scenario_id", "")
+    scenario_info = scenario_index.get(scenario_id, {})
+
+    related_requirement_ids = (
+        testcase.get("related_requirement_ids")
+        or testcase.get("requirement_ids")
+        or scenario_info.get("related_requirement_ids")
+        or []
+    )
+
+    related_requirement_ids = _normalize_requirement_ids(
+        related_requirement_ids
+    )
+
+    test_steps = (
+        testcase.get("steps")
+        or testcase.get("test_steps")
+        or []
+    )
+
+    expected_results = (
+        testcase.get("expected")
+        or testcase.get("expected_results")
+        or []
+    )
+
+    return {
+        "testcase_id": testcase.get("testcase_id", ""),
+        "scenario_id": scenario_id,
+        "function_id": (
+            testcase.get("function_id")
+            or scenario_info.get("function_id", "")
+        ),
+        "sub_function_id": (
+            testcase.get("sub_function_id")
+            or scenario_info.get("sub_function_id", "")
+        ),
+        "test_area_id": (
+            testcase.get("test_area_id")
+            or scenario_info.get("test_area_id", "")
+        ),
+        "title": testcase.get("title", ""),
+        "type": testcase.get("type", ""),
+        "technique": _normalize_technique(
+            testcase.get("technique"),
+            testcase.get("type", ""),
+        ),
+        "priority": testcase.get("priority", ""),
+        "preconditions": _normalize_list_field(
+            testcase.get("preconditions", [])
+        ),
+        "test_steps": _normalize_list_field(test_steps),
+        "expected_results": _normalize_list_field(expected_results),
+        "related_requirement_ids": related_requirement_ids,
+        "traceability": ", ".join(related_requirement_ids),
+    }
+
+
+def _normalize_compact_testcases(
+    testcases: list,
+    scenarios: list,
+) -> list:
+    scenario_index = _build_scenario_index(scenarios)
+
+    normalized = []
+
+    for testcase in testcases:
+        normalized_item = _normalize_compact_testcase(
+            testcase=testcase,
+            scenario_index=scenario_index,
+        )
+
+        if normalized_item:
+            normalized.append(normalized_item)
+
+    return normalized
+
+
 def _validate_testcases_for_function(
     testcases: list,
     function_id: str,
@@ -299,7 +565,23 @@ def _validate_testcases_for_function(
             invalid_items.append(item)
             continue
 
+        if not item.get("function_id"):
+            invalid_items.append(item)
+            continue
+
+        if not item.get("test_area_id"):
+            invalid_items.append(item)
+            continue
+
         if not item.get("related_requirement_ids"):
+            invalid_items.append(item)
+            continue
+
+        if not item.get("test_steps"):
+            invalid_items.append(item)
+            continue
+
+        if not item.get("expected_results"):
             invalid_items.append(item)
             continue
 
@@ -381,7 +663,7 @@ def _build_function_prompt(
             ),
         )
     )
-    
+
 
 def _get_batch_size() -> int:
     configured_value = os.getenv("TESTCASE_SCENARIO_BATCH_SIZE", "5")
@@ -447,7 +729,8 @@ def _generate_testcases_for_scenario_batch(
     function_scenarios_batch: list,
 ) -> dict:
     logger.info(
-        "Generating test cases for function batch. ticket_id=%s, function_id=%s, batch_index=%s, scenario_count=%s",
+        "Generating test cases for function batch. "
+        "ticket_id=%s, function_id=%s, batch_index=%s, scenario_count=%s",
         ticket_id,
         function_id,
         batch_index,
@@ -486,7 +769,12 @@ def _generate_testcases_for_scenario_batch(
                 original_error=parse_error,
             )
 
-        testcases = normalize_testcases(parsed)
+        raw_testcases = normalize_testcases(parsed)
+
+        testcases = _normalize_compact_testcases(
+            testcases=raw_testcases,
+            scenarios=function_scenarios_batch,
+        )
 
         expected_scenario_ids = {
             scenario.get("scenario_id")
@@ -523,7 +811,8 @@ def _generate_testcases_for_scenario_batch(
         ) from error
 
     logger.info(
-        "Generated test cases for function batch. ticket_id=%s, function_id=%s, batch_index=%s, testcase_count=%s",
+        "Generated test cases for function batch. "
+        "ticket_id=%s, function_id=%s, batch_index=%s, testcase_count=%s",
         ticket_id,
         function_id,
         batch_index,
@@ -556,7 +845,8 @@ def _generate_testcases_for_function(
     """
 
     logger.info(
-        "Generating test cases for function using scenario batches. ticket_id=%s, function_id=%s, scenario_count=%s",
+        "Generating test cases for function using scenario batches. "
+        "ticket_id=%s, function_id=%s, scenario_count=%s",
         ticket_id,
         function_id,
         len(function_scenarios),
@@ -573,7 +863,8 @@ def _generate_testcases_for_function(
     )
 
     logger.info(
-        "Function split into batches. ticket_id=%s, function_id=%s, batch_count=%s, batch_size=%s, batch_workers=%s",
+        "Function split into batches. "
+        "ticket_id=%s, function_id=%s, batch_count=%s, batch_size=%s, batch_workers=%s",
         ticket_id,
         function_id,
         len(scenario_batches),
@@ -611,7 +902,8 @@ def _generate_testcases_for_function(
                 batch_results.append(future.result())
             except Exception as error:
                 logger.exception(
-                    "Function batch generation failed. ticket_id=%s, function_id=%s, batch_index=%s",
+                    "Function batch generation failed. "
+                    "ticket_id=%s, function_id=%s, batch_index=%s",
                     ticket_id,
                     function_id,
                     batch_index,
@@ -665,8 +957,8 @@ def _generate_testcases_for_function(
 
     if missing_scenario_ids:
         raise ValueError(
-            f"Function {function_id} is missing test cases after batch merge for scenarios: "
-            f"{sorted(missing_scenario_ids)}"
+            f"Function {function_id} is missing test cases after batch merge "
+            f"for scenarios: {sorted(missing_scenario_ids)}"
         )
 
     testcases = _renumber_function_testcases(
@@ -681,7 +973,8 @@ def _generate_testcases_for_function(
     )
 
     logger.info(
-        "Generated test cases for function. ticket_id=%s, function_id=%s, scenario_count=%s, testcase_count=%s, file=%s",
+        "Generated test cases for function. "
+        "ticket_id=%s, function_id=%s, scenario_count=%s, testcase_count=%s, file=%s",
         ticket_id,
         function_id,
         len(function_scenarios),
@@ -745,7 +1038,8 @@ def generate_testcases(state):
     functions = _extract_functions(approved_structure)
 
     logger.info(
-        "Loaded approved structure. ticket_id=%s, function_count=%s, scenario_count=%s",
+        "Loaded approved structure. "
+        "ticket_id=%s, function_count=%s, scenario_count=%s",
         ticket_id,
         len(functions),
         len(scenarios),
@@ -780,7 +1074,8 @@ def generate_testcases(state):
         )
 
         logger.error(
-            "Some scenarios cannot be mapped to a main function. ticket_id=%s, unmatched_count=%s, file=%s",
+            "Some scenarios cannot be mapped to a main function. "
+            "ticket_id=%s, unmatched_count=%s, file=%s",
             ticket_id,
             len(unmatched_scenarios),
             unmatched_file,
@@ -800,7 +1095,8 @@ def generate_testcases(state):
     worker_count = _get_parallel_workers(len(executable_groups))
 
     logger.info(
-        "Grouped scenarios by main function. ticket_id=%s, function_count=%s, executable_function_count=%s, worker_count=%s",
+        "Grouped scenarios by main function. "
+        "ticket_id=%s, function_count=%s, executable_function_count=%s, worker_count=%s",
         ticket_id,
         len(groups),
         len(executable_groups),
@@ -809,7 +1105,8 @@ def generate_testcases(state):
 
     for function_id, group in executable_groups.items():
         logger.info(
-            "Function group ready. ticket_id=%s, function_id=%s, function_name=%s, scenario_count=%s",
+            "Function group ready. "
+            "ticket_id=%s, function_id=%s, function_name=%s, scenario_count=%s",
             ticket_id,
             function_id,
             _get_function_name(group["function"]),
@@ -843,7 +1140,8 @@ def generate_testcases(state):
                 function_results.append(result)
 
                 logger.info(
-                    "Function generation completed. ticket_id=%s, function_id=%s, testcase_count=%s",
+                    "Function generation completed. "
+                    "ticket_id=%s, function_id=%s, testcase_count=%s",
                     ticket_id,
                     function_id,
                     result.get("testcase_count"),
@@ -875,7 +1173,8 @@ def generate_testcases(state):
         )
 
         logger.error(
-            "One or more main functions failed during parallel test case generation. ticket_id=%s, error_count=%s, file=%s",
+            "One or more main functions failed during parallel test case generation. "
+            "ticket_id=%s, error_count=%s, file=%s",
             ticket_id,
             len(errors),
             error_file,
@@ -903,7 +1202,7 @@ def generate_testcases(state):
     )
 
     manifest = {
-        "generation_mode": "FUNCTION_BASED_PARALLEL",
+        "generation_mode": "FUNCTION_BASED_PARALLEL_COMPACT_OUTPUT",
         "parallel_workers": worker_count,
         "function_count": len(function_results),
         "scenario_count": len(scenarios),
@@ -917,6 +1216,8 @@ def generate_testcases(state):
                 "testcase_count": result["testcase_count"],
                 "file": result["file"],
                 "raw_file": result["raw_file"],
+                "batch_count": result.get("batch_count", 0),
+                "batch_size": result.get("batch_size", 0),
             }
             for result in function_results
         ],
@@ -938,7 +1239,8 @@ def generate_testcases(state):
     )
 
     logger.info(
-        "Function-based test case generation completed. ticket_id=%s, function_count=%s, testcase_count=%s, master_file=%s, manifest_file=%s",
+        "Function-based test case generation completed. "
+        "ticket_id=%s, function_count=%s, testcase_count=%s, master_file=%s, manifest_file=%s",
         ticket_id,
         len(function_results),
         len(merged_testcases),

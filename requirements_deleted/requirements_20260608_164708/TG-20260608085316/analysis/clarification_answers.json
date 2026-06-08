@@ -1,0 +1,57 @@
+{
+  "raw_answers": "Q001:Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.\nQ002: Email format must contain @ and domain\nQ003: meaningful inline error\nQ004: Hệ thống sẽ gửi một liên kết xác thực duy nhất qua email ngay sau khi đăng ký. Liên kết này có hiệu lực trong vòng 24 giờ. Người dùng có thể yêu cầu gửi lại mã (resend) sau mỗi 60 giây\nQ005: password length from 8 to 12 characters, do not trim leading/trailing spaces",
+  "answers": {
+    "Q001": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+    "Q002": "Email format must contain @ and domain",
+    "Q003": "meaningful inline error",
+    "Q004": "Hệ thống sẽ gửi một liên kết xác thực duy nhất qua email ngay sau khi đăng ký. Liên kết này có hiệu lực trong vòng 24 giờ. Người dùng có thể yêu cầu gửi lại mã (resend) sau mỗi 60 giây",
+    "Q005": "password length from 8 to 12 characters, do not trim leading/trailing spaces"
+  },
+  "answered_clarifications": [
+    {
+      "question_id": "Q001",
+      "question": "What are the password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "category": "Security",
+      "impact": "High",
+      "reason": "Missing password complexity rules affect security and test coverage for valid/invalid passwords.",
+      "answer": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+      "answered_at": "2026-06-08T09:01:22.003649"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What is the exact email format validation rule (e.g., RFC 5322, simple regex, or specific domain restrictions)?",
+      "category": "Validation",
+      "impact": "High",
+      "reason": "Email format validation is critical for positive and negative test cases and error handling.",
+      "answer": "Email format must contain @ and domain",
+      "answered_at": "2026-06-08T09:01:22.003649"
+    },
+    {
+      "question_id": "Q003",
+      "question": "What error messages should be displayed for duplicate email, invalid email format, and invalid password length?",
+      "category": "Error Handling",
+      "impact": "Medium",
+      "reason": "Error messages are needed for UX validation and negative test scenarios.",
+      "answer": "meaningful inline error",
+      "answered_at": "2026-06-08T09:01:22.003649"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What is the email verification mechanism (e.g., time-limited token, link expiration, resend policy)?",
+      "category": "Security",
+      "impact": "High",
+      "reason": "Verification flow details affect security, edge cases, and integration testing.",
+      "answer": "Hệ thống sẽ gửi một liên kết xác thực duy nhất qua email ngay sau khi đăng ký. Liên kết này có hiệu lực trong vòng 24 giờ. Người dùng có thể yêu cầu gửi lại mã (resend) sau mỗi 60 giây",
+      "answered_at": "2026-06-08T09:01:22.003649"
+    },
+    {
+      "question_id": "Q005",
+      "question": "Are passwords of exactly 8 and exactly 12 characters allowed, and what about leading/trailing spaces?",
+      "category": "Boundary Values",
+      "impact": "Medium",
+      "reason": "Boundary values and whitespace handling are essential for precise validation testing.",
+      "answer": "password length from 8 to 12 characters, do not trim leading/trailing spaces",
+      "answered_at": "2026-06-08T09:01:22.003649"
+    }
+  ]
+}

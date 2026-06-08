@@ -1,0 +1,441 @@
+{
+  "main_functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "User Registration",
+      "description": "Allows a user to create an account using email and password with strict validation rules and handling of duplicate unverified emails.",
+      "related_requirement_ids": [
+        "FR001",
+        "FR009",
+        "BR001",
+        "BR002",
+        "BR003",
+        "BR004",
+        "BR005",
+        "BR006",
+        "BR007",
+        "BR008",
+        "BR009",
+        "BR015",
+        "VAL001",
+        "VAL002",
+        "VAL003",
+        "VAL004",
+        "VAL005",
+        "VAL006",
+        "VAL007",
+        "VAL008"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB001",
+          "sub_function_name": "Email Validation",
+          "description": "Validates that the email is unique and properly formatted.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR001",
+            "VAL001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT001",
+              "category_name": "Unique Email Check for Verified Accounts",
+              "test_intent": "Verify that registration fails with a generic error message when email already exists and is verified, without revealing whether the email is already registered.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR001",
+                "VAL001"
+              ]
+            },
+            {
+              "category_id": "CAT002",
+              "category_name": "Unique Email Check for Unverified Accounts",
+              "test_intent": "Verify that registration proceeds normally from the frontend perspective when email exists but is unverified, showing a success message and not revealing that the email already exists.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR015",
+                "VAL001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB002",
+          "sub_function_name": "Password Validation",
+          "description": "Validates password against all complexity rules including length, character types, and restrictions.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR002",
+            "BR003",
+            "BR004",
+            "BR005",
+            "BR006",
+            "BR007",
+            "BR008",
+            "BR009",
+            "VAL002",
+            "VAL003",
+            "VAL004",
+            "VAL005",
+            "VAL006",
+            "VAL007",
+            "VAL008"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT003",
+              "category_name": "Password Length Validation",
+              "test_intent": "Verify that passwords shorter than 8 characters or longer than 12 characters are rejected with a generic error message.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR002",
+                "BR003",
+                "VAL002"
+              ]
+            },
+            {
+              "category_id": "CAT004",
+              "category_name": "Password Character Type Validation",
+              "test_intent": "Verify that passwords missing at least one uppercase letter, one lowercase letter, one numeric digit, or one special character are rejected with a generic error message.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR004",
+                "BR005",
+                "BR006",
+                "BR007",
+                "VAL003",
+                "VAL004",
+                "VAL005",
+                "VAL006"
+              ]
+            },
+            {
+              "category_id": "CAT005",
+              "category_name": "Password Space and Prefix Restrictions",
+              "test_intent": "Verify that passwords with consecutive spaces or containing the user's email prefix are rejected with a generic error message.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR008",
+                "BR009",
+                "VAL007",
+                "VAL008"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB003",
+          "sub_function_name": "Duplicate Unverified Email Handling",
+          "description": "When a user registers with an email that already exists but is unverified, the system updates the record and resets verification.",
+          "related_requirement_ids": [
+            "FR009",
+            "BR015"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT006",
+              "category_name": "Record Update and Token Reset",
+              "test_intent": "Verify that re-registering with an existing unverified email updates the password hash, generates a new verification token, and resets the 24-hour expiration clock.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR009"
+              ]
+            },
+            {
+              "category_id": "CAT007",
+              "category_name": "Frontend Enumeration Prevention",
+              "test_intent": "Verify that the frontend shows a normal registration success message and does not reveal that the email already exists or that the record was updated.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR015"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "description": "Handles the verification of user email via a secure link with token validation, expiration checks, and error handling.",
+      "related_requirement_ids": [
+        "FR002",
+        "FR003",
+        "FR004",
+        "FR005",
+        "FR006",
+        "FR007",
+        "BR010",
+        "BR011",
+        "BR012",
+        "BR013",
+        "BR014",
+        "VAL009",
+        "VAL010"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB004",
+          "sub_function_name": "Token Generation and Storage",
+          "description": "Generates a cryptographically secure random token, hashes it with SHA-256, and stores the hash in the database along with the issuance timestamp.",
+          "related_requirement_ids": [
+            "FR003",
+            "BR012"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT008",
+              "category_name": "Token Generation Entropy",
+              "test_intent": "Verify that the token is generated using a cryptographically secure random source and has sufficient entropy to prevent prediction.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR003"
+              ]
+            },
+            {
+              "category_id": "CAT009",
+              "category_name": "SHA-256 Hashing Before Storage",
+              "test_intent": "Verify that the token is hashed with SHA-256 before being stored in the database, and that the raw token is never stored.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR012"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB005",
+          "sub_function_name": "Verification Link Processing",
+          "description": "Processes the verification link by extracting the token, validating it against the stored hash, checking expiration, and marking the user as verified.",
+          "related_requirement_ids": [
+            "FR002",
+            "FR003",
+            "BR010",
+            "BR011",
+            "VAL009",
+            "VAL010"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT010",
+              "category_name": "Valid Token Verification",
+              "test_intent": "Verify that a valid, non-expired token successfully verifies the email and marks the user as verified in the database.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002",
+                "VAL009",
+                "VAL010"
+              ]
+            },
+            {
+              "category_id": "CAT011",
+              "category_name": "Expired Token Handling",
+              "test_intent": "Verify that an expired token (older than 24 hours from issuance) results in the message 'The verification link is invalid or has expired. Please request a new one.' and redirects to the resend page.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR004",
+                "FR005",
+                "BR010",
+                "VAL010"
+              ]
+            },
+            {
+              "category_id": "CAT012",
+              "category_name": "Invalid Token Handling",
+              "test_intent": "Verify that an invalid or tampered token (e.g., modified, random string) results in the message 'The verification link is invalid or has expired. Please request a new one.' and redirects to the resend page.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR004",
+                "FR005",
+                "VAL009"
+              ]
+            },
+            {
+              "category_id": "CAT013",
+              "category_name": "Single-Use Token Enforcement",
+              "test_intent": "Verify that a token cannot be used more than once; after successful verification, reusing the same token fails with the invalid/expired message.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR011",
+                "VAL009"
+              ]
+            },
+            {
+              "category_id": "CAT014",
+              "category_name": "Token Hash Comparison",
+              "test_intent": "Verify that the system correctly hashes the incoming token with SHA-256 and compares it to the stored hash, and that a token with a different hash is rejected.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR012"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB006",
+          "sub_function_name": "Error Handling and Security",
+          "description": "Handles system errors during verification and enforces HTTPS and information hiding.",
+          "related_requirement_ids": [
+            "FR006",
+            "BR013",
+            "BR014"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT015",
+              "category_name": "System Error Display",
+              "test_intent": "Verify that on a system error during verification (e.g., database failure), the generic message 'An unexpected error occurred. Please try again later.' is shown and no internal error details are exposed.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR006",
+                "BR014"
+              ]
+            },
+            {
+              "category_id": "CAT016",
+              "category_name": "HTTPS Enforcement",
+              "test_intent": "Verify that all verification traffic is forced over HTTPS (TLS 1.3) and that HTTP requests to verification endpoints are redirected or rejected.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR013"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB007",
+          "sub_function_name": "Resend Verification Email",
+          "description": "Provides a mechanism for users to request a new verification email after an expired or invalid link.",
+          "related_requirement_ids": [
+            "FR005",
+            "FR007"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT017",
+              "category_name": "Resend Button Display",
+              "test_intent": "Verify that the 'Resend Verification Email' button is displayed on the landing page after an expired or invalid link is detected.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR007"
+              ]
+            },
+            {
+              "category_id": "CAT018",
+              "category_name": "New Token Generation on Resend",
+              "test_intent": "Verify that clicking the resend button generates a new token, updates the database with the new hash and issuance timestamp, and sends a new email with a fresh 24-hour expiration.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR005"
+              ]
+            },
+            {
+              "category_id": "CAT019",
+              "category_name": "Rate Limiting on Resend Requests",
+              "test_intent": "Verify that the system enforces rate limiting on resend verification email requests to prevent abuse, returning a generic error message when the limit is exceeded.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR005"
+              ]
+            },
+            {
+              "category_id": "CAT020",
+              "category_name": "Email Delivery Failure Handling",
+              "test_intent": "Verify that if the email delivery service fails during resend, the system logs the error and returns a generic error message to the user without exposing delivery details.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR005",
+                "BR014"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "function_id": "FUNC003",
+      "function_name": "Login with Unverified Email",
+      "description": "Handles login attempts for users who have not yet verified their email, preventing access and providing appropriate feedback.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB008",
+          "sub_function_name": "Unverified Login Attempt Handling",
+          "description": "When a user attempts to login without having verified their email, the system denies access and displays a message indicating that verification is required.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT021",
+              "category_name": "Login Denied for Unverified User",
+              "test_intent": "Verify that a user with an unverified email cannot log in and receives a message indicating that email verification is required.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            },
+            {
+              "category_id": "CAT022",
+              "category_name": "Login Allowed for Verified User",
+              "test_intent": "Verify that a user with a verified email can log in successfully.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "function_id": "FUNC004",
+      "function_name": "Unverified Record Cleanup",
+      "description": "Automatically purges unverified user records from the database after 7 days to maintain database hygiene.",
+      "related_requirement_ids": [
+        "FR008"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB009",
+          "sub_function_name": "Scheduled Purge",
+          "description": "Runs a scheduled job to delete user records that have not been verified within 7 days of registration or last update.",
+          "related_requirement_ids": [
+            "FR008"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT023",
+              "category_name": "Purge Timing for New Registrations",
+              "test_intent": "Verify that unverified records are deleted exactly 7 days after the initial registration timestamp.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR008"
+              ]
+            },
+            {
+              "category_id": "CAT024",
+              "category_name": "Purge Timing for Re-registrations",
+              "test_intent": "Verify that unverified records are deleted exactly 7 days after the last update (re-registration) timestamp.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR008"
+              ]
+            },
+            {
+              "category_id": "CAT025",
+              "category_name": "Verified Record Retention",
+              "test_intent": "Verify that verified user records are not affected by the purge process and remain in the database.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR008"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

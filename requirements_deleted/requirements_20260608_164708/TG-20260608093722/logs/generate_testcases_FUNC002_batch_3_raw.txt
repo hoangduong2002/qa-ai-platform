@@ -1,0 +1,162 @@
+[
+  {
+    "testcase_id": "TC029",
+    "scenario_id": "SC029",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB013",
+    "test_area_id": "CAT018",
+    "title": "Successful login after clicking verification link",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration with valid data",
+      "User has received the verification email with a unique link",
+      "The verification link has not expired (within 24 hours)"
+    ],
+    "test_steps": [
+      "Open the verification link from the email in a browser",
+      "Observe the confirmation message displayed on the page",
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button"
+    ],
+    "expected_results": [
+      "The system displays a success message indicating the email has been verified",
+      "The user is redirected to the login page or a verification success page",
+      "The user is able to log in successfully and is redirected to the dashboard or home page"
+    ],
+    "test_data": {
+      "email": "verified_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC040",
+    "scenario_id": "SC040",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email not sent when registration fails",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter an invalid email address (e.g., missing '@')",
+      "Enter a valid password",
+      "Enter a matching confirm password",
+      "Submit the registration form"
+    ],
+    "expected_results": [
+      "The system displays an inline error message for invalid email format",
+      "The registration is not processed",
+      "No verification email is sent to the provided email address"
+    ],
+    "test_data": {
+      "email": "invalid-email",
+      "password": "ValidP@ss1",
+      "confirm_password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR003", "DEP001"],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC041",
+    "scenario_id": "SC041",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Multiple resend requests after cooldown",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration but has not yet verified email",
+      "User has received the initial verification email"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or click the resend button",
+      "Wait 60 seconds",
+      "Click the resend button again",
+      "Wait 60 seconds",
+      "Click the resend button a third time"
+    ],
+    "expected_results": [
+      "The first resend request is accepted and a new verification email is sent",
+      "The second resend request (after 60 seconds) is accepted and another verification email is sent",
+      "The third resend request (after another 60 seconds) is accepted and another verification email is sent",
+      "Each new email contains a unique verification link"
+    ],
+    "test_data": {
+      "email": "resend_user@example.com"
+    },
+    "related_requirement_ids": ["FR004", "DEP002"],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC042",
+    "scenario_id": "SC042",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Rate limiting on resend requests",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration but has not yet verified email",
+      "User has received the initial verification email"
+    ],
+    "test_steps": [
+      "Click the resend verification link button",
+      "Immediately click the resend button again (within 60 seconds)",
+      "Wait 30 seconds and click the resend button again",
+      "Wait 59 seconds from the first request and click the resend button again"
+    ],
+    "expected_results": [
+      "The first resend request is accepted and a new verification email is sent",
+      "The second request (immediate) is rejected with an error message indicating the cooldown period has not elapsed",
+      "The third request (30 seconds) is rejected with an error message indicating the cooldown period has not elapsed",
+      "The fourth request (59 seconds) is rejected with an error message indicating the cooldown period has not elapsed"
+    ],
+    "test_data": {
+      "email": "ratelimit_user@example.com"
+    },
+    "related_requirement_ids": ["FR004", "DEP002"],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC046",
+    "scenario_id": "SC046",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Email verification system dependency failure",
+    "type": "Integration",
+    "priority": "High",
+    "preconditions": [
+      "The email verification system (DEP001) is unavailable or returns an error",
+      "User is on the registration page with valid data"
+    ],
+    "test_steps": [
+      "Enter valid registration data (first name, last name, email, phone, password, confirm password)",
+      "Submit the registration form"
+    ],
+    "expected_results": [
+      "The system does not create the user account or creates it in a pending state",
+      "The system logs the email sending failure with relevant details",
+      "The system displays a user-friendly error message indicating that the verification email could not be sent and to try again later"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "fail_user@example.com",
+      "phone": "1234567890",
+      "password": "ValidP@ss1",
+      "confirm_password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR003", "DEP001"],
+    "traceability": "FR003, DEP001"
+  }
+]

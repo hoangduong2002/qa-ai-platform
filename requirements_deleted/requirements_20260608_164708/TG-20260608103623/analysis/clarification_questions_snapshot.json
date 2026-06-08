@@ -1,0 +1,39 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "category": "Security",
+      "question": "What is the password complexity requirement (e.g., must include uppercase, lowercase, digit, special character)?",
+      "impact": "High",
+      "reason": "Password complexity affects security and test coverage for valid/invalid passwords."
+    },
+    {
+      "question_id": "Q002",
+      "category": "Error Handling",
+      "question": "What error message should be displayed when a user tries to register with an already existing email?",
+      "impact": "Medium",
+      "reason": "Error messages are needed for UX and validation test cases."
+    },
+    {
+      "question_id": "Q003",
+      "category": "Validation",
+      "question": "What is the exact email format validation rule (e.g., must contain '@' and a domain)?",
+      "impact": "High",
+      "reason": "Email format validation affects positive and negative test cases."
+    },
+    {
+      "question_id": "Q004",
+      "category": "Security",
+      "question": "What is the email verification mechanism (e.g., link sent via email, token expiry time)?",
+      "impact": "High",
+      "reason": "Verification flow impacts test scenarios for successful and expired token handling."
+    },
+    {
+      "question_id": "Q005",
+      "category": "Boundary Values",
+      "question": "Are the password length boundaries inclusive (i.e., 8 and 12 characters allowed)?",
+      "impact": "Medium",
+      "reason": "Boundary clarity is needed for exact test case design."
+    }
+  ]
+}

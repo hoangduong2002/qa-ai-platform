@@ -1,0 +1,1146 @@
+[
+  {
+    "testcase_id": "TC042",
+    "scenario_id": "SC019",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email sent after successful registration",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed the registration form with valid data",
+      "User has submitted the registration form successfully",
+      "Email sending dependency (DEP001) is available and operational"
+    ],
+    "test_steps": [
+      "Register a new user with valid first name, last name, email, phone, password, and confirm password",
+      "Observe the system response after registration",
+      "Check the email inbox of the registered email address",
+      "Open the email received from the system",
+      "Verify the sender email address",
+      "Verify the email subject line",
+      "Verify the verification link is a URL with a unique token",
+      "Verify the verification link is valid by clicking it and confirming account activation"
+    ],
+    "expected_results": [
+      "The system displays a success message indicating that a verification email has been sent",
+      "An email is received at the registered email address within a reasonable time (e.g., less than 30 seconds)",
+      "The email is sent from a valid system email address (e.g., noreply@example.com)",
+      "The email subject line clearly indicates it is a verification email (e.g., 'Please verify your email address')",
+      "The email contains a unique verification link",
+      "The verification link is a URL that includes a unique token or identifier",
+      "Clicking the verification link activates the account and allows first login"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john.doe@example.com",
+      "phone": "1234567890",
+      "password": "Test@1234",
+      "confirm_password": "Test@1234"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "DEP001"
+    ],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC043",
+    "scenario_id": "SC020",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT017",
+    "title": "Verification link uniqueness across accounts",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "Two separate user accounts have been registered successfully",
+      "Both users have received their verification emails"
+    ],
+    "test_steps": [
+      "Register user A with email 'userA@example.com'",
+      "Capture the verification link from the email sent to user A",
+      "Register user B with email 'userB@example.com'",
+      "Capture the verification link from the email sent to user B",
+      "Compare the two verification links"
+    ],
+    "expected_results": [
+      "The verification link for user A is different from the verification link for user B",
+      "Each link contains a unique token or identifier that is not reused"
+    ],
+    "test_data": {
+      "user_A": {
+        "first_name": "Alice",
+        "last_name": "Smith",
+        "email": "userA@example.com",
+        "phone": "1111111111",
+        "password": "Pass@1234",
+        "confirm_password": "Pass@1234"
+      },
+      "user_B": {
+        "first_name": "Bob",
+        "last_name": "Jones",
+        "email": "userB@example.com",
+        "phone": "2222222222",
+        "password": "Word@5678",
+        "confirm_password": "Word@5678"
+      }
+    },
+    "related_requirement_ids": [
+      "FR003"
+    ],
+    "traceability": "FR003"
+  },
+  {
+    "testcase_id": "TC044",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT009",
+    "title": "Verification link expires after 24 hours",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received a verification link",
+      "System time can be manipulated or the test can wait for 24 hours",
+      "The verification link has not been clicked yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the verification link from the email",
+      "Wait for 24 hours and 1 second (or manipulate system time to simulate 24 hours passing)",
+      "Click the verification link in a browser",
+      "Observe the error message displayed on the verification page",
+      "Attempt to log in with the user's credentials",
+      "Observe the login error message"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating that the verification link has expired",
+      "The error message is displayed inline on the verification page",
+      "The user is not redirected to a login or success page",
+      "The user account remains unverified",
+      "The login attempt fails with an error message: 'Please verify your email before logging in.'"
+    ],
+    "test_data": {
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "email": "jane.doe@example.com",
+      "phone": "3333333333",
+      "password": "Test@5678",
+      "confirm_password": "Test@5678",
+      "wait_time_note": "Wait for 24 hours and 1 second after registration before clicking the link"
+    },
+    "related_requirement_ids": [
+      "BR006"
+    ],
+    "traceability": "BR006"
+  },
+  {
+    "testcase_id": "TC045",
+    "scenario_id": "SC022",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT015",
+    "title": "Attempt login with expired verification link",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received a verification link",
+      "The verification link has expired (24 hours have passed)",
+      "User has not verified their email yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the verification link from the email",
+      "Wait for 24 hours and 1 second (or manipulate system time to simulate 24 hours passing)",
+      "Click the expired verification link",
+      "Observe the error message displayed",
+      "Attempt to log in with the user's credentials",
+      "Observe the login error message"
+    ],
+    "expected_results": [
+      "Clicking the expired link displays an error message: 'Verification link has expired. Please request a new verification link.'",
+      "The error message is displayed inline on the verification page",
+      "The user is not logged in automatically",
+      "The login attempt with the user's credentials fails with an error message: 'Please verify your email before logging in.'",
+      "The login error message is displayed inline on the login page"
+    ],
+    "test_data": {
+      "first_name": "Mike",
+      "last_name": "Brown",
+      "email": "mike.brown@example.com",
+      "phone": "4444444444",
+      "password": "Test@9012",
+      "confirm_password": "Test@9012",
+      "wait_time_note": "Wait for 24 hours and 1 second after registration before clicking the link"
+    },
+    "related_requirement_ids": [
+      "BR006"
+    ],
+    "traceability": "BR006"
+  },
+  {
+    "testcase_id": "TC046",
+    "scenario_id": "SC023",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Resend verification link after 60 seconds",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received the initial verification link",
+      "User has not verified their email yet",
+      "The resend cooldown dependency (DEP002) is operational"
+    ],
+    "test_steps": [
+      "Register a new user and note the time of registration",
+      "Wait for 60 seconds after the initial verification email was sent",
+      "Click the 'Resend Verification Link' button or link",
+      "Check the email inbox for a new verification email",
+      "Open the new verification email",
+      "Verify the new verification link is different from the previous one",
+      "Click the new verification link to confirm it is valid and activates the account"
+    ],
+    "expected_results": [
+      "The system displays a success message: 'A new verification link has been sent to your email.'",
+      "A new verification email is received within a reasonable time",
+      "The new verification link is different from the previous one",
+      "The new verification link is valid for 24 hours from the time of resend",
+      "Clicking the new verification link activates the account and allows first login"
+    ],
+    "test_data": {
+      "first_name": "Sarah",
+      "last_name": "Connor",
+      "email": "sarah.connor@example.com",
+      "phone": "5555555555",
+      "password": "Test@3456",
+      "confirm_password": "Test@3456",
+      "wait_time_note": "Wait exactly 60 seconds after the initial email before requesting a resend"
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC047",
+    "scenario_id": "SC024",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Resend verification link before 60 seconds",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification email",
+      "User has not yet clicked the verification link",
+      "Less than 60 seconds have passed since the last verification email was sent"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or trigger the resend action",
+      "Attempt to request a resend of the verification link",
+      "Observe the system response",
+      "Check the email inbox for any new verification email"
+    ],
+    "expected_results": [
+      "The system rejects the resend request",
+      "An appropriate error message is displayed inline indicating that the user must wait 60 seconds before requesting another resend",
+      "No new verification email is sent"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "time_since_last_resend_seconds": 30
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC048",
+    "scenario_id": "SC025",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Resend verification link exactly at 60 seconds",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification email",
+      "User has not yet clicked the verification link",
+      "Exactly 60 seconds have passed since the last verification email was sent"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or trigger the resend action",
+      "Attempt to request a resend of the verification link",
+      "Observe the system response",
+      "Check the email inbox for a new verification email"
+    ],
+    "expected_results": [
+      "The system accepts the resend request",
+      "A new unique verification link is sent to the user's email",
+      "The user can use the new link to verify their account"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "time_since_last_resend_seconds": 60
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC049",
+    "scenario_id": "SC026",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Resend verification link at 59 seconds",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification email",
+      "User has not yet clicked the verification link",
+      "Exactly 59 seconds have passed since the last verification email was sent"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or trigger the resend action",
+      "Attempt to request a resend of the verification link",
+      "Observe the system response",
+      "Check the email inbox for any new verification email"
+    ],
+    "expected_results": [
+      "The system rejects the resend request",
+      "An appropriate error message is displayed inline indicating that the user must wait 60 seconds before requesting another resend",
+      "No new verification email is sent"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "time_since_last_resend_seconds": 59
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC050",
+    "scenario_id": "SC027",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Resend verification link at 61 seconds",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification email",
+      "User has not yet clicked the verification link",
+      "Exactly 61 seconds have passed since the last verification email was sent"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or trigger the resend action",
+      "Attempt to request a resend of the verification link",
+      "Observe the system response",
+      "Check the email inbox for a new verification email"
+    ],
+    "expected_results": [
+      "The system accepts the resend request",
+      "A new unique verification link is sent to the user's email",
+      "The user can use the new link to verify their account"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "time_since_last_resend_seconds": 61
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC051",
+    "scenario_id": "SC028",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT011",
+    "title": "Login blocked without email verification",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered successfully but has not clicked the verification link",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address and password",
+      "Click the login button",
+      "Observe the system response",
+      "Verify the error message displayed"
+    ],
+    "expected_results": [
+      "The system does not allow the user to log in",
+      "An appropriate error message is displayed inline indicating that the email must be verified before first login",
+      "The user remains on the login page or is redirected to a page prompting email verification"
+    ],
+    "test_data": {
+      "email": "unverified_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002"
+    ],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC052",
+    "scenario_id": "SC029",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB013",
+    "test_area_id": "CAT018",
+    "title": "Successful login after clicking verification link",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration with valid data",
+      "User has received the verification email with a unique link",
+      "The verification link has not expired (within 24 hours)"
+    ],
+    "test_steps": [
+      "Open the verification link from the email in a browser",
+      "Observe the confirmation message displayed on the page",
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button",
+      "Verify the user is redirected to the dashboard or home page",
+      "Verify the user's account status is marked as verified in the system"
+    ],
+    "expected_results": [
+      "The system displays a success message indicating the email has been verified",
+      "The user is redirected to the login page or a verification success page",
+      "The user is able to log in successfully and is redirected to the dashboard or home page",
+      "The user's account status is updated to 'verified' in the system"
+    ],
+    "test_data": {
+      "email": "verified_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002"
+    ],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC053",
+    "scenario_id": "SC040",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email not sent when registration fails",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter an invalid email address (e.g., missing '@')",
+      "Enter a valid password",
+      "Enter a matching confirm password",
+      "Submit the registration form",
+      "Observe the error message displayed",
+      "Check the email inbox for any verification email"
+    ],
+    "expected_results": [
+      "The system displays an inline error message for invalid email format",
+      "The registration is not processed",
+      "No verification email is sent to the provided email address",
+      "The user remains on the registration page"
+    ],
+    "test_data": {
+      "email": "invalid-email",
+      "password": "ValidP@ss1",
+      "confirm_password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "DEP001"
+    ],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC054",
+    "scenario_id": "SC041",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Multiple resend requests after cooldown",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration but has not yet verified email",
+      "User has received the initial verification email"
+    ],
+    "test_steps": [
+      "Navigate to the resend verification link page or click the resend button",
+      "Wait 60 seconds",
+      "Click the resend button again",
+      "Wait 60 seconds",
+      "Click the resend button a third time",
+      "Check the email inbox for each resend request",
+      "Verify each new verification link is unique"
+    ],
+    "expected_results": [
+      "The first resend request is accepted and a new verification email is sent",
+      "The second resend request (after 60 seconds) is accepted and another verification email is sent",
+      "The third resend request (after another 60 seconds) is accepted and another verification email is sent",
+      "Each new email contains a unique verification link"
+    ],
+    "test_data": {
+      "email": "resend_user@example.com"
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC055",
+    "scenario_id": "SC042",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Rate limiting on resend requests",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration but has not yet verified email",
+      "User has received the initial verification email"
+    ],
+    "test_steps": [
+      "Click the resend verification link button",
+      "Immediately click the resend button again (within 60 seconds)",
+      "Wait 30 seconds and click the resend button again",
+      "Wait 59 seconds from the first request and click the resend button again",
+      "Observe the system response for each request"
+    ],
+    "expected_results": [
+      "The first resend request is accepted and a new verification email is sent",
+      "The second request (immediate) is rejected with an inline error message indicating the cooldown period has not elapsed",
+      "The third request (30 seconds) is rejected with an inline error message indicating the cooldown period has not elapsed",
+      "The fourth request (59 seconds) is rejected with an inline error message indicating the cooldown period has not elapsed"
+    ],
+    "test_data": {
+      "email": "ratelimit_user@example.com"
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC056",
+    "scenario_id": "SC046",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Email verification system dependency failure",
+    "type": "Integration",
+    "priority": "High",
+    "preconditions": [
+      "The email verification system (DEP001) is unavailable or returns an error",
+      "User is on the registration page with valid data"
+    ],
+    "test_steps": [
+      "Enter valid registration data (first name, last name, email, phone, password, confirm password)",
+      "Submit the registration form",
+      "Observe the system response",
+      "Check the system logs for error messages",
+      "Attempt to log in with the registered credentials"
+    ],
+    "expected_results": [
+      "The system does not create the user account or creates it in a pending state",
+      "The system logs the email sending failure with relevant details",
+      "The system displays a user-friendly inline error message indicating that the verification email could not be sent and to try again later",
+      "The user cannot log in because the account is not verified or not created"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "fail_user@example.com",
+      "phone": "1234567890",
+      "password": "ValidP@ss1",
+      "confirm_password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "DEP001"
+    ],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC057",
+    "scenario_id": "SC047",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT010",
+    "title": "Token expiration and resend logic dependency failure",
+    "type": "Integration",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered and received an initial verification link",
+      "The token expiration and resend logic dependency (DEP002) is configured to fail or is unavailable",
+      "User is on the verification resend page or has access to the resend functionality"
+    ],
+    "test_steps": [
+      "Simulate a failure of the token expiration and resend logic dependency (e.g., by stopping the service or returning an error)",
+      "User clicks the 'Resend Verification Link' button",
+      "Observe the system response and any error handling behavior",
+      "Check system logs for error messages related to the dependency failure",
+      "Verify the user's account status remains unchanged"
+    ],
+    "expected_results": [
+      "The system does not send a new verification link",
+      "The system displays a user-friendly inline error message indicating that the resend service is temporarily unavailable (e.g., 'Unable to resend verification link at this time. Please try again later.')",
+      "The system logs the dependency failure with appropriate error details (e.g., 'Token expiration/resend service unavailable')",
+      "The user's account status remains unchanged (still unverified)",
+      "The system does not crash or enter an unstable state"
+    ],
+    "test_data": {
+      "dependency_status": "unavailable",
+      "user_email": "testuser@example.com",
+      "initial_verification_link": "https://example.com/verify?token=abc123"
+    },
+    "related_requirement_ids": [
+      "FR004",
+      "DEP002"
+    ],
+    "traceability": "FR004, DEP002"
+  },
+  {
+    "testcase_id": "TC058",
+    "scenario_id": "SC019",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email sent with correct sender and subject",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User has completed the registration form with valid data",
+      "User has submitted the registration form successfully",
+      "Email sending dependency (DEP001) is available and operational"
+    ],
+    "test_steps": [
+      "Register a new user with valid first name, last name, email, phone, password, and confirm password",
+      "Check the email inbox of the registered email address",
+      "Open the email received from the system",
+      "Verify the sender email address",
+      "Verify the email subject line"
+    ],
+    "expected_results": [
+      "The email is sent from a valid system email address (e.g., noreply@example.com)",
+      "The email subject line clearly indicates it is a verification email (e.g., 'Please verify your email address')",
+      "The email body contains a unique verification link"
+    ],
+    "test_data": {
+      "first_name": "Alice",
+      "last_name": "Johnson",
+      "email": "alice.johnson@example.com",
+      "phone": "6666666666",
+      "password": "Test@7890",
+      "confirm_password": "Test@7890"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "DEP001"
+    ],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC059",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT009",
+    "title": "Verification link valid just before 24 hours",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received a verification link",
+      "System time can be manipulated or the test can wait for 23 hours and 59 minutes",
+      "The verification link has not been clicked yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the verification link from the email",
+      "Wait for 23 hours and 59 minutes (or manipulate system time to simulate 23 hours and 59 minutes passing)",
+      "Click the verification link in a browser",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system accepts the verification link",
+      "The user's email is marked as verified",
+      "The user is redirected to a success page or login page",
+      "The user can log in successfully"
+    ],
+    "test_data": {
+      "first_name": "Tom",
+      "last_name": "Smith",
+      "email": "tom.smith@example.com",
+      "phone": "7777777777",
+      "password": "Test@1111",
+      "confirm_password": "Test@1111",
+      "wait_time_note": "Wait for 23 hours and 59 minutes after registration before clicking the link"
+    },
+    "related_requirement_ids": [
+      "BR006"
+    ],
+    "traceability": "BR006"
+  },
+  {
+    "testcase_id": "TC060",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT009",
+    "title": "Verification link expired exactly at 24 hours",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received a verification link",
+      "System time can be manipulated or the test can wait for exactly 24 hours",
+      "The verification link has not been clicked yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the verification link from the email",
+      "Wait for exactly 24 hours (or manipulate system time to simulate exactly 24 hours passing)",
+      "Click the verification link in a browser",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating that the verification link has expired",
+      "The error message is displayed inline on the verification page",
+      "The user is not redirected to a login or success page",
+      "The user account remains unverified"
+    ],
+    "test_data": {
+      "first_name": "Emma",
+      "last_name": "Wilson",
+      "email": "emma.wilson@example.com",
+      "phone": "8888888888",
+      "password": "Test@2222",
+      "confirm_password": "Test@2222",
+      "wait_time_note": "Wait for exactly 24 hours after registration before clicking the link"
+    },
+    "related_requirement_ids": [
+      "BR006"
+    ],
+    "traceability": "BR006"
+  },
+  {
+    "testcase_id": "TC061",
+    "scenario_id": "SC029",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB013",
+    "test_area_id": "CAT018",
+    "title": "Verification link clicked after successful resend",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration with valid data",
+      "User has received the initial verification email",
+      "User has requested a resend after 60 seconds and received a new verification link",
+      "The new verification link has not expired (within 24 hours)"
+    ],
+    "test_steps": [
+      "Open the new verification link from the resend email in a browser",
+      "Observe the confirmation message displayed on the page",
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button",
+      "Verify the user is redirected to the dashboard or home page"
+    ],
+    "expected_results": [
+      "The system displays a success message indicating the email has been verified",
+      "The user is redirected to the login page or a verification success page",
+      "The user is able to log in successfully and is redirected to the dashboard or home page"
+    ],
+    "test_data": {
+      "email": "resend_verify_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002",
+      "FR004"
+    ],
+    "traceability": "FR002, FR004"
+  },
+  {
+    "testcase_id": "TC062",
+    "scenario_id": "SC028",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT011",
+    "title": "Login blocked after verification link expired",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered successfully",
+      "User has received a verification link",
+      "The verification link has expired (24 hours have passed)",
+      "User has not clicked the expired link"
+    ],
+    "test_steps": [
+      "Navigate to the login page",
+      "Enter the registered email address and password",
+      "Click the login button",
+      "Observe the system response",
+      "Verify the error message displayed"
+    ],
+    "expected_results": [
+      "The system does not allow the user to log in",
+      "An appropriate error message is displayed inline indicating that the email must be verified before first login",
+      "The user remains on the login page or is redirected to a page prompting email verification"
+    ],
+    "test_data": {
+      "email": "expired_link_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002",
+      "BR006"
+    ],
+    "traceability": "FR002, BR006"
+  },
+  {
+    "testcase_id": "TC063",
+    "scenario_id": "SC019",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email sent with correct link format",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User has completed the registration form with valid data",
+      "User has submitted the registration form successfully",
+      "Email sending dependency (DEP001) is available and operational"
+    ],
+    "test_steps": [
+      "Register a new user with valid first name, last name, email, phone, password, and confirm password",
+      "Check the email inbox of the registered email address",
+      "Open the email received from the system",
+      "Extract the verification link from the email body",
+      "Verify the link format is a valid URL with a token parameter"
+    ],
+    "expected_results": [
+      "The verification link is a valid URL (e.g., starts with 'https://')",
+      "The link contains a unique token or identifier as a query parameter (e.g., 'token=abc123')",
+      "The link does not contain any sensitive user information (e.g., password)"
+    ],
+    "test_data": {
+      "first_name": "Bob",
+      "last_name": "Williams",
+      "email": "bob.williams@example.com",
+      "phone": "9999999999",
+      "password": "Test@3333",
+      "confirm_password": "Test@3333"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "DEP001"
+    ],
+    "traceability": "FR003, DEP001"
+  },
+  {
+    "testcase_id": "TC064",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT009",
+    "title": "Verification link expiration after resend",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification link",
+      "User has requested a resend after 60 seconds and received a new verification link",
+      "System time can be manipulated or the test can wait for 24 hours from the resend time"
+    ],
+    "test_steps": [
+      "Register a new user and capture the initial verification link",
+      "Wait for 60 seconds and request a resend",
+      "Capture the new verification link from the resend email",
+      "Wait for 24 hours and 1 second from the resend time (or manipulate system time)",
+      "Click the new verification link in a browser",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating that the verification link has expired",
+      "The error message is displayed inline on the verification page",
+      "The user is not redirected to a login or success page",
+      "The user account remains unverified"
+    ],
+    "test_data": {
+      "first_name": "Chris",
+      "last_name": "Davis",
+      "email": "chris.davis@example.com",
+      "phone": "1010101010",
+      "password": "Test@4444",
+      "confirm_password": "Test@4444",
+      "wait_time_note": "Wait for 24 hours and 1 second after the resend request before clicking the new link"
+    },
+    "related_requirement_ids": [
+      "BR006",
+      "FR004"
+    ],
+    "traceability": "BR006, FR004"
+  },
+  {
+    "testcase_id": "TC065",
+    "scenario_id": "SC028",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT011",
+    "title": "Login blocked after multiple failed verification attempts",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User has registered successfully",
+      "User has received a verification link",
+      "User has attempted to click the verification link multiple times but it has expired or is invalid"
+    ],
+    "test_steps": [
+      "Navigate to the login page",
+      "Enter the registered email address and password",
+      "Click the login button",
+      "Observe the system response",
+      "Verify the error message displayed"
+    ],
+    "expected_results": [
+      "The system does not allow the user to log in",
+      "An appropriate error message is displayed inline indicating that the email must be verified before first login",
+      "The user remains on the login page or is redirected to a page prompting email verification",
+      "The system does not lock the account due to failed verification attempts"
+    ],
+    "test_data": {
+      "email": "multiple_fail_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002"
+    ],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC066",
+    "scenario_id": "SC019",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT008",
+    "title": "Verification email sent with token that expires after 24 hours",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed the registration form with valid data",
+      "User has submitted the registration form successfully",
+      "Email sending dependency (DEP001) is available and operational"
+    ],
+    "test_steps": [
+      "Register a new user with valid data",
+      "Capture the verification link from the email",
+      "Extract the token from the verification link",
+      "Verify the token is stored in the system with a creation timestamp",
+      "Verify the token expiration is set to 24 hours from creation"
+    ],
+    "expected_results": [
+      "The verification link contains a unique token",
+      "The token is stored in the system with a creation timestamp",
+      "The token expiration is set to exactly 24 hours from the creation timestamp",
+      "The token is not expired at the time of verification"
+    ],
+    "test_data": {
+      "first_name": "David",
+      "last_name": "Lee",
+      "email": "david.lee@example.com",
+      "phone": "1212121212",
+      "password": "Test@5555",
+      "confirm_password": "Test@5555"
+    },
+    "related_requirement_ids": [
+      "FR003",
+      "BR006",
+      "DEP001"
+    ],
+    "traceability": "FR003, BR006, DEP001"
+  },
+  {
+    "testcase_id": "TC067",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT009",
+    "title": "Verification link expired at 24 hours and 1 second",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received a verification link",
+      "System time can be manipulated or the test can wait for 24 hours and 1 second",
+      "The verification link has not been clicked yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the verification link from the email",
+      "Wait for 24 hours and 1 second (or manipulate system time to simulate 24 hours and 1 second passing)",
+      "Click the verification link in a browser",
+      "Observe the error message displayed on the verification page",
+      "Attempt to log in with the user's credentials",
+      "Observe the login error message"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating that the verification link has expired",
+      "The error message is displayed inline on the verification page",
+      "The user is not redirected to a login or success page",
+      "The user account remains unverified",
+      "The login attempt fails with an error message: 'Please verify your email before logging in.'"
+    ],
+    "test_data": {
+      "first_name": "Frank",
+      "last_name": "Miller",
+      "email": "frank.miller@example.com",
+      "phone": "1313131313",
+      "password": "Test@6666",
+      "confirm_password": "Test@6666",
+      "wait_time_note": "Wait for 24 hours and 1 second after registration before clicking the link"
+    },
+    "related_requirement_ids": [
+      "BR006"
+    ],
+    "traceability": "BR006"
+  },
+  {
+    "testcase_id": "TC068",
+    "scenario_id": "SC022",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT015",
+    "title": "Attempt login with expired verification link after resend",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered and received an initial verification link",
+      "User has requested a resend after 60 seconds and received a new verification link",
+      "The new verification link has expired (24 hours have passed since resend)",
+      "User has not verified their email yet"
+    ],
+    "test_steps": [
+      "Register a new user and capture the initial verification link",
+      "Wait for 60 seconds and request a resend",
+      "Capture the new verification link from the resend email",
+      "Wait for 24 hours and 1 second from the resend time (or manipulate system time)",
+      "Click the expired new verification link",
+      "Observe the error message displayed",
+      "Attempt to log in with the user's credentials",
+      "Observe the login error message"
+    ],
+    "expected_results": [
+      "Clicking the expired link displays an error message: 'Verification link has expired. Please request a new verification link.'",
+      "The error message is displayed inline on the verification page",
+      "The user is not logged in automatically",
+      "The login attempt with the user's credentials fails with an error message: 'Please verify your email before logging in.'",
+      "The login error message is displayed inline on the login page"
+    ],
+    "test_data": {
+      "first_name": "Grace",
+      "last_name": "Taylor",
+      "email": "grace.taylor@example.com",
+      "phone": "1414141414",
+      "password": "Test@7777",
+      "confirm_password": "Test@7777",
+      "wait_time_note": "Wait for 24 hours and 1 second after the resend request before clicking the new link"
+    },
+    "related_requirement_ids": [
+      "BR006",
+      "FR004"
+    ],
+    "traceability": "BR006, FR004"
+  },
+  {
+    "testcase_id": "TC069",
+    "scenario_id": "SC028",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT011",
+    "title": "Login blocked without verification after resend",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has registered successfully",
+      "User has requested a resend of the verification link after 60 seconds",
+      "User has received the new verification link but has not clicked it",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address and password",
+      "Click the login button",
+      "Observe the system response",
+      "Verify the error message displayed"
+    ],
+    "expected_results": [
+      "The system does not allow the user to log in",
+      "An appropriate error message is displayed inline indicating that the email must be verified before first login",
+      "The user remains on the login page or is redirected to a page prompting email verification"
+    ],
+    "test_data": {
+      "email": "resend_unverified_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002",
+      "FR004"
+    ],
+    "traceability": "FR002, FR004"
+  },
+  {
+    "testcase_id": "TC070",
+    "scenario_id": "SC029",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB013",
+    "test_area_id": "CAT018",
+    "title": "Verification link clicked after multiple resends",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has completed registration with valid data",
+      "User has received the initial verification email",
+      "User has requested multiple resends (each after 60 seconds) and received new verification links",
+      "The latest verification link has not expired (within 24 hours)"
+    ],
+    "test_steps": [
+      "Open the latest verification link from the most recent resend email in a browser",
+      "Observe the confirmation message displayed on the page",
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button",
+      "Verify the user is redirected to the dashboard or home page"
+    ],
+    "expected_results": [
+      "The system displays a success message indicating the email has been verified",
+      "The user is redirected to the login page or a verification success page",
+      "The user is able to log in successfully and is redirected to the dashboard or home page"
+    ],
+    "test_data": {
+      "email": "multi_resend_user@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": [
+      "FR002",
+      "FR004"
+    ],
+    "traceability": "FR002, FR004"
+  }
+]

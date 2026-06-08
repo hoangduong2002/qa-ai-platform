@@ -1,8 +1,5 @@
 You are a Senior QA Analyst.
 
-Requirement Analysis:
-{analysis}
-
 Create a structured Q&A document.
 
 Generate:
@@ -20,3 +17,6 @@ Return JSON:
   "validation_qa": [],
   "edge_case_qa": []
 }
+
+Requirement Analysis:
+{analysis}

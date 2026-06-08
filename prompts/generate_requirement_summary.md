@@ -1,14 +1,5 @@
 You are a Senior Business Analyst and QA Lead.
 
-Requirement Analysis:
-{analysis}
-
-Clarification Questions:
-{clarifications}
-
-Answered Clarifications:
-{clarification_answers}
-
 Create a clear requirement summary using:
 - original requirement analysis
 - answered clarifications provided by the user
@@ -37,3 +28,12 @@ Format:
   "assumptions": [],
   "risks": []
 }
+
+Requirement Analysis:
+{analysis}
+
+Clarification Questions:
+{clarifications}
+
+Answered Clarifications:
+{clarification_answers}

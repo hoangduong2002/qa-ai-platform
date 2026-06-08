@@ -1,0 +1,44 @@
+[
+  {
+    "testcase_id": "TC048",
+    "scenario_id": "SC048",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Password containing username from first name or last name",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with the same email exists in the system"
+    ],
+    "test_steps": [
+      "Enter 'John' in the First name field",
+      "Enter 'Doe' in the Last name field",
+      "Enter 'john.doe@example.com' in the Email field",
+      "Enter '1234567890' in the Phone field",
+      "Enter 'JohnPass1@' in the Password field",
+      "Enter 'JohnPass1@' in the Confirm password field",
+      "Click the Submit button"
+    ],
+    "expected_results": [
+      "The system displays an inline error message below the Password field indicating that the password must not contain the username or email prefix",
+      "The user account is not created",
+      "No verification email is sent"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john.doe@example.com",
+      "phone": "1234567890",
+      "password": "JohnPass1@",
+      "confirm_password": "JohnPass1@"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR005",
+      "VAL005"
+    ],
+    "traceability": "FR001, BR005, VAL005"
+  }
+]

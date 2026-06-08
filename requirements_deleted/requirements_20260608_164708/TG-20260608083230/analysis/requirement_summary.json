@@ -1,0 +1,54 @@
+{
+  "executive_summary": "The system allows users to create an account using an email and password, with mandatory email verification before first login. Verification is performed via a secure URL containing a single-use, high-entropy token that expires 24 hours after issuance. The system handles expired or invalid tokens by displaying a specific message and redirecting users to request a new verification email. Unverified user records are automatically purged after 7 days. Password complexity rules are strict, including length, character types, and restrictions on spaces and email prefix. Security measures include SHA-256 hashing of tokens, HTTPS enforcement, and hiding system error details from the frontend. Duplicate registration attempts with an unverified email update the existing record and reset the verification clock.",
+  "functional_summary": "Users can register with email and password, then must verify their email via a link sent by the system. The verification link contains a cryptographically secure random token. If the link is expired or token invalid, the system displays 'The verification link is invalid or has expired. Please request a new one.' and redirects to a page with a 'Resend Verification Email' button. On system error, the message 'An unexpected error occurred. Please try again later.' is shown. Unverified records are purged after 7 days. If a user re-registers with an existing unverified email, the system updates the record with the new password hash and generates a new token, resetting the 24-hour expiration clock, while the frontend shows normal registration flow to prevent email enumeration.",
+  "confirmed_business_rules": [
+    "Email must be unique.",
+    "Password minimum length is 8 characters.",
+    "Password maximum length is 12 characters.",
+    "Password must contain at least one uppercase letter.",
+    "Password must contain at least one lowercase letter.",
+    "Password must contain at least one numeric digit.",
+    "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *).",
+    "Consecutive spaces are forbidden in the password.",
+    "Password cannot contain the user's explicit email prefix or username.",
+    "Email verification link expires exactly 24 hours after issuance.",
+    "Verification tokens are single-use only.",
+    "Tokens are hashed (using SHA-256) before storage in the database.",
+    "All verification traffic must be strictly enforced over HTTPS (TLS 1.3).",
+    "In all failure cases, raw database or system error details must be hidden from the frontend to prevent information disclosure.",
+    "When a user attempts to create an account with an email that already exists but is not yet verified, the registration flow proceeds normally from the frontend perspective to prevent email enumeration attacks."
+  ],
+  "validation_rules": [
+    "Email must be unique.",
+    "Password length must be between 8 and 12 characters.",
+    "Password must contain at least one uppercase letter.",
+    "Password must contain at least one lowercase letter.",
+    "Password must contain at least one numeric digit.",
+    "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *).",
+    "Password must not contain consecutive spaces.",
+    "Password must not contain the user's explicit email prefix or username.",
+    "Verification token must be validated as single-use; once clicked or validated, the token is immediately invalidated in the database.",
+    "Verification link must be checked for expiration (24 hours from issuance)."
+  ],
+  "open_questions": [
+    "The exact landing page URL or route for the 'Resend Verification Email' button is not specified.",
+    "The format or content of the verification email (e.g., sender name, subject line, body text) is not specified.",
+    "The behavior when a user attempts to login without verifying their email is not specified (e.g., error message, redirect).",
+    "The maximum number of resend verification email requests allowed within a time period is not specified.",
+    "The process for requesting a new verification email (e.g., endpoint, rate limiting) is not detailed."
+  ],
+  "assumptions": [
+    "The system will have a landing page or route where the 'Resend Verification Email' button is displayed after an expired or invalid link.",
+    "The verification email will include the secure URL with the token as a query parameter.",
+    "The system will handle login attempts for unverified users by preventing access, but the exact user-facing behavior is not defined.",
+    "Rate limiting for resend verification requests will be implemented, but the specific limits are not defined.",
+    "The cryptographic library used for token generation and SHA-256 hashing is assumed to be secure and correctly implemented."
+  ],
+  "risks": [
+    "Email delivery failures could prevent users from completing verification, leading to poor user experience and potential account lockout.",
+    "If the token generation or hashing implementation is flawed, security could be compromised (e.g., token prediction, collision).",
+    "The 7-day purge of unverified records may conflict with user expectations if they attempt to verify after the purge but before re-registering.",
+    "The behavior of updating an existing unverified record instead of creating a duplicate could lead to confusion if the user is not notified of the update.",
+    "The answer to Q005 states that the registration flow proceeds normally from the frontend perspective to prevent email enumeration, but the question asked about behavior when an email already exists but is not yet verified. The answer is consistent with the business rule BR015, so no mismatch is identified."
+  ]
+}

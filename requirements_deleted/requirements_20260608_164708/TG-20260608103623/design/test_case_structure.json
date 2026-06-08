@@ -1,0 +1,213 @@
+{
+  "main_functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "Account Creation",
+      "description": "User can create account using email and password.",
+      "related_requirement_ids": [
+        "FR001"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB001",
+          "sub_function_name": "Email Input and Validation",
+          "description": "Email uniqueness must be validated during account creation.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR001",
+            "VAL001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT001",
+              "category_name": "Email Uniqueness Validation",
+              "test_intent": "Verify that the system rejects duplicate email addresses and allows unique ones.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR001",
+                "VAL001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB002",
+          "sub_function_name": "Password Input and Validation",
+          "description": "Password length must be between 8 and 12 characters.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR002",
+            "VAL002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT002",
+              "category_name": "Password Length Validation",
+              "test_intent": "Verify that the system accepts passwords with length between 8 and 12 characters and rejects passwords outside this range.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR002",
+                "VAL002"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB008",
+          "sub_function_name": "Email Format Validation",
+          "description": "Validate that the email address conforms to a standard format (e.g., contains '@' and a domain).",
+          "related_requirement_ids": [
+            "FR001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT008",
+              "category_name": "Email Format Acceptance and Rejection",
+              "test_intent": "Verify that the system accepts valid email formats and rejects invalid formats such as missing '@' or invalid domain.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB004",
+          "sub_function_name": "Account Creation Success Path",
+          "description": "Test the complete account creation flow with valid email and password, including successful submission and confirmation.",
+          "related_requirement_ids": [
+            "FR001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT004",
+              "category_name": "Successful Account Creation",
+              "test_intent": "Verify that a user can successfully create an account with a unique email and a valid password, and receive a confirmation.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB005",
+          "sub_function_name": "Account Creation Error Handling",
+          "description": "Test system behavior when account creation fails due to network issues, server errors, or invalid input formats beyond uniqueness and length.",
+          "related_requirement_ids": [
+            "FR001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT005",
+              "category_name": "Error Handling During Account Creation",
+              "test_intent": "Verify that the system handles non-validation errors gracefully, such as network timeout, server 500 error, or database failure, without data corruption.",
+              "priority": "Medium",
+              "related_requirement_ids": [
+                "FR001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB009",
+          "sub_function_name": "Duplicate Email Error Message",
+          "description": "Ensure that when a duplicate email is entered, the system displays a clear and appropriate error message to the user.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR001",
+            "VAL001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT009",
+              "category_name": "Duplicate Email Error Feedback",
+              "test_intent": "Verify that the system shows a meaningful error message when a user attempts to create an account with an already registered email.",
+              "priority": "Medium",
+              "related_requirement_ids": [
+                "BR001",
+                "VAL001"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "description": "User must verify email before first login.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB003",
+          "sub_function_name": "Verification Process",
+          "description": "System sends verification and user completes verification before first login.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT003A",
+              "category_name": "Pre-login Verification Check",
+              "test_intent": "Verify that the system prevents login for unverified accounts.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            },
+            {
+              "category_id": "CAT003B",
+              "category_name": "Post-verification Login Success",
+              "test_intent": "Verify that the system allows login only after successful email verification.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB006",
+          "sub_function_name": "Verification Email Delivery",
+          "description": "Test that the verification email is sent to the correct email address and contains a valid verification link.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT006",
+              "category_name": "Email Delivery and Link Validity",
+              "test_intent": "Verify that the verification email is sent to the user's email address and the link is functional.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB007",
+          "sub_function_name": "Verification Link Expiry and Resend",
+          "description": "Test that the verification link expires after a certain time and that the user can request a new verification email.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT007",
+              "category_name": "Link Expiry and Resend",
+              "test_intent": "Verify that an expired verification link is rejected and the user can request a new verification email.",
+              "priority": "Medium",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

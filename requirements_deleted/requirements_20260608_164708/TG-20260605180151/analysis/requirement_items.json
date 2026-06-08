@@ -1,0 +1,82 @@
+[
+  {
+    "requirement_id": "FR001",
+    "type": "Functional Requirement",
+    "description": "The system shall allow a user to create an account using an email address and a password."
+  },
+  {
+    "requirement_id": "FR002",
+    "type": "Functional Requirement",
+    "description": "The system shall require email verification before the user can perform their first login."
+  },
+  {
+    "requirement_id": "FR003",
+    "type": "Functional Requirement",
+    "description": "The system shall store user account data in a database."
+  },
+  {
+    "requirement_id": "BR001",
+    "type": "Business Rule",
+    "description": "Email must be unique across all user accounts."
+  },
+  {
+    "requirement_id": "BR002",
+    "type": "Business Rule",
+    "description": "Password length must be between 8 and 12 characters."
+  },
+  {
+    "requirement_id": "BR003",
+    "type": "Business Rule",
+    "description": "Password must include at least one number, one special character, and one alphabet character."
+  },
+  {
+    "requirement_id": "BR004",
+    "type": "Business Rule",
+    "description": "Email maximum length is 255 characters."
+  },
+  {
+    "requirement_id": "BR005",
+    "type": "Business Rule",
+    "description": "Password maximum length is 12 characters."
+  },
+  {
+    "requirement_id": "VAL001",
+    "type": "Validation",
+    "description": "The system shall validate that the email is unique before creating the account."
+  },
+  {
+    "requirement_id": "VAL002",
+    "type": "Validation",
+    "description": "The system shall validate that the password meets the minimum length of 8 characters."
+  },
+  {
+    "requirement_id": "VAL003",
+    "type": "Validation",
+    "description": "The system shall validate that the password does not exceed the maximum length of 12 characters."
+  },
+  {
+    "requirement_id": "VAL004",
+    "type": "Validation",
+    "description": "The system shall validate that the password contains at least one number, one special character, and one alphabet character."
+  },
+  {
+    "requirement_id": "VAL005",
+    "type": "Validation",
+    "description": "The system shall validate that the email does not exceed the maximum length of 255 characters."
+  },
+  {
+    "requirement_id": "VAL006",
+    "type": "Validation",
+    "description": "The system shall display meaningful inline error messages for validation failures (e.g., duplicate email, short password, invalid email format)."
+  },
+  {
+    "requirement_id": "DEP001",
+    "type": "Dependency",
+    "description": "Email verification mechanism (e.g., confirmation link, OTP) must be implemented to support FR002."
+  },
+  {
+    "requirement_id": "DEP002",
+    "type": "Dependency",
+    "description": "A database system must be available to store user account data as per FR003."
+  }
+]

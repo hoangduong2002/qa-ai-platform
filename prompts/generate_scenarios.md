@@ -6,18 +6,6 @@ Generate test scenarios from:
 3. requirement items
 4. approved test case structure
 
-Requirement Summary:
-{requirement_summary}
-
-Test Scope:
-{test_scope}
-
-Requirement Items:
-{requirement_items}
-
-Approved Test Case Structure:
-{approved_test_case_structure}
-
 Core rules:
 - Generate scenarios only from confirmed requirement summary.
 - The requirement summary already includes confirmed clarification answers.
@@ -80,3 +68,15 @@ Format:
     "traceability": "FR001, BR001, VAL001"
   }
 ]
+
+Requirement Summary:
+{requirement_summary}
+
+Test Scope:
+{test_scope}
+
+Requirement Items:
+{requirement_items}
+
+Approved Test Case Structure:
+{approved_test_case_structure}

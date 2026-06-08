@@ -15,7 +15,7 @@ from app.services.test_structure_service import (
 def _structure_actions(ticket_id: str) -> list[AppAction]:
     return [
         AppAction(
-            label="Self Review",
+            label="AI Review",
             action="structure_self_review",
             ticket_id=ticket_id,
         ),

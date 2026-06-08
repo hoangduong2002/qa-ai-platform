@@ -1,0 +1,54 @@
+{
+  "scope_decision": {
+    "positive": true,
+    "negative": true,
+    "validation": true,
+    "boundary": true,
+    "business_rule": true,
+    "security": true,
+    "permissions": false,
+    "ux_ui": true,
+    "integration": true,
+    "network": false,
+    "localization": false,
+    "timezone": false
+  },
+  "included_categories": [
+    "positive",
+    "negative",
+    "validation",
+    "boundary",
+    "business_rule",
+    "security",
+    "ux_ui",
+    "integration"
+  ],
+  "excluded_categories": [
+    {
+      "category": "permissions",
+      "reason": "No requirement or business rule related to user roles, access levels, or permissions is present in the confirmed requirement summary."
+    },
+    {
+      "category": "network",
+      "reason": "No requirement or risk mentions network conditions, connectivity, or protocol-level testing."
+    },
+    {
+      "category": "localization",
+      "reason": "No requirement or business rule specifies language, locale, or regional formatting."
+    },
+    {
+      "category": "timezone",
+      "reason": "No requirement or business rule references timezone handling, DST, or time-based calculations beyond the 24-hour link validity (which is a fixed duration, not timezone-dependent)."
+    }
+  ],
+  "scenario_generation_rules": [
+    "Generate positive test scenarios for successful registration with valid email and password, successful email verification, and successful resend of verification link after 60 seconds.",
+    "Generate negative test scenarios for registration with duplicate email, invalid email format, password violating complexity rules (missing uppercase, lowercase, digit, special character), password containing consecutive spaces, password containing email prefix or username, password length below 8 or above 12 characters, and resend request before 60 seconds.",
+    "Generate validation test scenarios for email format (missing '@', missing domain, invalid characters), password length boundaries (8 and 12 characters inclusive), and duplicate email inline error message.",
+    "Generate boundary test scenarios for password length at 7, 8, 12, and 13 characters, and resend timing at 59, 60, and 61 seconds.",
+    "Generate business rule test scenarios for email uniqueness (BR001), verification link expiry at 24 hours (BR002), password complexity rules (BR003), consecutive spaces prohibition (BR004), and password not containing email prefix or username (BR005).",
+    "Generate security test scenarios for password strength against common attacks (e.g., SQL injection, XSS in email/password fields), rate limiting on resend requests (every 60 seconds), and verification link tampering or replay attacks.",
+    "Generate UX/UI test scenarios for inline error messages on duplicate email (VAL003), success messages after registration and verification, and loading states during email sending or verification.",
+    "Generate integration test scenarios for external email delivery service failures (RISK001, DEP001), delays in email delivery, and verification link not being sent due to service unavailability."
+  ]
+}

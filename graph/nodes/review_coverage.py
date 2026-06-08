@@ -13,6 +13,9 @@ from app.utils.function_review_store import (
     save_master_coverage_review,
     save_function_coverage_manifest,
 )
+from app.services.coverage_score_service import (
+    build_deterministic_coverage_review,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +40,7 @@ def _unique_ids(values: list) -> list[str]:
             continue
 
         if not isinstance(value, str):
-            continue
+            value = str(value)
 
         clean_value = value.strip()
 
@@ -124,7 +127,9 @@ def _scenario_matches_function_by_requirement(
     if not scenario_requirement_ids or not function_requirement_ids:
         return False
 
-    return bool(scenario_requirement_ids.intersection(function_requirement_ids))
+    return bool(
+        scenario_requirement_ids.intersection(function_requirement_ids)
+    )
 
 
 def _testcase_matches_function_by_requirement(
@@ -137,7 +142,9 @@ def _testcase_matches_function_by_requirement(
     if not testcase_requirement_ids or not function_requirement_ids:
         return False
 
-    return bool(testcase_requirement_ids.intersection(function_requirement_ids))
+    return bool(
+        testcase_requirement_ids.intersection(function_requirement_ids)
+    )
 
 
 def _group_items_by_function(
@@ -269,6 +276,48 @@ def _validate_function_review(
             review[key] = []
 
 
+def _to_slim_testcases(testcases: list) -> list:
+    slim = []
+
+    for testcase in testcases:
+        if not isinstance(testcase, dict):
+            continue
+
+        test_steps = testcase.get("test_steps", [])
+        expected_results = testcase.get("expected_results", [])
+
+        slim.append(
+            {
+                "testcase_id": testcase.get("testcase_id", ""),
+                "scenario_id": testcase.get("scenario_id", ""),
+                "function_id": testcase.get("function_id", ""),
+                "sub_function_id": testcase.get("sub_function_id", ""),
+                "test_area_id": testcase.get("test_area_id", ""),
+                "title": testcase.get("title", ""),
+                "type": testcase.get("type", ""),
+                "technique": testcase.get("technique", ""),
+                "priority": testcase.get("priority", ""),
+                "related_requirement_ids": testcase.get(
+                    "related_requirement_ids",
+                    [],
+                ),
+                "traceability": testcase.get("traceability", ""),
+                "step_count": (
+                    len(test_steps)
+                    if isinstance(test_steps, list)
+                    else 0
+                ),
+                "expected_result_count": (
+                    len(expected_results)
+                    if isinstance(expected_results, list)
+                    else 0
+                ),
+            }
+        )
+
+    return slim
+
+
 def _build_function_review_prompt(
     requirement_summary: dict,
     test_scope: dict,
@@ -315,12 +364,61 @@ def _build_function_review_prompt(
         .replace(
             "{function_testcases}",
             json.dumps(
-                function_testcases,
+                _to_slim_testcases(function_testcases),
                 indent=2,
                 ensure_ascii=False,
             ),
         )
     )
+
+
+def _build_deterministic_coverage_review(
+    function_id: str,
+    function_item: dict,
+    function_scenarios: list,
+    function_testcases: list,
+) -> dict:
+    return build_deterministic_coverage_review(
+        function_id=function_id,
+        function_name=_get_function_name(function_item),
+        function_scenarios=function_scenarios,
+        function_testcases=function_testcases,
+    )
+
+
+def _should_use_llm_review(deterministic_review: dict) -> bool:
+    """
+    Use deterministic scoring as the default.
+
+    Only call LLM review when deterministic scoring finds meaningful gaps.
+    This keeps token usage low while still allowing AI review for problematic
+    functions.
+    """
+
+    if not isinstance(deterministic_review, dict):
+        return True
+
+    if deterministic_review.get("approved_by_ai"):
+        return False
+
+    if deterministic_review.get("coverage_score", 0) >= 90:
+        return False
+
+    high_risk_keys = [
+        "missing_scenarios",
+        "traceability_issues",
+    ]
+
+    for key in high_risk_keys:
+        if deterministic_review.get(key):
+            return True
+
+    weak_testcases = deterministic_review.get("weak_testcases", [])
+
+    if len(weak_testcases) >= 5:
+        return True
+
+    return False
 
 
 def _generate_coverage_review_for_function(
@@ -333,12 +431,46 @@ def _generate_coverage_review_for_function(
     function_testcases: list,
 ) -> dict:
     logger.info(
-        "Starting function coverage review. ticket_id=%s, function_id=%s, scenario_count=%s, testcase_count=%s",
+        "Starting function coverage review. "
+        "ticket_id=%s, function_id=%s, scenario_count=%s, testcase_count=%s",
         ticket_id,
         function_id,
         len(function_scenarios),
         len(function_testcases),
     )
+
+    deterministic_review = _build_deterministic_coverage_review(
+        function_id=function_id,
+        function_item=function_item,
+        function_scenarios=function_scenarios,
+        function_testcases=function_testcases,
+    )
+
+    if not _should_use_llm_review(deterministic_review):
+        review_file = save_function_coverage_review(
+            ticket_id=ticket_id,
+            function_id=function_id,
+            review=deterministic_review,
+        )
+
+        return {
+            "function_id": function_id,
+            "function_name": deterministic_review["function_name"],
+            "coverage_score": deterministic_review.get("coverage_score", 0),
+            "approved_by_ai": deterministic_review.get(
+                "approved_by_ai",
+                False,
+            ),
+            "scenario_count": len(function_scenarios),
+            "testcase_count": len(function_testcases),
+            "review": deterministic_review,
+            "file": review_file,
+            "raw_file": "",
+            "review_mode": deterministic_review.get(
+                "review_mode",
+                "DETERMINISTIC_SCORE",
+            ),
+        }
 
     llm = get_llm()
 
@@ -398,9 +530,19 @@ def _generate_coverage_review_for_function(
         ) from error
 
     review["function_id"] = function_id
-    review["function_name"] = review.get("function_name") or _get_function_name(function_item)
+    review["function_name"] = (
+        review.get("function_name")
+        or _get_function_name(function_item)
+    )
     review["scenario_count"] = len(function_scenarios)
     review["testcase_count"] = len(function_testcases)
+    review["review_mode"] = review.get("review_mode") or "LLM_REVIEW"
+
+    # Keep deterministic score breakdown even when LLM review is used.
+    if deterministic_review.get("score_breakdown"):
+        review["deterministic_score_breakdown"] = deterministic_review.get(
+            "score_breakdown"
+        )
 
     review_file = save_function_coverage_review(
         ticket_id=ticket_id,
@@ -409,7 +551,8 @@ def _generate_coverage_review_for_function(
     )
 
     logger.info(
-        "Function coverage review completed. ticket_id=%s, function_id=%s, coverage_score=%s, file=%s",
+        "Function coverage review completed. "
+        "ticket_id=%s, function_id=%s, coverage_score=%s, file=%s",
         ticket_id,
         function_id,
         review.get("coverage_score"),
@@ -426,6 +569,7 @@ def _generate_coverage_review_for_function(
         "review": review,
         "file": review_file,
         "raw_file": raw_file,
+        "review_mode": review.get("review_mode", "LLM_REVIEW"),
     }
 
 
@@ -436,7 +580,8 @@ def _get_parallel_workers(function_count: int) -> int:
         configured_workers = int(configured_value)
     except ValueError:
         logger.warning(
-            "Invalid COVERAGE_REVIEW_PARALLEL_WORKERS value: %s. Falling back to 3.",
+            "Invalid COVERAGE_REVIEW_PARALLEL_WORKERS value: %s. "
+            "Falling back to 3.",
             configured_value,
         )
         configured_workers = 3
@@ -459,7 +604,10 @@ def _merge_function_reviews(
 
     if function_results:
         average_score = round(
-            sum(result.get("coverage_score", 0) for result in function_results)
+            sum(
+                result.get("coverage_score", 0)
+                for result in function_results
+            )
             / len(function_results)
         )
     else:
@@ -471,43 +619,74 @@ def _merge_function_reviews(
     all_traceability_issues = []
     all_recommendations = []
 
+    score_breakdowns = []
+
     for review in function_reviews:
         function_id = review.get("function_id")
         function_name = review.get("function_name")
 
+        score_breakdown = review.get("score_breakdown")
+
+        if score_breakdown:
+            score_breakdowns.append(
+                {
+                    "function_id": function_id,
+                    "function_name": function_name,
+                    **score_breakdown,
+                }
+            )
+
         for item in review.get("missing_scenarios", []):
             if isinstance(item, dict):
                 item["function_id"] = item.get("function_id") or function_id
-                item["function_name"] = item.get("function_name") or function_name
+                item["function_name"] = (
+                    item.get("function_name")
+                    or function_name
+                )
             all_missing_scenarios.append(item)
 
         for item in review.get("weak_testcases", []):
             if isinstance(item, dict):
                 item["function_id"] = item.get("function_id") or function_id
-                item["function_name"] = item.get("function_name") or function_name
+                item["function_name"] = (
+                    item.get("function_name")
+                    or function_name
+                )
             all_weak_testcases.append(item)
 
         for item in review.get("missing_testcases", []):
             if isinstance(item, dict):
                 item["function_id"] = item.get("function_id") or function_id
-                item["function_name"] = item.get("function_name") or function_name
+                item["function_name"] = (
+                    item.get("function_name")
+                    or function_name
+                )
             all_missing_testcases.append(item)
 
         for item in review.get("traceability_issues", []):
             if isinstance(item, dict):
                 item["function_id"] = item.get("function_id") or function_id
-                item["function_name"] = item.get("function_name") or function_name
+                item["function_name"] = (
+                    item.get("function_name")
+                    or function_name
+                )
             all_traceability_issues.append(item)
 
         for item in review.get("recommendations", []):
             if isinstance(item, dict):
                 item["function_id"] = item.get("function_id") or function_id
-                item["function_name"] = item.get("function_name") or function_name
+                item["function_name"] = (
+                    item.get("function_name")
+                    or function_name
+                )
             all_recommendations.append(item)
 
     approved_by_ai = (
         bool(function_results)
-        and all(result.get("approved_by_ai", False) for result in function_results)
+        and all(
+            result.get("approved_by_ai", False)
+            for result in function_results
+        )
     )
 
     master_review = {
@@ -515,14 +694,16 @@ def _merge_function_reviews(
         "coverage_score": average_score,
         "approved_by_ai": approved_by_ai,
         "summary": (
-            f"Function-level coverage review completed for {len(function_results)} "
-            f"main functions. Average coverage score: {average_score}."
+            f"Function-level coverage review completed for "
+            f"{len(function_results)} main functions. "
+            f"Average coverage score: {average_score}."
         ),
         "function_count": len(function_results),
         "scenario_count": len(scenarios),
         "testcase_count": len(testcases),
         "parallel_workers": worker_count,
         "function_reviews": function_reviews,
+        "score_breakdowns": score_breakdowns,
         "missing_scenarios": all_missing_scenarios,
         "weak_testcases": all_weak_testcases,
         "missing_testcases": all_missing_testcases,
@@ -554,6 +735,7 @@ def _merge_function_reviews(
                 "testcase_count": result["testcase_count"],
                 "file": result["file"],
                 "raw_file": result["raw_file"],
+                "review_mode": result.get("review_mode", ""),
             }
             for result in function_results
         ],
@@ -594,7 +776,8 @@ def coverage_review(state):
 
     if not approved_structure:
         raise ValueError(
-            "approved_test_case_structure is required for function-based coverage review."
+            "approved_test_case_structure is required for function-based "
+            "coverage review."
         )
 
     if not scenarios:
@@ -633,7 +816,8 @@ def coverage_review(state):
         )
 
         raise ValueError(
-            "Some scenarios cannot be mapped to a main function during coverage review.\n"
+            "Some scenarios cannot be mapped to a main function during "
+            "coverage review.\n"
             f"Unmatched scenarios saved to: {unmatched_scenarios_file}"
         )
 
@@ -649,7 +833,8 @@ def coverage_review(state):
         )
 
         raise ValueError(
-            "Some test cases cannot be mapped to a main function during coverage review.\n"
+            "Some test cases cannot be mapped to a main function during "
+            "coverage review.\n"
             f"Unmatched test cases saved to: {unmatched_testcases_file}"
         )
 
@@ -661,13 +846,15 @@ def coverage_review(state):
 
     if not executable_groups:
         raise ValueError(
-            "No scenarios/testcases could be grouped by main function for coverage review."
+            "No scenarios/testcases could be grouped by main function for "
+            "coverage review."
         )
 
     worker_count = _get_parallel_workers(len(executable_groups))
 
     logger.info(
-        "Grouped coverage review items by function. ticket_id=%s, function_count=%s, worker_count=%s",
+        "Grouped coverage review items by function. "
+        "ticket_id=%s, function_count=%s, worker_count=%s",
         ticket_id,
         len(executable_groups),
         worker_count,
@@ -701,7 +888,8 @@ def coverage_review(state):
                 function_results.append(result)
 
                 logger.info(
-                    "Function coverage review result received. ticket_id=%s, function_id=%s, coverage_score=%s",
+                    "Function coverage review result received. "
+                    "ticket_id=%s, function_id=%s, coverage_score=%s",
                     ticket_id,
                     function_id,
                     result.get("coverage_score"),
@@ -709,7 +897,8 @@ def coverage_review(state):
 
             except Exception as error:
                 logger.exception(
-                    "Function coverage review failed. ticket_id=%s, function_id=%s",
+                    "Function coverage review failed. "
+                    "ticket_id=%s, function_id=%s",
                     ticket_id,
                     function_id,
                 )
@@ -733,7 +922,8 @@ def coverage_review(state):
         )
 
         raise ValueError(
-            "One or more main functions failed during parallel coverage review.\n"
+            "One or more main functions failed during parallel coverage "
+            "review.\n"
             f"Error details saved to: {error_file}\n"
             f"Errors: {errors}"
         )
@@ -749,7 +939,8 @@ def coverage_review(state):
     )
 
     logger.info(
-        "Function-based coverage review completed. ticket_id=%s, function_count=%s, coverage_score=%s",
+        "Function-based coverage review completed. "
+        "ticket_id=%s, function_count=%s, coverage_score=%s",
         ticket_id,
         len(function_results),
         master_review.get("coverage_score"),
@@ -760,8 +951,6 @@ def coverage_review(state):
     }
 
 
-# Compatibility aliases.
-# Keep these in case your graph imports the node function with another name.
 def review_coverage(state):
     return coverage_review(state)
 

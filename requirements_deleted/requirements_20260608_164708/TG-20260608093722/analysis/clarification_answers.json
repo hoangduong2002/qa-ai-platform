@@ -1,0 +1,57 @@
+{
+  "raw_answers": "Q001:Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.\nQ002: Email format must contain @ and domain\nQ003: meaningful inline error\nQ004: The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.\nQ005: First name, Last name, email, phone, password, confirm password",
+  "answers": {
+    "Q001": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+    "Q002": "Email format must contain @ and domain",
+    "Q003": "meaningful inline error",
+    "Q004": "The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.",
+    "Q005": "First name, Last name, email, phone, password, confirm password"
+  },
+  "answered_clarifications": [
+    {
+      "question_id": "Q001",
+      "question": "What are the password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "category": "Security",
+      "impact": "High",
+      "reason": "Missing complexity rules affect security and test coverage for valid/invalid passwords.",
+      "answer": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+      "answered_at": "2026-06-08T09:39:36.103276"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What is the exact email format validation rule (e.g., must contain '@' and a domain, allowed characters)?",
+      "category": "Validation",
+      "impact": "High",
+      "reason": "Email format validation is critical for positive and negative test cases.",
+      "answer": "Email format must contain @ and domain",
+      "answered_at": "2026-06-08T09:39:36.103276"
+    },
+    {
+      "question_id": "Q003",
+      "question": "What error messages should be displayed for duplicate email, invalid password length, or invalid email format?",
+      "category": "Error Handling",
+      "impact": "Medium",
+      "reason": "Error handling affects user experience and test validation of system responses.",
+      "answer": "meaningful inline error",
+      "answered_at": "2026-06-08T09:39:36.103276"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What is the email verification method (e.g., clickable link, one-time code) and what is the expiration time for the verification token?",
+      "category": "UX/Flow",
+      "impact": "High",
+      "reason": "Verification method and token expiry impact test scenarios for successful and failed verification.",
+      "answer": "The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.",
+      "answered_at": "2026-06-08T09:39:36.103276"
+    },
+    {
+      "question_id": "Q005",
+      "question": "What additional fields (e.g., name, phone) are required during account creation, and what are their validation rules?",
+      "category": "Data Persistence",
+      "impact": "Medium",
+      "reason": "Missing fields affect test data preparation and account creation flow coverage.",
+      "answer": "First name, Last name, email, phone, password, confirm password",
+      "answered_at": "2026-06-08T09:39:36.103276"
+    }
+  ]
+}

@@ -2,12 +2,6 @@ You are a Senior Business Analyst and QA Lead.
 
 Review the requirement analysis below and generate clarification questions.
 
-Requirement Analysis:
-{analysis}
-
-Answered Clarifications:
-{answered_clarifications}
-
 Configuration:
 - Maximum clarification questions for this round: {max_clarifications_per_round}
 - Maximum clarification rounds: {max_clarification_rounds}
@@ -68,3 +62,9 @@ Format:
     }
   ]
 }
+
+Requirement Analysis:
+{analysis}
+
+Answered Clarifications:
+{answered_clarifications}

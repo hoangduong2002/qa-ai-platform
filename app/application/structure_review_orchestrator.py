@@ -21,7 +21,7 @@ def _structure_actions(
 
     return [
         AppAction(
-            label="Self Review",
+            label="AI Review",
             action="structure_self_review",
             ticket_id=ticket_id
         ),
@@ -83,7 +83,7 @@ def self_review_structure(
         message=_build_message(
             ticket_id,
             state,
-            "Structure self review completed."
+            "Structure AI review completed."
         ),
         files=[
             state["structure_excel_file"]

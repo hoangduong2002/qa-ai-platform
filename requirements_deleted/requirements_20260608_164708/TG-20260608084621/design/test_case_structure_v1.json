@@ -1,0 +1,187 @@
+{
+  "main_functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "Account Registration",
+      "description": "User can create an account using email and password.",
+      "related_requirement_ids": [
+        "FR001"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB001",
+          "sub_function_name": "Email Uniqueness Validation",
+          "description": "Ensure that the email provided during registration is unique across all accounts.",
+          "related_requirement_ids": [
+            "FR001",
+            "BR001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT001",
+              "category_name": "Duplicate Email Rejection",
+              "test_intent": "Verify that registration is rejected with an appropriate error when an email already exists in the system.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR001"
+              ]
+            },
+            {
+              "category_id": "CAT002",
+              "category_name": "Email Uniqueness Edge Cases",
+              "test_intent": "Verify that email uniqueness is enforced considering case sensitivity, leading/trailing spaces, and Unicode normalization.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR001"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB002",
+          "sub_function_name": "Password Length Validation",
+          "description": "Ensure that the password meets the minimum and maximum length requirements.",
+          "related_requirement_ids": [
+            "FR001",
+            "VAL001",
+            "VAL002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT003",
+              "category_name": "Minimum Password Length Boundary",
+              "test_intent": "Verify that registration is rejected when password is shorter than 8 characters, and succeeds when password is exactly 8 characters.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "VAL001"
+              ]
+            },
+            {
+              "category_id": "CAT004",
+              "category_name": "Maximum Password Length Boundary",
+              "test_intent": "Verify that registration is rejected when password is longer than 12 characters, and succeeds when password is exactly 12 characters.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "VAL002"
+              ]
+            },
+            {
+              "category_id": "CAT005",
+              "category_name": "Valid Password Length Range",
+              "test_intent": "Verify that registration succeeds for passwords with length between 9 and 11 characters inclusive.",
+              "priority": "Medium",
+              "related_requirement_ids": [
+                "VAL001",
+                "VAL002"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB003",
+          "sub_function_name": "Registration Error Handling and Feedback",
+          "description": "Ensure that appropriate error messages and feedback are provided for validation failures during registration.",
+          "related_requirement_ids": [
+            "FR001"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT006",
+              "category_name": "Duplicate Email Error Message",
+              "test_intent": "Verify that a clear and specific error message is displayed when attempting to register with an already used email.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "BR001"
+              ]
+            },
+            {
+              "category_id": "CAT007",
+              "category_name": "Password Length Error Messages",
+              "test_intent": "Verify that clear and specific error messages are displayed when password does not meet length requirements.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "VAL001",
+                "VAL002"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification Before First Login",
+      "description": "User must verify their email address before they are allowed to log in for the first time.",
+      "related_requirement_ids": [
+        "FR002"
+      ],
+      "sub_functions": [
+        {
+          "sub_function_id": "SUB004",
+          "sub_function_name": "Email Verification Process",
+          "description": "Ensure that the email verification mechanism (sending, resending, and verifying) functions correctly.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT008",
+              "category_name": "Verification Email Sent",
+              "test_intent": "Verify that a verification email is sent to the user's email address upon successful account creation.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            },
+            {
+              "category_id": "CAT009",
+              "category_name": "Successful Email Verification",
+              "test_intent": "Verify that the user can successfully verify their email using the provided mechanism (e.g., link or code).",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            },
+            {
+              "category_id": "CAT010",
+              "category_name": "Resend Verification Email",
+              "test_intent": "Verify that the user can request a new verification email if the original is not received or expired.",
+              "priority": "Medium",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        },
+        {
+          "sub_function_id": "SUB005",
+          "sub_function_name": "First Login Restriction",
+          "description": "Ensure that a user cannot log in without having verified their email address.",
+          "related_requirement_ids": [
+            "FR002"
+          ],
+          "test_categories": [
+            {
+              "category_id": "CAT011",
+              "category_name": "Unverified Email Login Attempt",
+              "test_intent": "Verify that login is denied for a user who has not yet verified their email.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            },
+            {
+              "category_id": "CAT012",
+              "category_name": "Verified Email Login Success",
+              "test_intent": "Verify that login is allowed after successful email verification.",
+              "priority": "High",
+              "related_requirement_ids": [
+                "FR002"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

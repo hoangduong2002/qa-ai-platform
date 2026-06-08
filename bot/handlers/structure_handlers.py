@@ -14,6 +14,9 @@ from app.utils.test_structure_store import (
     set_pending_generation_after_approval,
 )
 from bot.renderers.telegram_result_renderer import send_app_result
+from bot.renderers.structure_review_text_renderer import (
+    render_structure_review_chat_summary,
+)
 
 
 def get_message(update):
@@ -24,6 +27,24 @@ def get_message(update):
         return update.callback_query.message
 
     return None
+
+
+def get_result_data(result):
+    """
+    Safely extract data from AppResult or dict.
+
+    This keeps the handler safe if the application layer returns either:
+    - AppResult(data=...)
+    - dict{"data": ...}
+    """
+
+    if hasattr(result, "data"):
+        return result.data or {}
+
+    if isinstance(result, dict):
+        return result.get("data", {}) or {}
+
+    return {}
 
 
 async def structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,15 +89,38 @@ async def handle_structure_callback(
         ticket_id = data.split(":")[1]
 
         await query.message.reply_text(
-            f"Running structure self review for {ticket_id}..."
+            f"Running structure AI review for {ticket_id}..."
         )
 
         try:
             result = self_review_structure_app(ticket_id)
-            await send_app_result(query.message, ticket_id, result)
+
+            result_data = get_result_data(result)
+            review = result_data.get("test_case_structure_review", {})
+            session = result_data.get("structure_session", {})
+            version = (
+                result_data.get("current_version")
+                or session.get("current_version")
+                or "latest"
+            )
+
+            summary_text = render_structure_review_chat_summary(
+                ticket_id=ticket_id,
+                version=version,
+                review=review,
+            )
+
+            await query.message.reply_text(summary_text)
+
+            await send_app_result(
+                query.message,
+                ticket_id,
+                result,
+            )
+
         except Exception as error:
             await query.message.reply_text(
-                f"Failed to self review structure:\n{error}"
+                f"Failed to AI review structure:\n{error}"
             )
 
         return True
@@ -140,14 +184,18 @@ async def handle_structure_callback(
                 await after_approve_callback(
                     query.message,
                     ticket_id,
+                    prepare_requirement_context=False,
                 )
             except Exception as error:
                 await query.message.reply_text(
-                    f"Structure was approved, but automatic generation failed:\n{error}\n\n"
-                    f"You can retry generation with:\n/generate {ticket_id}"
+                    f"Structure was approved, but automatic generation failed:\n"
+                    f"{error}\n\n"
+                    f"You can retry generation with:\n"
+                    f"/generate {ticket_id}"
                 )
 
             return True
+
         await query.message.reply_text(result.message)
         return True
 

@@ -1,0 +1,35 @@
+```json
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC031",
+    "function_id": "FUNC003",
+    "sub_function_id": "SUB008",
+    "test_area_id": "CAT014",
+    "title": "Verified user can log in successfully",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has registered with a valid email and password meeting all rules",
+      "User has verified their email within 24 hours via the verification link",
+      "User is on the login page"
+    ],
+    "test_steps": [
+      "Enter the registered email address in the email field",
+      "Enter the correct password in the password field",
+      "Click the 'Login' button"
+    ],
+    "expected_results": [
+      "The system authenticates the user successfully",
+      "The user is redirected to the dashboard or home page",
+      "No error messages are displayed"
+    ],
+    "test_data": {
+      "email": "verified_user@example.com",
+      "password": "Test@1234"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  }
+]
+```

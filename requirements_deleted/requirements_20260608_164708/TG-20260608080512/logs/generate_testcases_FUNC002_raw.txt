@@ -1,0 +1,361 @@
+```json
+[
+  {
+    "testcase_id": "TC018",
+    "scenario_id": "SC018",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT009",
+    "title": "Verify email link expires after 24 hours",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "A verification link was generated and sent to the user's email",
+      "The current time is exactly 24 hours after the link was generated"
+    ],
+    "test_steps": [
+      "Open the verification link from the email",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating the link has expired",
+      "The account remains unverified"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "verification_link": "https://example.com/verify?token=expired_token_placeholder"
+    },
+    "related_requirement_ids": ["FR002", "BR002"],
+    "traceability": "FR002, BR002"
+  },
+  {
+    "testcase_id": "TC019",
+    "scenario_id": "SC019",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT010",
+    "title": "Verify unique verification link per registration",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "Two separate user accounts have been registered with different email addresses",
+      "Both accounts have received verification links"
+    ],
+    "test_steps": [
+      "Capture the verification link from the first account's email",
+      "Capture the verification link from the second account's email",
+      "Compare the two links"
+    ],
+    "expected_results": [
+      "The two verification links are different and unique to each account"
+    ],
+    "test_data": {
+      "email_1": "user1@example.com",
+      "password_1": "ValidP@ss1",
+      "email_2": "user2@example.com",
+      "password_2": "ValidP@ss2"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC020",
+    "scenario_id": "SC020",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB004",
+    "test_area_id": "CAT025",
+    "title": "Verify verification link tampering is rejected",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "A verification link was generated and sent to the user's email"
+    ],
+    "test_steps": [
+      "Modify the token portion of the verification link (e.g., change a character or append extra data)",
+      "Open the modified link in a browser"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating the link is invalid or tampered",
+      "The account remains unverified"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "original_link": "https://example.com/verify?token=abc123",
+      "tampered_link": "https://example.com/verify?token=abc124"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC021",
+    "scenario_id": "SC021",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT011",
+    "title": "Resend verification email after 60 seconds cooldown",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "The initial verification email was sent",
+      "The user waits exactly 60 seconds after the initial request"
+    ],
+    "test_steps": [
+      "Click the 'Resend verification email' button",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system sends a new verification email to the user's email address",
+      "The user receives the email within a reasonable time"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "cooldown_seconds": 60
+    },
+    "related_requirement_ids": ["FR003"],
+    "traceability": "FR003"
+  },
+  {
+    "testcase_id": "TC022",
+    "scenario_id": "SC022",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT011",
+    "title": "Resend verification email within 60 seconds cooldown",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "The initial verification email was sent",
+      "The user attempts to resend within 60 seconds of the initial request"
+    ],
+    "test_steps": [
+      "Click the 'Resend verification email' button immediately after the first request",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system blocks the resend request",
+      "The system displays an error message indicating the cooldown period has not elapsed"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "cooldown_seconds": 30
+    },
+    "related_requirement_ids": ["FR003"],
+    "traceability": "FR003"
+  },
+  {
+    "testcase_id": "TC023",
+    "scenario_id": "SC023",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT012",
+    "title": "Resend rate limit exceeded for account",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "The user has already made 3 resend requests within the last 1 hour for the same account"
+    ],
+    "test_steps": [
+      "Attempt to make a 4th resend request for the same account within the same 1-hour window",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system blocks the resend request",
+      "The system displays an error message indicating the rate limit has been exceeded and the feature is locked for 30 minutes"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "resend_attempts": 4
+    },
+    "related_requirement_ids": ["FR005"],
+    "traceability": "FR005"
+  },
+  {
+    "testcase_id": "TC024",
+    "scenario_id": "SC024",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT012",
+    "title": "Resend rate limit exceeded for IP",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "Multiple accounts have been registered from the same IP address",
+      "The IP address has already made 3 resend requests within the last 1 hour (across any accounts)"
+    ],
+    "test_steps": [
+      "Attempt to make a 4th resend request from the same IP address within the same 1-hour window",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system blocks the resend request",
+      "The system displays an error message indicating the rate limit has been exceeded and the feature is locked for 30 minutes for this IP"
+    ],
+    "test_data": {
+      "ip_address": "192.168.1.1",
+      "resend_attempts": 4
+    },
+    "related_requirement_ids": ["FR005"],
+    "traceability": "FR005"
+  },
+  {
+    "testcase_id": "TC025",
+    "scenario_id": "SC025",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB005",
+    "test_area_id": "CAT026",
+    "title": "Resend during 30-minute lockout period",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "The account or IP has exceeded the resend rate limit (3 attempts within 1 hour)",
+      "The 30-minute lockout period is still active (less than 30 minutes have passed since the last attempt)"
+    ],
+    "test_steps": [
+      "Attempt to make a resend request during the lockout period",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system blocks the resend request",
+      "The system displays an error message indicating the feature is temporarily disabled due to rate limiting"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "lockout_minutes": 15
+    },
+    "related_requirement_ids": ["FR005"],
+    "traceability": "FR005"
+  },
+  {
+    "testcase_id": "TC026",
+    "scenario_id": "SC026",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT013",
+    "title": "Login blocked for unverified account",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "The user has not yet verified their email address"
+    ],
+    "test_steps": [
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system blocks the login attempt",
+      "The system displays an error message indicating the email address has not been verified"
+    ],
+    "test_data": {
+      "email": "unverified@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR006"],
+    "traceability": "FR006"
+  },
+  {
+    "testcase_id": "TC027",
+    "scenario_id": "SC027",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB006",
+    "test_area_id": "CAT014",
+    "title": "Login allowed after email verification",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "User has clicked the verification link and the account is now verified"
+    ],
+    "test_steps": [
+      "Navigate to the login page",
+      "Enter the registered email and password",
+      "Click the login button",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system allows the login",
+      "The user is redirected to the dashboard or home page"
+    ],
+    "test_data": {
+      "email": "verified@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR006"],
+    "traceability": "FR006"
+  },
+  {
+    "testcase_id": "TC028",
+    "scenario_id": "SC028",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT015",
+    "title": "Expired verification link rejection",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "A verification link was generated and sent to the user's email",
+      "More than 24 hours have passed since the link was generated"
+    ],
+    "test_steps": [
+      "Open the expired verification link from the email",
+      "Observe the system response"
+    ],
+    "expected_results": [
+      "The system displays an error message indicating the link has expired",
+      "The account remains unverified"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1",
+      "verification_link": "https://example.com/verify?token=expired_token_placeholder"
+    },
+    "related_requirement_ids": ["FR002", "BR002"],
+    "traceability": "FR002, BR002"
+  },
+  {
+    "testcase_id": "TC029",
+    "scenario_id": "SC029",
+    "function_id": "FUNC002",
+    "sub_function_id": "SUB007",
+    "test_area_id": "CAT016",
+    "title": "Request new verification link after expiry",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User has successfully registered with a valid email and password",
+      "The original verification link has expired (more than 24 hours old)",
+      "The user has not exceeded the resend rate limit"
+    ],
+    "test_steps": [
+      "Click the 'Resend verification email' button",
+      "Observe the system response",
+      "Open the new verification link from the email"
+    ],
+    "expected_results": [
+      "The system sends a new verification email to the user's email address",
+      "The new verification link is valid and can be used to verify the account",
+      "After clicking the new link, the account becomes verified"
+    ],
+    "test_data": {
+      "email": "testuser@example.com",
+      "password": "ValidP@ss1"
+    },
+    "related_requirement_ids": ["FR003", "BR002"],
+    "traceability": "FR003, BR002"
+  }
+]
+```

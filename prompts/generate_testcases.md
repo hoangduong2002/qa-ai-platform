@@ -2,18 +2,6 @@ You are a Senior QA Engineer.
 
 Generate detailed test cases from the test scenarios.
 
-Requirement Summary:
-{requirement_summary}
-
-Test Scope:
-{test_scope}
-
-Approved Test Case Structure:
-{approved_test_case_structure}
-
-Scenarios:
-{scenarios}
-
 Important rules:
 - Generate exactly ONE test case for EACH input scenario.
 - Do NOT create additional scenarios.
@@ -74,3 +62,15 @@ Each test case must follow this schema:
     "traceability": "FR001, BR001"
   }
 ]
+
+Requirement Summary:
+{requirement_summary}
+
+Test Scope:
+{test_scope}
+
+Approved Test Case Structure:
+{approved_test_case_structure}
+
+Scenarios:
+{scenarios}

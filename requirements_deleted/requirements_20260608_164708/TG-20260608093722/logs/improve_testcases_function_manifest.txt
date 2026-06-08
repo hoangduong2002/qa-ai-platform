@@ -1,0 +1,58 @@
+{
+  "generation_mode": "FUNCTION_BASED_PARALLEL_IMPROVE",
+  "parallel_workers": 3,
+  "function_count": 3,
+  "original_count": 76,
+  "improved_count": 83,
+  "improved_file": "requirements\\TG-20260608093722\\testcases\\improved_testcases_v2.json",
+  "master_file": "requirements\\TG-20260608093722\\testcases\\testcases.json",
+  "functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "User Registration",
+      "original_count": 41,
+      "patch_count": 0,
+      "improved_count": 41,
+      "file": "",
+      "raw_file": "",
+      "fallback_used": true,
+      "fallback_reason": "Failed to improve test cases for FUNC001.\nRaw response saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_raw.txt\nParse debug saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_parse_error.txt\nOriginal error: Expecting ',' delimiter at line 918, column 6 char 29681\n\nContext around error:\ned_results\": [\n      \"The system creates the user account successfully\",\n      \"The system sends a verification email to 'john.doe@example.com'\",\n      \"No inline error messages are displayed\"\n    ],\n    \"test_data\": {\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john.doe@example.com\",\n      \"phone\": \"1234567890\",\n      \"password\": \"Test@1234\",\n      \"confirm_password\": \"Test@1234\"\n    },\n    \"related_requirement_ids\": [\n      \"FR001\",\n      \"BR003\",\n      \"VAL003\"\n    ]"
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "original_count": 24,
+      "patch_count": 10,
+      "improved_count": 29,
+      "file": "requirements\\TG-20260608093722\\testcases\\functions\\improved\\FUNC002_improved.json",
+      "raw_file": "requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC002_raw.txt",
+      "fallback_used": false,
+      "fallback_reason": ""
+    },
+    {
+      "function_id": "FUNC003",
+      "function_name": "Account State Management",
+      "original_count": 11,
+      "patch_count": 13,
+      "improved_count": 13,
+      "file": "requirements\\TG-20260608093722\\testcases\\functions\\improved\\FUNC003_improved.json",
+      "raw_file": "requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC003_raw.txt",
+      "fallback_used": false,
+      "fallback_reason": ""
+    }
+  ],
+  "errors": [
+    {
+      "function_id": "FUNC001",
+      "error": "Failed to improve test cases for FUNC001.\nRaw response saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_raw.txt\nParse debug saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_parse_error.txt\nOriginal error: Expecting ',' delimiter at line 918, column 6 char 29681\n\nContext around error:\ned_results\": [\n      \"The system creates the user account successfully\",\n      \"The system sends a verification email to 'john.doe@example.com'\",\n      \"No inline error messages are displayed\"\n    ],\n    \"test_data\": {\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john.doe@example.com\",\n      \"phone\": \"1234567890\",\n      \"password\": \"Test@1234\",\n      \"confirm_password\": \"Test@1234\"\n    },\n    \"related_requirement_ids\": [\n      \"FR001\",\n      \"BR003\",\n      \"VAL003\"\n    ]"
+    },
+    {
+      "function_id": "FUNC001",
+      "error": "Failed to improve test cases for FUNC001.\nRaw response saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_raw.txt\nParse debug saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_parse_error.txt\nOriginal error: Expecting ',' delimiter at line 918, column 6 char 29681\n\nContext around error:\ned_results\": [\n      \"The system creates the user account successfully\",\n      \"The system sends a verification email to 'john.doe@example.com'\",\n      \"No inline error messages are displayed\"\n    ],\n    \"test_data\": {\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john.doe@example.com\",\n      \"phone\": \"1234567890\",\n      \"password\": \"Test@1234\",\n      \"confirm_password\": \"Test@1234\"\n    },\n    \"related_requirement_ids\": [\n      \"FR001\",\n      \"BR003\",\n      \"VAL003\"\n    ]"
+    },
+    {
+      "function_id": "FUNC001",
+      "error": "Failed to improve test cases for FUNC001.\nRaw response saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_raw.txt\nParse debug saved to: requirements\\TG-20260608093722\\logs\\improve_testcases_FUNC001_parse_error.txt\nOriginal error: Expecting ',' delimiter at line 918, column 6 char 29681\n\nContext around error:\ned_results\": [\n      \"The system creates the user account successfully\",\n      \"The system sends a verification email to 'john.doe@example.com'\",\n      \"No inline error messages are displayed\"\n    ],\n    \"test_data\": {\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john.doe@example.com\",\n      \"phone\": \"1234567890\",\n      \"password\": \"Test@1234\",\n      \"confirm_password\": \"Test@1234\"\n    },\n    \"related_requirement_ids\": [\n      \"FR001\",\n      \"BR003\",\n      \"VAL003\"\n    ]"
+    }
+  ]
+}

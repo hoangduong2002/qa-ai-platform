@@ -2,12 +2,6 @@ You are a Senior QA Architect.
 
 Generate a test case structure from the confirmed requirement summary and requirement items.
 
-Requirement Summary:
-{requirement_summary}
-
-Requirement Items:
-{requirement_items}
-
 Rules:
 - Create at least 2 levels:
   - Category 1: Main Function
@@ -58,3 +52,9 @@ Format:
     }
   ]
 }
+
+Requirement Summary:
+{requirement_summary}
+
+Requirement Items:
+{requirement_items}

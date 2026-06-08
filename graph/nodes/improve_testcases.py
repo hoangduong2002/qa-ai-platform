@@ -31,7 +31,6 @@ def _short_error(
     if not text:
         return type(error).__name__
 
-    # Chỉ lấy dòng đầu để tránh in cả JSON context dài ra terminal.
     first_line = text.splitlines()[0]
 
     if len(first_line) > max_length:
@@ -97,7 +96,7 @@ def _unique_ids(values: list) -> list[str]:
             continue
 
         if not isinstance(value, str):
-            continue
+            value = str(value)
 
         clean_value = value.strip()
 
@@ -111,6 +110,20 @@ def _unique_ids(values: list) -> list[str]:
     return result
 
 
+def _normalize_requirement_ids(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [
+            item.strip()
+            for item in value.split(",")
+            if item.strip()
+        ]
+
+    if isinstance(value, list):
+        return _unique_ids(value)
+
+    return []
+
+
 def _get_related_requirement_ids(item: dict) -> list[str]:
     if not isinstance(item, dict):
         return []
@@ -120,6 +133,96 @@ def _get_related_requirement_ids(item: dict) -> list[str]:
         + _as_list(item.get("requirement_ids"))
         + _as_list(item.get("related_requirements"))
     )
+
+
+def _normalize_list_field(value: Any) -> list:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        return [value]
+
+    return [str(value)]
+
+
+ALLOWED_TEST_DESIGN_TECHNIQUES = {
+    "EP",
+    "BVA",
+    "Decision Table",
+    "State Transition",
+    "Pairwise",
+    "Error Guessing",
+    "Use Case",
+    "Security",
+    "UX",
+}
+
+
+def _infer_technique_from_type(testcase_type: str) -> str:
+    normalized_type = str(testcase_type or "").strip().lower()
+
+    if normalized_type in ["boundary", "boundary value", "bva"]:
+        return "BVA"
+
+    if normalized_type in ["business rule", "decision", "decision table"]:
+        return "Decision Table"
+
+    if normalized_type in ["state", "state transition", "workflow"]:
+        return "State Transition"
+
+    if normalized_type in ["security", "permission", "permissions"]:
+        return "Security"
+
+    if normalized_type in ["ux", "ui", "ux_ui", "usability"]:
+        return "UX"
+
+    if normalized_type in ["positive", "negative", "validation"]:
+        return "EP"
+
+    return "Use Case"
+
+
+def _normalize_technique(
+    technique: Any,
+    testcase_type: str = "",
+) -> str:
+    if technique is None:
+        return _infer_technique_from_type(testcase_type)
+
+    value = str(technique).strip()
+
+    aliases = {
+        "equivalence partitioning": "EP",
+        "equivalence partition": "EP",
+        "ep": "EP",
+        "boundary value analysis": "BVA",
+        "boundary value": "BVA",
+        "bva": "BVA",
+        "decision table testing": "Decision Table",
+        "decision table": "Decision Table",
+        "state transition testing": "State Transition",
+        "state transition": "State Transition",
+        "pairwise testing": "Pairwise",
+        "pairwise": "Pairwise",
+        "combinatorial": "Pairwise",
+        "error guessing": "Error Guessing",
+        "use case": "Use Case",
+        "use-case": "Use Case",
+        "security": "Security",
+        "ux": "UX",
+        "ui": "UX",
+        "usability": "UX",
+    }
+
+    normalized = aliases.get(value.lower(), value)
+
+    if normalized in ALLOWED_TEST_DESIGN_TECHNIQUES:
+        return normalized
+
+    return _infer_technique_from_type(testcase_type)
 
 
 def _get_testcase_id(testcase: dict) -> str:
@@ -158,7 +261,19 @@ def _is_valid_testcase_item(item: dict) -> bool:
     if not item.get("testcase_id"):
         return False
 
+    if not item.get("scenario_id"):
+        return False
+
+    if not item.get("function_id"):
+        return False
+
+    if not item.get("test_area_id"):
+        return False
+
     if not item.get("title"):
+        return False
+
+    if not item.get("technique"):
         return False
 
     if not item.get("test_steps"):
@@ -191,13 +306,177 @@ def _validate_original_testcases(original_testcases: list) -> None:
         )
 
 
+def _build_scenario_index(scenarios: list) -> dict:
+    """
+    Build scenario_id -> metadata index.
+
+    Improve patch can be compact:
+    - scenario_id
+    - title
+    - type
+    - priority
+    - preconditions
+    - steps
+    - expected
+
+    Metadata is derived from scenario_id.
+    """
+
+    index = {}
+
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            continue
+
+        scenario_id = scenario.get("scenario_id")
+
+        if not scenario_id:
+            continue
+
+        related_requirement_ids = _normalize_requirement_ids(
+            scenario.get("related_requirement_ids")
+        )
+
+        index[scenario_id] = {
+            "scenario_id": scenario_id,
+            "function_id": scenario.get("function_id", ""),
+            "sub_function_id": scenario.get("sub_function_id", ""),
+            "test_area_id": scenario.get("test_area_id", ""),
+            "related_requirement_ids": related_requirement_ids,
+            "traceability": (
+                scenario.get("traceability")
+                or ", ".join(related_requirement_ids)
+            ),
+        }
+
+    return index
+
+
+def _normalize_compact_patch_testcase(
+    testcase: dict,
+    scenario_index: dict,
+) -> dict:
+    """
+    Normalize compact improve patch into internal schema.
+
+    Compact patch:
+    {
+      "testcase_id": "TC001",
+      "scenario_id": "SC001",
+      "title": "...",
+      "type": "Positive",
+      "priority": "High",
+      "preconditions": [],
+      "steps": [],
+      "expected": []
+    }
+
+    Internal schema:
+    {
+      "testcase_id": "TC001",
+      "scenario_id": "SC001",
+      "function_id": "FUNC001",
+      "sub_function_id": "SUB001",
+      "test_area_id": "CAT001",
+      "title": "...",
+      "type": "Positive",
+      "priority": "High",
+      "preconditions": [],
+      "test_steps": [],
+      "expected_results": [],
+      "related_requirement_ids": ["FR001"],
+      "traceability": "FR001"
+    }
+    """
+
+    if not isinstance(testcase, dict):
+        return {}
+
+    scenario_id = testcase.get("scenario_id", "")
+    scenario_info = scenario_index.get(scenario_id, {})
+
+    related_requirement_ids = (
+        testcase.get("related_requirement_ids")
+        or testcase.get("requirement_ids")
+        or scenario_info.get("related_requirement_ids")
+        or []
+    )
+
+    related_requirement_ids = _normalize_requirement_ids(
+        related_requirement_ids
+    )
+
+    test_steps = (
+        testcase.get("steps")
+        or testcase.get("test_steps")
+        or []
+    )
+
+    expected_results = (
+        testcase.get("expected")
+        or testcase.get("expected_results")
+        or []
+    )
+
+    return {
+        "testcase_id": testcase.get("testcase_id", ""),
+        "scenario_id": scenario_id,
+        "function_id": (
+            testcase.get("function_id")
+            or scenario_info.get("function_id", "")
+        ),
+        "sub_function_id": (
+            testcase.get("sub_function_id")
+            or scenario_info.get("sub_function_id", "")
+        ),
+        "test_area_id": (
+            testcase.get("test_area_id")
+            or scenario_info.get("test_area_id", "")
+        ),
+        "title": testcase.get("title", ""),
+        "type": testcase.get("type", ""),
+        "technique": _normalize_technique(
+            testcase.get("technique"),
+            testcase.get("type", ""),
+        ),
+        "priority": testcase.get("priority", ""),
+        "preconditions": _normalize_list_field(
+            testcase.get("preconditions", [])
+        ),
+        "test_steps": _normalize_list_field(test_steps),
+        "expected_results": _normalize_list_field(expected_results),
+        "related_requirement_ids": related_requirement_ids,
+        "traceability": ", ".join(related_requirement_ids),
+    }
+
+
+def _normalize_compact_patch_testcases(
+    patch_testcases: list,
+    scenarios: list,
+) -> list:
+    scenario_index = _build_scenario_index(scenarios)
+
+    normalized = []
+
+    for patch_item in patch_testcases:
+        normalized_item = _normalize_compact_patch_testcase(
+            testcase=patch_item,
+            scenario_index=scenario_index,
+        )
+
+        if normalized_item:
+            normalized.append(normalized_item)
+
+    return normalized
+
+
 def _normalize_patch_testcase(
     testcase: dict,
     next_id_number: int,
 ) -> tuple[dict, int]:
     item = dict(testcase)
 
-    if not item.get("testcase_id"):
+    if not item.get("testcase_id") or str(item.get("testcase_id")).startswith("NEW_TC"):
         item["testcase_id"] = f"TC{next_id_number:03d}"
         next_id_number += 1
 
@@ -596,19 +875,21 @@ def _is_fail_fast_improve_enabled() -> bool:
     return value.strip().lower() in ["1", "true", "yes", "y"]
 
 
+def _is_improve_json_repair_enabled() -> bool:
+    return os.getenv("IMPROVE_JSON_REPAIR_ENABLED", "false").lower() in [
+        "1",
+        "true",
+        "yes",
+        "y",
+    ]
+
+
 def _build_fallback_improve_result(
     function_id: str,
     function_item: dict,
     function_testcases: list,
     error: Exception,
 ) -> dict:
-    """
-    Fallback result when improve fails for one function.
-
-    Improve is a quality enhancement step. A JSON parsing failure in improve
-    should not drop test cases or fail the entire generation pipeline.
-    """
-
     logger.info(
         "Using original test cases as fallback. function_id=%s, error=%s",
         function_id,
@@ -702,6 +983,82 @@ def _build_function_improve_prompt(
     )
 
 
+def _has_actionable_improve_items(
+    function_coverage_review: dict,
+    review_comments: list,
+) -> bool:
+    if review_comments:
+        return True
+
+    if not isinstance(function_coverage_review, dict):
+        return False
+
+    actionable_keys = [
+        "missing_scenarios",
+        "weak_testcases",
+        "missing_testcases",
+        "traceability_issues",
+        "recommendations",
+    ]
+
+    return any(
+        bool(function_coverage_review.get(key))
+        for key in actionable_keys
+    )
+
+
+def _extract_impacted_testcase_ids(
+    function_coverage_review: dict,
+) -> set[str]:
+    impacted = set()
+
+    if not isinstance(function_coverage_review, dict):
+        return impacted
+
+    for item in function_coverage_review.get("weak_testcases", []):
+        if isinstance(item, dict) and item.get("testcase_id"):
+            impacted.add(item["testcase_id"])
+
+    for item in function_coverage_review.get("traceability_issues", []):
+        if isinstance(item, dict):
+            item_id = item.get("item_id") or item.get("testcase_id")
+            if item_id:
+                impacted.add(item_id)
+
+    for rec in function_coverage_review.get("recommendations", []):
+        if not isinstance(rec, dict):
+            continue
+
+        for testcase_id in rec.get("related_testcase_ids", []):
+            if testcase_id:
+                impacted.add(testcase_id)
+
+    return impacted
+
+
+def _extract_impacted_scenario_ids(
+    function_coverage_review: dict,
+) -> set[str]:
+    impacted = set()
+
+    if not isinstance(function_coverage_review, dict):
+        return impacted
+
+    for item in function_coverage_review.get("missing_scenarios", []):
+        if isinstance(item, dict) and item.get("scenario_id"):
+            impacted.add(item["scenario_id"])
+
+    for rec in function_coverage_review.get("recommendations", []):
+        if not isinstance(rec, dict):
+            continue
+
+        for scenario_id in rec.get("related_scenario_ids", []):
+            if scenario_id:
+                impacted.add(scenario_id)
+
+    return impacted
+
+
 def _generate_improve_patch_for_function(
     ticket_id: str,
     requirement_summary: dict,
@@ -722,12 +1079,36 @@ def _generate_improve_patch_for_function(
 
     llm = get_llm()
 
+    impacted_testcase_ids = _extract_impacted_testcase_ids(
+        function_coverage_review
+    )
+
+    impacted_scenario_ids = _extract_impacted_scenario_ids(
+        function_coverage_review
+    )
+
+    target_testcases = [
+        testcase
+        for testcase in function_testcases
+        if testcase.get("testcase_id") in impacted_testcase_ids
+    ]
+
+    target_scenarios = [
+        scenario
+        for scenario in function_scenarios
+        if scenario.get("scenario_id") in impacted_scenario_ids
+    ]
+
+    if review_comments and not target_testcases and not target_scenarios:
+        target_testcases = function_testcases[:10]
+        target_scenarios = function_scenarios[:10]
+
     final_prompt = _build_function_improve_prompt(
         requirement_summary=requirement_summary,
         test_scope=test_scope,
         function_item=function_item,
-        function_scenarios=function_scenarios,
-        function_testcases=function_testcases,
+        function_scenarios=target_scenarios,
+        function_testcases=target_testcases,
         function_coverage_review=function_coverage_review,
         review_comments=review_comments,
     )
@@ -748,13 +1129,21 @@ def _generate_improve_patch_for_function(
         try:
             parsed = parse_json(response.content)
         except Exception as parse_error:
-            parsed = repair_json_with_llm(
-                ticket_id=ticket_id,
-                malformed_json_text=response.content,
-                original_error=parse_error,
-            )
+            if _is_improve_json_repair_enabled():
+                parsed = repair_json_with_llm(
+                    ticket_id=ticket_id,
+                    malformed_json_text=response.content,
+                    original_error=parse_error,
+                )
+            else:
+                raise
 
-        patch_testcases = normalize_testcases(parsed)
+        raw_patch_testcases = normalize_testcases(parsed)
+
+        patch_testcases = _normalize_compact_patch_testcases(
+            patch_testcases=raw_patch_testcases,
+            scenarios=function_scenarios,
+        )
 
     except Exception as error:
         error_file = save_raw_response(
@@ -882,13 +1271,6 @@ def _validate_no_duplicate_testcase_ids(testcases: list) -> None:
 def _deduplicate_function_results(
     function_results: list[dict],
 ) -> list[dict]:
-    """
-    Keep only one improve result per function_id.
-
-    This prevents duplicated function outputs from being merged multiple times
-    into the master test case suite.
-    """
-
     deduplicated = {}
     duplicate_counts = {}
 
@@ -952,6 +1334,7 @@ def improve_testcases(state):
 
     scenarios = state.get("scenarios", [])
     coverage_review = state.get("coverage_review", {})
+    review_comments = state.get("review_comments", [])
 
     groups, unmatched_scenarios, unmatched_testcases = _group_items_by_function(
         functions=functions,
@@ -1023,6 +1406,27 @@ def improve_testcases(state):
                 function_id,
             )
 
+            if not _has_actionable_improve_items(
+                function_coverage_review,
+                review_comments,
+            ):
+                function_results.append(
+                    {
+                        "function_id": function_id,
+                        "function_name": _get_function_name(group["function"]),
+                        "original_count": len(group["testcases"]),
+                        "patch_count": 0,
+                        "improved_count": len(group["testcases"]),
+                        "patch_testcases": [],
+                        "improved_testcases": group["testcases"],
+                        "file": "",
+                        "raw_file": "",
+                        "skipped": True,
+                        "skip_reason": "No actionable coverage review items.",
+                    }
+                )
+                continue
+
             future = executor.submit(
                 _generate_improve_patch_for_function,
                 ticket_id,
@@ -1033,84 +1437,83 @@ def improve_testcases(state):
                 group["scenarios"],
                 group["testcases"],
                 function_coverage_review,
-                state.get("review_comments", []),
+                review_comments,
             )
 
             future_map[future] = function_id
 
-            for future in as_completed(future_map):
-                function_id = future_map[future]
+        for future in as_completed(future_map):
+            function_id = future_map[future]
 
-                try:
-                    result = future.result()
-                    function_results.append(result)
+            try:
+                result = future.result()
+                function_results.append(result)
 
-                    logger.info(
-                        "Function improve result received. ticket_id=%s, function_id=%s, improved_count=%s",
-                        ticket_id,
-                        function_id,
-                        result.get("improved_count"),
-                    )
-
-                except Exception as error:
-                    errors.append(
-                        {
-                            "function_id": function_id,
-                            "error": str(error),
-                        }
-                    )
-
-                    if _is_fail_fast_improve_enabled():
-                        logger.exception(
-                            "Function improve failed. ticket_id=%s, function_id=%s",
-                            ticket_id,
-                            function_id,
-                        )
-                    else:
-                        logger.warning(
-                            "Function improve failed, fallback will be used. "
-                            "ticket_id=%s, function_id=%s, error=%s",
-                            ticket_id,
-                            function_id,
-                            _short_error(error),
-                        )
-
-                    if not _is_fail_fast_improve_enabled():
-                        group = executable_groups[function_id]
-
-                        fallback_result = _build_fallback_improve_result(
-                            function_id=function_id,
-                            function_item=group["function"],
-                            function_testcases=group["testcases"],
-                            error=error,
-                        )
-
-                        function_results.append(fallback_result)
-
-        if errors:
-            error_file = save_raw_response(
-                ticket_id,
-                "improve_testcases_function_errors",
-                json.dumps(
-                    errors,
-                    indent=2,
-                    ensure_ascii=False,
-                ),
-            )
-
-            if _is_fail_fast_improve_enabled():
-                raise ValueError(
-                    "One or more main functions failed during parallel improve.\n"
-                    f"Error details saved to: {error_file}\n"
-                    f"Errors: {errors}"
+                logger.info(
+                    "Function improve result received. ticket_id=%s, function_id=%s, improved_count=%s",
+                    ticket_id,
+                    function_id,
+                    result.get("improved_count"),
                 )
 
-            logger.warning(
-                "One or more function improves failed, but fallback was used. "
-                "ticket_id=%s, error_file=%s",
-                ticket_id,
-                error_file,
+            except Exception as error:
+                errors.append(
+                    {
+                        "function_id": function_id,
+                        "error": str(error),
+                    }
+                )
+
+                if _is_fail_fast_improve_enabled():
+                    logger.exception(
+                        "Function improve failed. ticket_id=%s, function_id=%s",
+                        ticket_id,
+                        function_id,
+                    )
+                else:
+                    logger.warning(
+                        "Function improve failed, fallback will be used. "
+                        "ticket_id=%s, function_id=%s, error=%s",
+                        ticket_id,
+                        function_id,
+                        _short_error(error),
+                    )
+
+                    group = executable_groups[function_id]
+
+                    fallback_result = _build_fallback_improve_result(
+                        function_id=function_id,
+                        function_item=group["function"],
+                        function_testcases=group["testcases"],
+                        error=error,
+                    )
+
+                    function_results.append(fallback_result)
+
+    if errors:
+        error_file = save_raw_response(
+            ticket_id,
+            "improve_testcases_function_errors",
+            json.dumps(
+                errors,
+                indent=2,
+                ensure_ascii=False,
+            ),
+        )
+
+        if _is_fail_fast_improve_enabled():
+            raise ValueError(
+                "One or more main functions failed during parallel improve.\n"
+                f"Error details saved to: {error_file}\n"
+                f"Errors: {errors}"
             )
+
+        logger.warning(
+            "One or more function improves failed, but fallback was used. "
+            "ticket_id=%s, error_file=%s",
+            ticket_id,
+            error_file,
+        )
 
     function_results = _deduplicate_function_results(
         function_results
@@ -1152,7 +1555,7 @@ def improve_testcases(state):
     )
 
     manifest = {
-        "generation_mode": "FUNCTION_BASED_PARALLEL_IMPROVE",
+        "generation_mode": "FUNCTION_BASED_PARALLEL_IMPROVE_COMPACT_PATCH",
         "parallel_workers": worker_count,
         "function_count": len(function_results),
         "original_count": len(original_testcases),
@@ -1170,6 +1573,8 @@ def improve_testcases(state):
                 "raw_file": result.get("raw_file", ""),
                 "fallback_used": result.get("fallback_used", False),
                 "fallback_reason": result.get("fallback_reason", ""),
+                "skipped": result.get("skipped", False),
+                "skip_reason": result.get("skip_reason", ""),
             }
             for result in function_results
         ],
@@ -1209,6 +1614,5 @@ def improve_testcases(state):
     }
 
 
-# Compatibility alias, in case your graph imports a different function name.
 def run_improve_testcases(state):
     return improve_testcases(state)

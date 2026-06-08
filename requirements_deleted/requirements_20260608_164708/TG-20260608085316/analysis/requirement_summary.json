@@ -1,0 +1,39 @@
+{
+  "executive_summary": "The system allows users to create an account using an email and password, with mandatory email verification before first login. A unique verification link is sent immediately after registration and is valid for 24 hours. Users can request a resend of the verification link after a 60-second cooldown. Password rules include length between 8 and 12 characters, at least one uppercase, one lowercase, one digit, and one special character (e.g., @, #, $, %, ^, &, *), no consecutive spaces, and no inclusion of the email prefix or username. Email must be unique and contain '@' and a domain. Leading/trailing spaces in the password are not trimmed. Meaningful inline error messages must be shown for duplicate email, invalid email format, and invalid password length.",
+  "functional_summary": "Users can register with email and password. After registration, the system sends a unique verification link via email. The user must verify their email before their first login. Users can request to resend the verification link after 60 seconds. The verification link expires after 24 hours.",
+  "confirmed_business_rules": [
+    "Email must be unique.",
+    "Password length must be between 8 and 12 characters (inclusive).",
+    "Password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *).",
+    "Consecutive spaces in the password are forbidden.",
+    "Password cannot contain the user's explicit email prefix or username.",
+    "Verification link is valid for 24 hours.",
+    "Leading/trailing spaces in the password are not trimmed."
+  ],
+  "validation_rules": [
+    "Email format must contain '@' and a domain.",
+    "Password length must be between 8 and 12 characters (inclusive).",
+    "Password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character.",
+    "Consecutive spaces in the password are forbidden.",
+    "Password cannot contain the user's explicit email prefix or username.",
+    "Email must be unique (no duplicate email allowed).",
+    "Leading/trailing spaces in the password are not trimmed.",
+    "Meaningful inline error messages must be displayed for duplicate email, invalid email format, and invalid password length."
+  ],
+  "open_questions": [
+    "What is the exact list of allowed special characters for the password? (Only examples given: @, #, $, %, ^, &, *)",
+    "What are the exact error message texts for each validation failure? (Only 'meaningful inline error' is stated)",
+    "What is the behavior when the verification link expires? (e.g., can the user request a new link after expiration?)"
+  ],
+  "assumptions": [
+    "The email sending service is assumed to be reliable and available for sending verification links.",
+    "The 60-second resend cooldown is enforced on both client and server sides.",
+    "The 24-hour verification link expiration is enforced server-side.",
+    "The password special characters are limited to the examples provided (@, #, $, %, ^, &, *) unless clarified otherwise."
+  ],
+  "risks": [
+    "If the email sending service is down or slow, users may not receive the verification link, blocking account activation.",
+    "The 60-second resend cooldown may be bypassed if not properly enforced on both client and server sides.",
+    "The 24-hour link expiration may cause user frustration if the link expires before the user verifies."
+  ]
+}

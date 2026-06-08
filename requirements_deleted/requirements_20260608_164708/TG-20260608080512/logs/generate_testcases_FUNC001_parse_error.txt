@@ -1,0 +1,437 @@
+Failed to parse or validate test cases for FUNC001.
+
+Function:
+{
+  "function_id": "FUNC001",
+  "function_name": "Account Registration",
+  "description": "Allows a user to create an account using an email and password, with validation and rate limiting.",
+  "related_requirement_ids": [
+    "FR001",
+    "FR005",
+    "BR001",
+    "BR002",
+    "BR003",
+    "BR004",
+    "BR007",
+    "VAL001",
+    "VAL002",
+    "VAL003",
+    "VAL004",
+    "VAL005",
+    "VAL006",
+    "VAL007"
+  ],
+  "sub_functions": [
+    {
+      "sub_function_id": "SUB001",
+      "sub_function_name": "Email Validation",
+      "description": "Validates email format and uniqueness, and blocks disposable email domains.",
+      "related_requirement_ids": [
+        "FR001",
+        "BR001",
+        "VAL001",
+        "VAL002",
+        "VAL007"
+      ],
+      "test_categories": [
+        {
+          "category_id": "CAT001",
+          "category_name": "Email Format Validation",
+          "test_intent": "Verify that email addresses conforming to simplified RFC 5322 are accepted, and non-conforming formats are rejected with the specified error message 'Địa chỉ email không đúng định dạng. Vui lòng kiểm tra lại.'",
+          "priority": "High",
+          "related_requirement_ids": [
+            "VAL001"
+          ]
+        },
+        {
+          "category_id": "CAT002",
+          "category_name": "Disposable Email Domain Blocking",
+          "test_intent": "Verify that registration with email from known disposable email providers is rejected with an appropriate error message (exact message not specified in requirements).",
+          "priority": "High",
+          "related_requirement_ids": [
+            "VAL002"
+          ]
+        },
+        {
+          "category_id": "CAT003",
+          "category_name": "Email Uniqueness Check",
+          "test_intent": "Verify that duplicate email registration is rejected with the specified error message 'Email này đã được đăng ký. Vui lòng đăng nhập hoặc sử dụng email khác.'",
+          "priority": "High",
+          "related_requirement_ids": [
+            "BR001",
+            "VAL007"
+          ]
+        }
+      ]
+    },
+    {
+      "sub_function_id": "SUB002",
+      "sub_function_name": "Password Validation",
+      "description": "Validates password complexity, length, and content rules.",
+      "related_requirement_ids": [
+        "FR001",
+        "BR002",
+        "BR003",
+        "BR004",
+        "VAL003",
+        "VAL004",
+        "VAL005",
+        "VAL006"
+      ],
+      "test_categories": [
+        {
+          "category_id": "CAT004",
+          "category_name": "Password Length Validation",
+          "test_intent": "Verify that passwords between 8 and 64 characters are accepted, and passwords outside this range are rejected with the specified error message 'Mật khẩu phải có độ dài từ 8 đến 64 ký tự.'",
+          "priority": "High",
+          "related_requirement_ids": [
+            "BR002",
+            "VAL003"
+          ]
+        },
+        {
+          "category_id": "CAT005",
+          "category_name": "Password Complexity Validation",
+          "test_intent": "Verify that passwords containing at least one uppercase letter, one lowercase letter, one digit, and one special character are accepted; missing any required character type is rejected with an appropriate error message.",
+          "priority": "High",
+          "related_requirement_ids": [
+            "BR003",
+            "VAL004"
+          ]
+        },
+        {
+          "category_id": "CAT006",
+          "category_name": "Password Content Restrictions",
+          "test_intent": "Verify that passwords containing spaces or the username are rejected with an appropriate error message.",
+          "priority": "High",
+          "related_requirement_ids": [
+            "BR004",
+            "VAL005",
+            "VAL006"
+          ]
+        }
+      ]
+    },
+    {
+      "sub_function_id": "SUB003",
+      "sub_function_name": "Account Creation Rate Limiting",
+      "description": "Enforces rate limit on account creation attempts per IP address.",
+      "related_requirement_ids": [
+        "FR005",
+        "BR007"
+      ],
+      "test_categories": [
+        {
+          "category_id": "CAT007",
+          "category_name": "IP-based Rate Limit Enforcement",
+          "test_intent": "Verify that up to 5 account creation attempts per IP within a 15-minute rolling window are allowed, and the 6th attempt is blocked with an appropriate error message (exact message not specified in requirements).",
+          "priority": "High",
+          "related_requirement_ids": [
+            "FR005",
+            "BR007"
+          ]
+        },
+        {
+          "category_id": "CAT008",
+          "category_name": "Rate Limit Rolling Window Reset",
+          "test_intent": "Verify that after the 15-minute rolling window expires, the IP can attempt account creation again (e.g., the 6th attempt succeeds if made after the window resets).",
+          "priority": "Medium",
+          "related_requirement_ids": [
+            "FR005",
+            "BR007"
+          ]
+        }
+      ]
+    },
+    {
+      "sub_function_id": "SUB010",
+      "sub_function_name": "Concurrent Registration Handling",
+      "description": "Handles race conditions when multiple registration requests are made from the same IP simultaneously.",
+      "related_requirement_ids": [
+        "FR001",
+        "FR005",
+        "BR007"
+      ],
+      "test_categories": [
+        {
+          "category_id": "CAT024",
+          "category_name": "Concurrent Registration from Same IP",
+          "test_intent": "Verify that simultaneous registration requests from the same IP are handled correctly, ensuring no duplicate accounts are created and rate limit is enforced consistently.",
+          "priority": "Medium",
+          "related_requirement_ids": [
+            "FR001",
+            "FR005",
+            "BR007"
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Scenarios:
+[
+  {
+    "scenario_id": "SC001",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with valid email format",
+    "type": "Positive",
+    "priority": "High",
+    "description": "Verify that registration succeeds when a valid email conforming to simplified RFC 5322 is provided.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL005"
+    ],
+    "traceability": "FR001, VAL005"
+  },
+  {
+    "scenario_id": "SC002",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with invalid email format",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected with error message 'Địa chỉ email không đúng định dạng. Vui lòng kiểm tra lại.' when email format is invalid.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL005",
+      "VAL008"
+    ],
+    "traceability": "FR001, VAL005, VAL008"
+  },
+  {
+    "scenario_id": "SC003",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT002",
+    "title": "Register with disposable email provider",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when email domain is from a known disposable email provider.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR003"
+    ],
+    "traceability": "FR001, BR003"
+  },
+  {
+    "scenario_id": "SC004",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT003",
+    "title": "Register with duplicate email",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected with error message 'Email này đã được đăng ký. Vui lòng đăng nhập hoặc sử dụng email khác.' when email already exists.",
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL006"
+    ],
+    "traceability": "FR001, BR001, VAL006"
+  },
+  {
+    "scenario_id": "SC005",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password length exactly 8 characters",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Verify that registration succeeds when password is exactly 8 characters and meets all complexity rules.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001"
+    ],
+    "traceability": "FR001, VAL001"
+  },
+  {
+    "scenario_id": "SC006",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password length exactly 64 characters",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Verify that registration succeeds when password is exactly 64 characters and meets all complexity rules.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001"
+    ],
+    "traceability": "FR001, VAL001"
+  },
+  {
+    "scenario_id": "SC007",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password length 7 characters",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected with error message 'Mật khẩu phải có độ dài từ 8 đến 64 ký tự.' when password is 7 characters.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL007"
+    ],
+    "traceability": "FR001, VAL001, VAL007"
+  },
+  {
+    "scenario_id": "SC008",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password length 65 characters",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected with error message 'Mật khẩu phải có độ dài từ 8 đến 64 ký tự.' when password is 65 characters.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL007"
+    ],
+    "traceability": "FR001, VAL001, VAL007"
+  },
+  {
+    "scenario_id": "SC009",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password missing uppercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password lacks an uppercase letter.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL002"
+    ],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "scenario_id": "SC010",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password missing lowercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password lacks a lowercase letter.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL002"
+    ],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "scenario_id": "SC011",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password missing digit",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password lacks a digit.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL002"
+    ],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "scenario_id": "SC012",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password missing special character",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password lacks a special character.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL002"
+    ],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "scenario_id": "SC013",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password containing spaces",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password contains spaces.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL003"
+    ],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "scenario_id": "SC014",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password containing user's name",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that registration is rejected when password contains the user's name as personal information.",
+    "related_requirement_ids": [
+      "FR001",
+      "VAL004"
+    ],
+    "traceability": "FR001, VAL004"
+  },
+  {
+    "scenario_id": "SC015",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB003",
+    "test_area_id": "CAT007",
+    "title": "Account creation rate limit exceeded from same IP",
+    "type": "Security",
+    "priority": "High",
+    "description": "Verify that after 5 failed registration attempts from the same IP within 15 minutes, the 6th attempt is blocked.",
+    "related_requirement_ids": [
+      "FR004"
+    ],
+    "traceability": "FR004"
+  },
+  {
+    "scenario_id": "SC016",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB003",
+    "test_area_id": "CAT008",
+    "title": "Account creation rate limit resets after 15 minutes",
+    "type": "Boundary",
+    "priority": "Medium",
+    "description": "Verify that after the 15-minute rolling window expires, the IP can attempt registration again.",
+    "related_requirement_ids": [
+      "FR004"
+    ],
+    "traceability": "FR004"
+  },
+  {
+    "scenario_id": "SC017",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB010",
+    "test_area_id": "CAT024",
+    "title": "Concurrent registration requests from same IP",
+    "type": "Negative",
+    "priority": "Medium",
+    "description": "Verify that simultaneous registration requests from the same IP are handled correctly without creating duplicate accounts and rate limit is enforced consistently.",
+    "related_requirement_ids": [
+      "FR001",
+      "FR004"
+    ],
+    "traceability": "FR001, FR004"
+  }
+]
+
+Error:
+Invalid testcase schema for function FUNC001. First invalid item: {'testcase_id': 'TC003', 'function_id': 'FUNC001', 'sub_function_id': 'SUB001', 'test_area_id': 'CAT002', 'title': 'Register with disposable email provider', 'type': 'Negative', 'priority': 'High', 'preconditions': ['User is on the registration page', 'The IP address has not exceeded the account creation rate limit', 'The system has a list of known disposable email providers (e.g., mailinator.com, guerrillamail.com)'], 'test_steps': ['Enter an email address from a known disposable email provider (e.g., user@mailinator.com)', 'Enter a valid password meeting all complexity rules', 'Submit the registration form'], 'expected_results': ['The system rejects the registration', 'The system displays an error message indicating that disposable email providers are not allowed (exact message is an open question)', 'No account is created', 'No verification email is sent'], 'test_data': {'email': 'testuser@mailinator.com', 'password': 'ValidP@ss1'}, 'related_requirement_ids': ['FR001', 'BR003'], 'traceability': 'FR001, BR003'}
+
+Raw response file:
+requirements\TG-20260608080512\logs\generate_testcases_FUNC001_raw.txt

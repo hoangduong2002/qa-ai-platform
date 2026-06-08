@@ -326,12 +326,11 @@ def _write_testcase_header(ws) -> None:
         "Test Area ID",
         "Title",
         "Type",
+        "Technique",
         "Priority",
         "Preconditions",
         "Test Steps",
         "Expected Results",
-        "Test Data",
-        "Related Requirement IDs",
         "Traceability",
     ]
 
@@ -348,12 +347,11 @@ def _write_testcase_row(ws, testcase: dict) -> None:
             testcase.get("test_area_id", ""),
             testcase.get("title", ""),
             testcase.get("type", ""),
+            testcase.get("technique", ""),
             testcase.get("priority", ""),
             _to_text(testcase.get("preconditions", [])),
             _to_text(testcase.get("test_steps", [])),
             _to_text(testcase.get("expected_results", [])),
-            _to_text(testcase.get("test_data", {})),
-            _to_text(testcase.get("related_requirement_ids", [])),
             testcase.get("traceability", ""),
         ]
     )

@@ -1,0 +1,878 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with invalid email format missing '@'",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter 'invalidemail.com' in the email field",
+      "Enter a valid password meeting all complexity rules in the password field",
+      "Enter the same password in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the email field indicating that the email format is invalid (e.g., 'Email must contain @')",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "invalidemail.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "VAL001", "VAL005"],
+    "traceability": "FR001, VAL001, VAL005"
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with invalid email format missing domain",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter 'user@' in the email field",
+      "Enter a valid password meeting all complexity rules in the password field",
+      "Enter the same password in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the email field indicating that the email format is invalid (e.g., 'Email must contain a domain after @')",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "user@",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "VAL001", "VAL005"],
+    "traceability": "FR001, VAL001, VAL005"
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT002",
+    "title": "Register with duplicate email",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "An account with email 'existing@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter 'existing@example.com' in the email field",
+      "Enter a valid password meeting all complexity rules in the password field",
+      "Enter the same password in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the email field indicating that the email is already in use (e.g., 'This email is already registered')",
+      "No new account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "existing@example.com",
+      "phone": "9876543210",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "BR001", "VAL005"],
+    "traceability": "FR001, BR001, VAL005"
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length less than 8 characters",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Ab1@xyz' (7 characters) in the password field",
+      "Enter 'Ab1@xyz' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must be at least 8 characters long",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Alice",
+      "last_name": "Johnson",
+      "email": "alice@example.com",
+      "phone": "5551234567",
+      "password": "Ab1@xyz",
+      "confirm_password": "Ab1@xyz"
+    },
+    "related_requirement_ids": ["FR001", "VAL002", "VAL005"],
+    "traceability": "FR001, VAL002, VAL005"
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC005",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length greater than 12 characters",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Ab1@xyz123456' (13 characters) in the password field",
+      "Enter 'Ab1@xyz123456' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must be at most 12 characters long",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Bob",
+      "last_name": "Williams",
+      "email": "bob@example.com",
+      "phone": "5559876543",
+      "password": "Ab1@xyz123456",
+      "confirm_password": "Ab1@xyz123456"
+    },
+    "related_requirement_ids": ["FR001", "VAL002", "VAL005"],
+    "traceability": "FR001, VAL002, VAL005"
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC006",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length exactly 8 characters",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'testuser@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'testuser@example.com' in the email field",
+      "Enter 'Ab1@xYz!' (8 characters) in the password field",
+      "Enter 'Ab1@xYz!' in the confirm password field",
+      "Enter 'Test' in the first name field",
+      "Enter 'User' in the last name field",
+      "Enter '1234567890' in the phone field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'testuser@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Test",
+      "last_name": "User",
+      "email": "testuser@example.com",
+      "phone": "1234567890",
+      "password": "Ab1@xYz!",
+      "confirm_password": "Ab1@xYz!"
+    },
+    "related_requirement_ids": ["FR001", "VAL002"],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC007",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length exactly 12 characters",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'testuser2@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'testuser2@example.com' in the email field",
+      "Enter 'Ab1@xYz!abc' (12 characters) in the password field",
+      "Enter 'Ab1@xYz!abc' in the confirm password field",
+      "Enter 'Test' in the first name field",
+      "Enter 'User2' in the last name field",
+      "Enter '0987654321' in the phone field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'testuser2@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Test",
+      "last_name": "User2",
+      "email": "testuser2@example.com",
+      "phone": "0987654321",
+      "password": "Ab1@xYz!abc",
+      "confirm_password": "Ab1@xYz!abc"
+    },
+    "related_requirement_ids": ["FR001", "VAL002"],
+    "traceability": "FR001, VAL002"
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC008",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing uppercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'abc1@defg' (no uppercase) in the password field",
+      "Enter 'abc1@defg' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must contain at least one uppercase letter",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Charlie",
+      "last_name": "Brown",
+      "email": "charlie@example.com",
+      "phone": "1112223333",
+      "password": "abc1@defg",
+      "confirm_password": "abc1@defg"
+    },
+    "related_requirement_ids": ["FR001", "VAL003"],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "testcase_id": "TC009",
+    "scenario_id": "SC009",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing lowercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'ABC1@DEFG' (no lowercase) in the password field",
+      "Enter 'ABC1@DEFG' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must contain at least one lowercase letter",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Diana",
+      "last_name": "Prince",
+      "email": "diana@example.com",
+      "phone": "4445556666",
+      "password": "ABC1@DEFG",
+      "confirm_password": "ABC1@DEFG"
+    },
+    "related_requirement_ids": ["FR001", "VAL003"],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "testcase_id": "TC010",
+    "scenario_id": "SC010",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing numeric digit",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Abc@defgh' (no digit) in the password field",
+      "Enter 'Abc@defgh' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must contain at least one numeric digit",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Eve",
+      "last_name": "Adams",
+      "email": "eve@example.com",
+      "phone": "7778889999",
+      "password": "Abc@defgh",
+      "confirm_password": "Abc@defgh"
+    },
+    "related_requirement_ids": ["FR001", "VAL003"],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC011",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing special character",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Abc1defgh' (no special character) in the password field",
+      "Enter 'Abc1defgh' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password must contain at least one special character from the allowed set (@, #, $, %, ^, &, *)",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Frank",
+      "last_name": "Castle",
+      "email": "frank@example.com",
+      "phone": "0001112222",
+      "password": "Abc1defgh",
+      "confirm_password": "Abc1defgh"
+    },
+    "related_requirement_ids": ["FR001", "VAL003"],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "testcase_id": "TC012",
+    "scenario_id": "SC012",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password containing consecutive spaces",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Ab1@  xYz' (contains two consecutive spaces) in the password field",
+      "Enter 'Ab1@  xYz' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that consecutive spaces are not allowed in the password",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Grace",
+      "last_name": "Hopper",
+      "email": "grace@example.com",
+      "phone": "3334445555",
+      "password": "Ab1@  xYz",
+      "confirm_password": "Ab1@  xYz"
+    },
+    "related_requirement_ids": ["FR001", "VAL004"],
+    "traceability": "FR001, VAL004"
+  },
+  {
+    "testcase_id": "TC013",
+    "scenario_id": "SC013",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password containing email prefix",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter 'john.doe@example.com' in the email field",
+      "Enter 'John.doe1@Pass' (contains email prefix 'john.doe') in the password field",
+      "Enter 'John.doe1@Pass' in the confirm password field",
+      "Enter 'John' in the first name field",
+      "Enter 'Doe' in the last name field",
+      "Enter '1234567890' in the phone field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the password field indicating that the password cannot contain the email prefix or username",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john.doe@example.com",
+      "phone": "1234567890",
+      "password": "John.doe1@Pass",
+      "confirm_password": "John.doe1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "BR003"],
+    "traceability": "FR001, BR003"
+  },
+  {
+    "testcase_id": "TC014",
+    "scenario_id": "SC014",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB003",
+    "test_area_id": "CAT007",
+    "title": "Register with mismatched confirm password",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter 'Valid1@Pass' in the password field",
+      "Enter 'Different1@Pass' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the confirm password field indicating that the passwords do not match",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Kate",
+      "last_name": "Bishop",
+      "email": "kate@example.com",
+      "phone": "6667778888",
+      "password": "Valid1@Pass",
+      "confirm_password": "Different1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "FR002"],
+    "traceability": "FR001, FR002"
+  },
+  {
+    "testcase_id": "TC015",
+    "scenario_id": "SC015",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB008",
+    "test_area_id": "CAT012",
+    "title": "Register with empty first name",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Leave the first name field empty",
+      "Enter a valid last name",
+      "Enter a valid email address",
+      "Enter a valid phone number",
+      "Enter a valid password meeting all complexity rules",
+      "Enter the same password in the confirm password field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the first name field indicating that the first name is required",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "",
+      "last_name": "Smith",
+      "email": "smith@example.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC016",
+    "scenario_id": "SC016",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB009",
+    "test_area_id": "CAT013",
+    "title": "Register with empty last name",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid first name",
+      "Leave the last name field empty",
+      "Enter a valid email address",
+      "Enter a valid phone number",
+      "Enter a valid password meeting all complexity rules",
+      "Enter the same password in the confirm password field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the last name field indicating that the last name is required",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "John",
+      "last_name": "",
+      "email": "john@example.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC017",
+    "scenario_id": "SC017",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB010",
+    "test_area_id": "CAT014",
+    "title": "Register with empty phone",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid first name",
+      "Enter a valid last name",
+      "Enter a valid email address",
+      "Leave the phone field empty",
+      "Enter a valid password meeting all complexity rules",
+      "Enter the same password in the confirm password field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted",
+      "An inline error message is displayed below the phone field indicating that the phone number is required",
+      "No account is created in the system"
+    ],
+    "test_data": {
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "email": "jane@example.com",
+      "phone": "",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR002"],
+    "traceability": "FR002"
+  },
+  {
+    "testcase_id": "TC018",
+    "scenario_id": "SC018",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with valid email format",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'valid.user@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'valid.user@example.com' in the email field",
+      "Enter a valid password meeting all complexity rules in the password field",
+      "Enter the same password in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'valid.user@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Valid",
+      "last_name": "User",
+      "email": "valid.user@example.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "VAL001"],
+    "traceability": "FR001, VAL001"
+  },
+  {
+    "testcase_id": "TC019",
+    "scenario_id": "SC019",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password meeting all character requirements",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'char.test@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'char.test@example.com' in the email field",
+      "Enter 'Abc1@xyz' (contains uppercase, lowercase, digit, special char) in the password field",
+      "Enter 'Abc1@xyz' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'char.test@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Char",
+      "last_name": "Test",
+      "email": "char.test@example.com",
+      "phone": "1234567890",
+      "password": "Abc1@xyz",
+      "confirm_password": "Abc1@xyz"
+    },
+    "related_requirement_ids": ["FR001", "VAL003"],
+    "traceability": "FR001, VAL003"
+  },
+  {
+    "testcase_id": "TC020",
+    "scenario_id": "SC020",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password without consecutive spaces",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'space.test@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'space.test@example.com' in the email field",
+      "Enter 'Ab1@xYz!' (no consecutive spaces) in the password field",
+      "Enter 'Ab1@xYz!' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'space.test@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Space",
+      "last_name": "Test",
+      "email": "space.test@example.com",
+      "phone": "1234567890",
+      "password": "Ab1@xYz!",
+      "confirm_password": "Ab1@xYz!"
+    },
+    "related_requirement_ids": ["FR001", "VAL004"],
+    "traceability": "FR001, VAL004"
+  },
+  {
+    "testcase_id": "TC021",
+    "scenario_id": "SC021",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password not containing email prefix",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'prefix.test@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'prefix.test@example.com' in the email field",
+      "Enter 'Valid1@Pass' (does not contain 'prefix.test') in the password field",
+      "Enter 'Valid1@Pass' in the confirm password field",
+      "Enter 'Prefix' in the first name field",
+      "Enter 'Test' in the last name field",
+      "Enter '1234567890' in the phone field",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'prefix.test@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Prefix",
+      "last_name": "Test",
+      "email": "prefix.test@example.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "BR003"],
+    "traceability": "FR001, BR003"
+  },
+  {
+    "testcase_id": "TC022",
+    "scenario_id": "SC022",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB003",
+    "test_area_id": "CAT007",
+    "title": "Register with matching confirm password",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in",
+      "Email 'match.test@example.com' is not already registered"
+    ],
+    "test_steps": [
+      "Enter 'match.test@example.com' in the email field",
+      "Enter 'Valid1@Pass' in the password field",
+      "Enter 'Valid1@Pass' in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is submitted successfully",
+      "A new account is created with the provided details",
+      "A verification email is sent to 'match.test@example.com'"
+    ],
+    "test_data": {
+      "first_name": "Match",
+      "last_name": "Test",
+      "email": "match.test@example.com",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001", "FR002"],
+    "traceability": "FR001, FR002"
+  },
+  {
+    "testcase_id": "TC023",
+    "scenario_id": "SC045",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "SQL injection attempt in email field during registration",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a SQL injection payload such as \"' OR 1=1 --\" in the email field",
+      "Enter a valid password meeting all complexity rules in the password field",
+      "Enter the same password in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted or is rejected",
+      "The system does not execute any injected SQL commands",
+      "No account is created in the system",
+      "An appropriate error message is displayed (e.g., 'Invalid email format')"
+    ],
+    "test_data": {
+      "first_name": "Hacker",
+      "last_name": "Test",
+      "email": "' OR 1=1 --",
+      "phone": "1234567890",
+      "password": "Valid1@Pass",
+      "confirm_password": "Valid1@Pass"
+    },
+    "related_requirement_ids": ["FR001"],
+    "traceability": "FR001"
+  },
+  {
+    "testcase_id": "TC024",
+    "scenario_id": "SC046",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "SQL injection attempt in password field during registration",
+    "type": "Security",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No user is currently logged in"
+    ],
+    "test_steps": [
+      "Enter a valid email address in the email field",
+      "Enter a SQL injection payload such as \"' OR 1=1 --\" in the password field",
+      "Enter the same payload in the confirm password field",
+      "Enter valid first name, last name, and phone",
+      "Click the 'Register' or 'Submit' button"
+    ],
+    "expected_results": [
+      "The registration form is not submitted or is rejected",
+      "The system does not execute any injected SQL commands",
+      "No account is created in the system",
+      "An appropriate error message is displayed (e.g., 'Password must meet complexity requirements')"
+    ],
+    "test_data":

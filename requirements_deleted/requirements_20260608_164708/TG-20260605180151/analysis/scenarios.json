@@ -1,0 +1,292 @@
+[
+  {
+    "scenario_id": "SC001",
+    "title": "Successful account creation with valid email and password meeting all rules",
+    "type": "Positive",
+    "priority": "High",
+    "description": "Verify that a user can create an account using a unique email address (e.g., user@example.com) and a password that is 8-12 characters long, includes at least one number, one special character, and one alphabet character (e.g., Pass1@abc). The system should accept the input and store the account data in the database.",
+    "related_requirement_ids": [
+      "FR1",
+      "BR1",
+      "BR2",
+      "BR3",
+      "BR4",
+      "BR5"
+    ],
+    "traceability": "Requirement Summary: functional_summary, confirmed_business_rules"
+  },
+  {
+    "scenario_id": "SC002",
+    "title": "Account creation with password exactly 8 characters meeting complexity",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Verify that a password of exactly 8 characters (e.g., Abc1@xyz) containing at least one number, one special character, and one alphabet is accepted for account creation.",
+    "related_requirement_ids": [
+      "BR2",
+      "BR3"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC003",
+    "title": "Account creation with password exactly 12 characters meeting complexity",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Verify that a password of exactly 12 characters (e.g., Abc1@xyz1234) containing at least one number, one special character, and one alphabet is accepted for account creation.",
+    "related_requirement_ids": [
+      "BR2",
+      "BR3",
+      "BR5"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC004",
+    "title": "Account creation with email exactly 255 characters",
+    "type": "Boundary",
+    "priority": "High",
+    "description": "Verify that an email address of exactly 255 characters (e.g., a...@b.c where total length is 255) is accepted for account creation, provided it is unique and password meets all rules.",
+    "related_requirement_ids": [
+      "BR4"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC005",
+    "title": "Reject duplicate email during account creation",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that attempting to create an account with an email address that already exists in the database results in a validation failure and displays a meaningful inline error message (e.g., 'This email is already registered').",
+    "related_requirement_ids": [
+      "BR1",
+      "VR1"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC006",
+    "title": "Reject password shorter than 8 characters",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that a password of length 7 characters (e.g., Abc1@xy) is rejected with an inline error message indicating the minimum length requirement.",
+    "related_requirement_ids": [
+      "BR2",
+      "VR2"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC007",
+    "title": "Reject password longer than 12 characters",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that a password of length 13 characters (e.g., Abc1@xyz12345) is rejected with an inline error message indicating the maximum length requirement.",
+    "related_requirement_ids": [
+      "BR5",
+      "VR3"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC008",
+    "title": "Reject password missing a number",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that a password with no numeric character (e.g., Abc@defgh) is rejected with an inline error message indicating that at least one number is required.",
+    "related_requirement_ids": [
+      "BR3",
+      "VR4"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC009",
+    "title": "Reject password missing a special character",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that a password with no special character (e.g., Abc1defgh) is rejected with an inline error message indicating that at least one special character is required.",
+    "related_requirement_ids": [
+      "BR3",
+      "VR4"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC010",
+    "title": "Reject password missing an alphabet character",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that a password with no alphabet character (e.g., 123@4567) is rejected with an inline error message indicating that at least one alphabet character is required.",
+    "related_requirement_ids": [
+      "BR3",
+      "VR4"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC011",
+    "title": "Reject email exceeding 255 characters",
+    "type": "Negative",
+    "priority": "High",
+    "description": "Verify that an email address longer than 255 characters (e.g., 256 characters) is rejected with an inline error message indicating the maximum length limit.",
+    "related_requirement_ids": [
+      "BR4",
+      "VR5"
+    ],
+    "traceability": "Requirement Summary: confirmed_business_rules, validation_rules"
+  },
+  {
+    "scenario_id": "SC012",
+    "title": "Verify password is not stored in plaintext in the database",
+    "type": "Security",
+    "priority": "High",
+    "description": "After successful account creation, verify that the stored password in the database is not in plaintext (e.g., appears as a hash or encrypted value). This can be validated by inspecting the database record directly.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary, assumptions"
+  },
+  {
+    "scenario_id": "SC013",
+    "title": "Attempt to bypass email verification before first login",
+    "type": "Security",
+    "priority": "High",
+    "description": "Verify that a user who has not completed email verification cannot log in. Attempt to log in with valid credentials before the email is verified and confirm that access is denied with an appropriate error message.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary"
+  },
+  {
+    "scenario_id": "SC014",
+    "title": "SQL injection attempt on email field during account creation",
+    "type": "Security",
+    "priority": "High",
+    "description": "Verify that entering a malicious SQL injection string (e.g., ' OR '1'='1) in the email field does not bypass validation or create an account, and the system handles it securely without exposing database errors.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary"
+  },
+  {
+    "scenario_id": "SC015",
+    "title": "SQL injection attempt on password field during account creation",
+    "type": "Security",
+    "priority": "High",
+    "description": "Verify that entering a malicious SQL injection string (e.g., '; DROP TABLE users; --) in the password field does not compromise the database, and the system rejects the input or handles it securely.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary"
+  },
+  {
+    "scenario_id": "SC016",
+    "title": "Inline error message displayed for duplicate email",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a duplicate email is entered, a meaningful inline error message (e.g., 'This email is already registered') appears next to the email field before form submission or after validation.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC017",
+    "title": "Inline error message displayed for password too short",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a password shorter than 8 characters is entered, a meaningful inline error message (e.g., 'Password must be at least 8 characters') appears next to the password field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC018",
+    "title": "Inline error message displayed for password too long",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a password longer than 12 characters is entered, a meaningful inline error message (e.g., 'Password must not exceed 12 characters') appears next to the password field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC019",
+    "title": "Inline error message displayed for missing number in password",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a password without a number is entered, a meaningful inline error message (e.g., 'Password must contain at least one number') appears next to the password field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC020",
+    "title": "Inline error message displayed for missing special character in password",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a password without a special character is entered, a meaningful inline error message (e.g., 'Password must contain at least one special character') appears next to the password field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC021",
+    "title": "Inline error message displayed for missing alphabet in password",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when a password without an alphabet character is entered, a meaningful inline error message (e.g., 'Password must contain at least one alphabet character') appears next to the password field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC022",
+    "title": "Inline error message displayed for email exceeding 255 characters",
+    "type": "UX/UI",
+    "priority": "Medium",
+    "description": "Verify that when an email longer than 255 characters is entered, a meaningful inline error message (e.g., 'Email must not exceed 255 characters') appears next to the email field.",
+    "related_requirement_ids": [
+      "VR6"
+    ],
+    "traceability": "Requirement Summary: validation_rules"
+  },
+  {
+    "scenario_id": "SC023",
+    "title": "Email verification link is sent after successful account creation",
+    "type": "Integration",
+    "priority": "High",
+    "description": "Verify that after successful account creation, the system triggers an email verification mechanism (e.g., sends a confirmation link or OTP) to the registered email address.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary, assumptions"
+  },
+  {
+    "scenario_id": "SC024",
+    "title": "Email verification token expires after a defined period",
+    "type": "Integration",
+    "priority": "High",
+    "description": "Verify that the email verification token (e.g., link or OTP) expires after a certain time (e.g., 24 hours) and cannot be used for verification after expiration.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary, assumptions"
+  },
+  {
+    "scenario_id": "SC025",
+    "title": "Resend email verification functionality works",
+    "type": "Integration",
+    "priority": "High",
+    "description": "Verify that a user can request to resend the email verification (e.g., via a 'Resend verification email' button) and a new verification link or OTP is sent to the registered email.",
+    "related_requirement_ids": [
+      "FR1"
+    ],
+    "traceability": "Requirement Summary: functional_summary, assumptions"
+  }
+]

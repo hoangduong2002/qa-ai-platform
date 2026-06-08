@@ -12,21 +12,6 @@ Important concept:
 - Do NOT delete existing test cases.
 - Do NOT reduce the test suite.
 
-Requirement Analysis:
-{analysis}
-
-Scenarios:
-{scenarios}
-
-Original Test Cases:
-{testcases}
-
-Coverage Review:
-{coverage_review}
-
-Human Review Comments:
-{review_comments}
-
 Improvement rules:
 - Keep existing valid test cases.
 - Improve only weak, missing, incomplete, duplicated, or impacted test cases.
@@ -89,3 +74,18 @@ Return format:
     "traceability": "FR001"
   }
 ]
+
+Requirement Analysis:
+{analysis}
+
+Scenarios:
+{scenarios}
+
+Original Test Cases:
+{testcases}
+
+Coverage Review:
+{coverage_review}
+
+Human Review Comments:
+{review_comments}

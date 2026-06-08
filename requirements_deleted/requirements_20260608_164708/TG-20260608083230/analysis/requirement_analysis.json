@@ -1,0 +1,444 @@
+{
+  "actors": [
+    "User"
+  ],
+  "functional_requirements": [
+    {
+      "requirement_id": "FR001",
+      "type": "Functional Requirement",
+      "description": "User can create an account using email and password."
+    },
+    {
+      "requirement_id": "FR002",
+      "type": "Functional Requirement",
+      "description": "User must verify email before first login."
+    },
+    {
+      "requirement_id": "FR003",
+      "type": "Functional Requirement",
+      "description": "System sends a secure URL containing a cryptographically secure, high-entropy random token as a query parameter for email verification."
+    },
+    {
+      "requirement_id": "FR004",
+      "type": "Functional Requirement",
+      "description": "System displays message 'The verification link is invalid or has expired. Please request a new one.' when verification link is expired or token is invalid."
+    },
+    {
+      "requirement_id": "FR005",
+      "type": "Functional Requirement",
+      "description": "System redirects user to a page where they can trigger a new verification email when link is expired or token is invalid."
+    },
+    {
+      "requirement_id": "FR006",
+      "type": "Functional Requirement",
+      "description": "System displays message 'An unexpected error occurred. Please try again later.' on system error during verification."
+    },
+    {
+      "requirement_id": "FR007",
+      "type": "Functional Requirement",
+      "description": "System provides a 'Resend Verification Email' button on the landing page when verification link is expired."
+    },
+    {
+      "requirement_id": "FR008",
+      "type": "Functional Requirement",
+      "description": "System automatically purges unverified user records from the database after 7 days."
+    },
+    {
+      "requirement_id": "FR009",
+      "type": "Functional Requirement",
+      "description": "When a user attempts to create an account with an email that already exists but is not yet verified, the system updates the existing unverified record with the new password hash and generates a brand-new verification token, sending it to the email address, resetting the 24-hour expiration clock."
+    }
+  ],
+  "business_rules": [
+    {
+      "requirement_id": "BR001",
+      "type": "Business Rule",
+      "description": "Email must be unique."
+    },
+    {
+      "requirement_id": "BR002",
+      "type": "Business Rule",
+      "description": "Password minimum length is 8 characters."
+    },
+    {
+      "requirement_id": "BR003",
+      "type": "Business Rule",
+      "description": "Password maximum length is 12 characters."
+    },
+    {
+      "requirement_id": "BR004",
+      "type": "Business Rule",
+      "description": "Password must contain at least one uppercase letter."
+    },
+    {
+      "requirement_id": "BR005",
+      "type": "Business Rule",
+      "description": "Password must contain at least one lowercase letter."
+    },
+    {
+      "requirement_id": "BR006",
+      "type": "Business Rule",
+      "description": "Password must contain at least one numeric digit."
+    },
+    {
+      "requirement_id": "BR007",
+      "type": "Business Rule",
+      "description": "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *)."
+    },
+    {
+      "requirement_id": "BR008",
+      "type": "Business Rule",
+      "description": "Consecutive spaces are forbidden in the password."
+    },
+    {
+      "requirement_id": "BR009",
+      "type": "Business Rule",
+      "description": "Password cannot contain the user's explicit email prefix or username."
+    },
+    {
+      "requirement_id": "BR010",
+      "type": "Business Rule",
+      "description": "Email verification link expires exactly 24 hours after issuance."
+    },
+    {
+      "requirement_id": "BR011",
+      "type": "Business Rule",
+      "description": "Verification tokens are single-use only."
+    },
+    {
+      "requirement_id": "BR012",
+      "type": "Business Rule",
+      "description": "Tokens are hashed (using SHA-256) before storage in the database."
+    },
+    {
+      "requirement_id": "BR013",
+      "type": "Business Rule",
+      "description": "All verification traffic must be strictly enforced over HTTPS (TLS 1.3)."
+    },
+    {
+      "requirement_id": "BR014",
+      "type": "Business Rule",
+      "description": "In all failure cases, raw database or system error details must be hidden from the frontend to prevent information disclosure."
+    },
+    {
+      "requirement_id": "BR015",
+      "type": "Business Rule",
+      "description": "When a user attempts to create an account with an email that already exists but is not yet verified, the registration flow proceeds normally from the frontend perspective to prevent email enumeration attacks."
+    }
+  ],
+  "validations": [
+    {
+      "requirement_id": "VAL001",
+      "type": "Validation",
+      "description": "Email must be unique."
+    },
+    {
+      "requirement_id": "VAL002",
+      "type": "Validation",
+      "description": "Password length must be between 8 and 12 characters."
+    },
+    {
+      "requirement_id": "VAL003",
+      "type": "Validation",
+      "description": "Password must contain at least one uppercase letter."
+    },
+    {
+      "requirement_id": "VAL004",
+      "type": "Validation",
+      "description": "Password must contain at least one lowercase letter."
+    },
+    {
+      "requirement_id": "VAL005",
+      "type": "Validation",
+      "description": "Password must contain at least one numeric digit."
+    },
+    {
+      "requirement_id": "VAL006",
+      "type": "Validation",
+      "description": "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *)."
+    },
+    {
+      "requirement_id": "VAL007",
+      "type": "Validation",
+      "description": "Password must not contain consecutive spaces."
+    },
+    {
+      "requirement_id": "VAL008",
+      "type": "Validation",
+      "description": "Password must not contain the user's explicit email prefix or username."
+    },
+    {
+      "requirement_id": "VAL009",
+      "type": "Validation",
+      "description": "Verification token must be validated as single-use; once clicked or validated, the token is immediately invalidated in the database."
+    },
+    {
+      "requirement_id": "VAL010",
+      "type": "Validation",
+      "description": "Verification link must be checked for expiration (24 hours from issuance)."
+    }
+  ],
+  "dependencies": [
+    {
+      "requirement_id": "DEP001",
+      "type": "Dependency",
+      "description": "Email delivery service is required to send verification emails."
+    },
+    {
+      "requirement_id": "DEP002",
+      "type": "Dependency",
+      "description": "Database is required to store user records, password hashes, and verification tokens."
+    },
+    {
+      "requirement_id": "DEP003",
+      "type": "Dependency",
+      "description": "HTTPS/TLS 1.3 must be enforced on the server for all verification traffic."
+    },
+    {
+      "requirement_id": "DEP004",
+      "type": "Dependency",
+      "description": "Cryptographic library is required to generate high-entropy random tokens and perform SHA-256 hashing."
+    }
+  ],
+  "risks": [
+    {
+      "requirement_id": "RISK001",
+      "type": "Risk",
+      "description": "Email delivery failures could prevent users from completing verification, leading to poor user experience and potential account lockout."
+    },
+    {
+      "requirement_id": "RISK002",
+      "type": "Risk",
+      "description": "If the token generation or hashing implementation is flawed, security could be compromised (e.g., token prediction, collision)."
+    },
+    {
+      "requirement_id": "RISK003",
+      "type": "Risk",
+      "description": "The 7-day purge of unverified records may conflict with user expectations if they attempt to verify after the purge but before re-registering."
+    },
+    {
+      "requirement_id": "RISK004",
+      "type": "Risk",
+      "description": "The behavior of updating an existing unverified record instead of creating a duplicate could lead to confusion if the user is not notified of the update."
+    }
+  ],
+  "missing_information": [
+    {
+      "requirement_id": "MISS001",
+      "type": "Missing Information",
+      "description": "The exact landing page URL or route for the 'Resend Verification Email' button is not specified."
+    },
+    {
+      "requirement_id": "MISS002",
+      "type": "Missing Information",
+      "description": "The format or content of the verification email (e.g., sender name, subject line, body text) is not specified."
+    },
+    {
+      "requirement_id": "MISS003",
+      "type": "Missing Information",
+      "description": "The behavior when a user attempts to login without verifying their email is not specified (e.g., error message, redirect)."
+    },
+    {
+      "requirement_id": "MISS004",
+      "type": "Missing Information",
+      "description": "The maximum number of resend verification email requests allowed within a time period is not specified."
+    },
+    {
+      "requirement_id": "MISS005",
+      "type": "Missing Information",
+      "description": "The process for requesting a new verification email (e.g., endpoint, rate limiting) is not detailed."
+    }
+  ],
+  "requirement_items": [
+    {
+      "requirement_id": "FR001",
+      "type": "Functional Requirement",
+      "description": "User can create an account using email and password."
+    },
+    {
+      "requirement_id": "FR002",
+      "type": "Functional Requirement",
+      "description": "User must verify email before first login."
+    },
+    {
+      "requirement_id": "FR003",
+      "type": "Functional Requirement",
+      "description": "System sends a secure URL containing a cryptographically secure, high-entropy random token as a query parameter for email verification."
+    },
+    {
+      "requirement_id": "FR004",
+      "type": "Functional Requirement",
+      "description": "System displays message 'The verification link is invalid or has expired. Please request a new one.' when verification link is expired or token is invalid."
+    },
+    {
+      "requirement_id": "FR005",
+      "type": "Functional Requirement",
+      "description": "System redirects user to a page where they can trigger a new verification email when link is expired or token is invalid."
+    },
+    {
+      "requirement_id": "FR006",
+      "type": "Functional Requirement",
+      "description": "System displays message 'An unexpected error occurred. Please try again later.' on system error during verification."
+    },
+    {
+      "requirement_id": "FR007",
+      "type": "Functional Requirement",
+      "description": "System provides a 'Resend Verification Email' button on the landing page when verification link is expired."
+    },
+    {
+      "requirement_id": "FR008",
+      "type": "Functional Requirement",
+      "description": "System automatically purges unverified user records from the database after 7 days."
+    },
+    {
+      "requirement_id": "FR009",
+      "type": "Functional Requirement",
+      "description": "When a user attempts to create an account with an email that already exists but is not yet verified, the system updates the existing unverified record with the new password hash and generates a brand-new verification token, sending it to the email address, resetting the 24-hour expiration clock."
+    },
+    {
+      "requirement_id": "BR001",
+      "type": "Business Rule",
+      "description": "Email must be unique."
+    },
+    {
+      "requirement_id": "BR002",
+      "type": "Business Rule",
+      "description": "Password minimum length is 8 characters."
+    },
+    {
+      "requirement_id": "BR003",
+      "type": "Business Rule",
+      "description": "Password maximum length is 12 characters."
+    },
+    {
+      "requirement_id": "BR004",
+      "type": "Business Rule",
+      "description": "Password must contain at least one uppercase letter."
+    },
+    {
+      "requirement_id": "BR005",
+      "type": "Business Rule",
+      "description": "Password must contain at least one lowercase letter."
+    },
+    {
+      "requirement_id": "BR006",
+      "type": "Business Rule",
+      "description": "Password must contain at least one numeric digit."
+    },
+    {
+      "requirement_id": "BR007",
+      "type": "Business Rule",
+      "description": "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *)."
+    },
+    {
+      "requirement_id": "BR008",
+      "type": "Business Rule",
+      "description": "Consecutive spaces are forbidden in the password."
+    },
+    {
+      "requirement_id": "BR009",
+      "type": "Business Rule",
+      "description": "Password cannot contain the user's explicit email prefix or username."
+    },
+    {
+      "requirement_id": "BR010",
+      "type": "Business Rule",
+      "description": "Email verification link expires exactly 24 hours after issuance."
+    },
+    {
+      "requirement_id": "BR011",
+      "type": "Business Rule",
+      "description": "Verification tokens are single-use only."
+    },
+    {
+      "requirement_id": "BR012",
+      "type": "Business Rule",
+      "description": "Tokens are hashed (using SHA-256) before storage in the database."
+    },
+    {
+      "requirement_id": "BR013",
+      "type": "Business Rule",
+      "description": "All verification traffic must be strictly enforced over HTTPS (TLS 1.3)."
+    },
+    {
+      "requirement_id": "BR014",
+      "type": "Business Rule",
+      "description": "In all failure cases, raw database or system error details must be hidden from the frontend to prevent information disclosure."
+    },
+    {
+      "requirement_id": "BR015",
+      "type": "Business Rule",
+      "description": "When a user attempts to create an account with an email that already exists but is not yet verified, the registration flow proceeds normally from the frontend perspective to prevent email enumeration attacks."
+    },
+    {
+      "requirement_id": "VAL001",
+      "type": "Validation",
+      "description": "Email must be unique."
+    },
+    {
+      "requirement_id": "VAL002",
+      "type": "Validation",
+      "description": "Password length must be between 8 and 12 characters."
+    },
+    {
+      "requirement_id": "VAL003",
+      "type": "Validation",
+      "description": "Password must contain at least one uppercase letter."
+    },
+    {
+      "requirement_id": "VAL004",
+      "type": "Validation",
+      "description": "Password must contain at least one lowercase letter."
+    },
+    {
+      "requirement_id": "VAL005",
+      "type": "Validation",
+      "description": "Password must contain at least one numeric digit."
+    },
+    {
+      "requirement_id": "VAL006",
+      "type": "Validation",
+      "description": "Password must contain at least one special character (e.g., @, #, $, %, ^, &, *)."
+    },
+    {
+      "requirement_id": "VAL007",
+      "type": "Validation",
+      "description": "Password must not contain consecutive spaces."
+    },
+    {
+      "requirement_id": "VAL008",
+      "type": "Validation",
+      "description": "Password must not contain the user's explicit email prefix or username."
+    },
+    {
+      "requirement_id": "VAL009",
+      "type": "Validation",
+      "description": "Verification token must be validated as single-use; once clicked or validated, the token is immediately invalidated in the database."
+    },
+    {
+      "requirement_id": "VAL010",
+      "type": "Validation",
+      "description": "Verification link must be checked for expiration (24 hours from issuance)."
+    },
+    {
+      "requirement_id": "DEP001",
+      "type": "Dependency",
+      "description": "Email delivery service is required to send verification emails."
+    },
+    {
+      "requirement_id": "DEP002",
+      "type": "Dependency",
+      "description": "Database is required to store user records, password hashes, and verification tokens."
+    },
+    {
+      "requirement_id": "DEP003",
+      "type": "Dependency",
+      "description": "HTTPS/TLS 1.3 must be enforced on the server for all verification traffic."
+    },
+    {
+      "requirement_id": "DEP004",
+      "type": "Dependency",
+      "description": "Cryptographic library is required to generate high-entropy random tokens and perform SHA-256 hashing."
+    }
+  ]
+}

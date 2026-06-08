@@ -1,0 +1,42 @@
+{
+  "generation_mode": "FUNCTION_BASED_PARALLEL_COVERAGE_REVIEW",
+  "parallel_workers": 3,
+  "function_count": 3,
+  "scenario_count": 50,
+  "testcase_count": 50,
+  "coverage_score": 70,
+  "approved_by_ai": false,
+  "master_file": "requirements\\TG-20260608085316\\review\\coverage_review.json",
+  "functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "User Registration",
+      "coverage_score": 100,
+      "approved_by_ai": true,
+      "scenario_count": 31,
+      "testcase_count": 31,
+      "file": "requirements\\TG-20260608085316\\review\\functions\\FUNC001_coverage_review.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\coverage_review_FUNC001_raw.txt"
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "coverage_score": 100,
+      "approved_by_ai": true,
+      "scenario_count": 18,
+      "testcase_count": 18,
+      "file": "requirements\\TG-20260608085316\\review\\functions\\FUNC002_coverage_review.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\coverage_review_FUNC002_raw.txt"
+    },
+    {
+      "function_id": "FUNC003",
+      "function_name": "Account Login",
+      "coverage_score": 10,
+      "approved_by_ai": false,
+      "scenario_count": 1,
+      "testcase_count": 1,
+      "file": "requirements\\TG-20260608085316\\review\\functions\\FUNC003_coverage_review.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\coverage_review_FUNC003_raw.txt"
+    }
+  ]
+}

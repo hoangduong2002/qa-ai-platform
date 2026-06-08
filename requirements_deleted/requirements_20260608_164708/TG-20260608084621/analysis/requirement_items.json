@@ -1,0 +1,27 @@
+[
+  {
+    "requirement_id": "FR001",
+    "type": "Functional Requirement",
+    "description": "User can create account using email and password."
+  },
+  {
+    "requirement_id": "FR002",
+    "type": "Functional Requirement",
+    "description": "User must verify email before first login."
+  },
+  {
+    "requirement_id": "BR001",
+    "type": "Business Rule",
+    "description": "Email must be unique."
+  },
+  {
+    "requirement_id": "VAL001",
+    "type": "Validation",
+    "description": "Password min length is 8."
+  },
+  {
+    "requirement_id": "VAL002",
+    "type": "Validation",
+    "description": "Password max length is 12."
+  }
+]

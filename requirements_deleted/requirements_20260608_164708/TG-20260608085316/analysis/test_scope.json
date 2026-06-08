@@ -1,0 +1,53 @@
+{
+  "scope_decision": {
+    "positive": true,
+    "negative": true,
+    "validation": true,
+    "boundary": true,
+    "business_rule": true,
+    "security": true,
+    "permissions": false,
+    "ux_ui": true,
+    "integration": true,
+    "network": false,
+    "localization": false,
+    "timezone": false
+  },
+  "included_categories": [
+    "positive",
+    "negative",
+    "validation",
+    "boundary",
+    "business_rule",
+    "security",
+    "ux_ui",
+    "integration"
+  ],
+  "excluded_categories": [
+    {
+      "category": "permissions",
+      "reason": "No requirement or business rule mentions user roles, access levels, or permission-based restrictions."
+    },
+    {
+      "category": "network",
+      "reason": "No requirement specifies network conditions, connectivity, or offline behavior."
+    },
+    {
+      "category": "localization",
+      "reason": "No requirement mentions language, locale, or regional formatting."
+    },
+    {
+      "category": "timezone",
+      "reason": "No requirement specifies timezone handling for verification link expiration or cooldown."
+    }
+  ],
+  "scenario_generation_rules": [
+    "Generate positive scenarios for successful registration with valid email and password meeting all rules, successful email verification within 24 hours, and successful resend of verification link after 60-second cooldown.",
+    "Generate negative scenarios for registration with duplicate email, invalid email format (missing '@' or domain), password length less than 8 or greater than 12, missing uppercase/lowercase/digit/special character, consecutive spaces, password containing email prefix or username, and leading/trailing spaces in password (not trimmed).",
+    "Generate boundary scenarios for password length exactly 8 and exactly 12 characters, verification link expiration exactly at 24 hours, and resend cooldown exactly at 60 seconds.",
+    "Generate business rule scenarios for unique email enforcement, password composition rules, verification link expiration after 24 hours, and resend cooldown enforcement on both client and server sides.",
+    "Generate security scenarios for brute-force attempts on email uniqueness, injection attacks in email or password fields, bypassing resend cooldown via API manipulation, and expired verification link reuse.",
+    "Generate UX/UI scenarios for inline error messages displayed for duplicate email, invalid email format, and invalid password length; also for loading states during registration and resend actions.",
+    "Generate integration scenarios for email sending service reliability (e.g., service down, slow response) and server-side enforcement of cooldown and link expiration."
+  ]
+}

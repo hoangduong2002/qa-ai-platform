@@ -1,0 +1,6 @@
+[
+  {
+    "function_id": "FUNC001",
+    "error": "Failed to improve test cases for FUNC001.\nRaw response saved to: requirements\\TG-20260608085316\\logs\\improve_testcases_FUNC001_raw.txt\nParse debug saved to: requirements\\TG-20260608085316\\logs\\improve_testcases_FUNC001_parse_error.txt\nOriginal error: Expecting ',' delimiter at line 978, column 6 char 30559\n\nContext around error:\nClick the 'Register' button\"\n    ],\n    \"expected_results\": [\n      \"The system does not create the user account\",\n      \"A meaningful inline error message is displayed next to the password field\",\n      \"The error message clearly indicates that the password must be between 8 and 12 characters (e.g., 'Password must be between 8 and 12 characters')\"\n    ],\n    \"test_data\": {\n      \"email\": \"valid@example.com\",\n      \"password\": \"Abc@12\"\n    },\n    \"related_requirement_ids\": [\n      \"VAL008\"\n    ]"
+  }
+]

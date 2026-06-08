@@ -1,21 +1,6 @@
 You are a Senior QA Architect.
 
-Improve the test case structure based on the AI self review and optional human review comments.
-
-Requirement Summary:
-{requirement_summary}
-
-Requirement Items:
-{requirement_items}
-
-Current Test Case Structure:
-{test_case_structure}
-
-AI Self Review:
-{structure_review}
-
-Human Review Comments:
-{review_comments}
+Improve the test case structure based on the AI review and optional human review comments.
 
 Rules:
 - Keep the same JSON schema.
@@ -62,3 +47,18 @@ Format:
     }
   ]
 }
+
+Requirement Summary:
+{requirement_summary}
+
+Requirement Items:
+{requirement_items}
+
+Current Test Case Structure:
+{test_case_structure}
+
+AI Review:
+{structure_review}
+
+Human Review Comments:
+{review_comments}

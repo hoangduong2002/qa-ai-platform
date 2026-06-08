@@ -1,0 +1,34 @@
+{
+  "generation_mode": "FUNCTION_BASED_PARALLEL",
+  "parallel_workers": 3,
+  "function_count": 3,
+  "scenario_count": 50,
+  "testcase_count": 50,
+  "master_file": "requirements\\TG-20260608085316\\testcases\\testcases.json",
+  "functions": [
+    {
+      "function_id": "FUNC001",
+      "function_name": "User Registration",
+      "scenario_count": 31,
+      "testcase_count": 31,
+      "file": "requirements\\TG-20260608085316\\testcases\\functions\\FUNC001.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\generate_testcases_FUNC001_raw.txt"
+    },
+    {
+      "function_id": "FUNC002",
+      "function_name": "Email Verification",
+      "scenario_count": 18,
+      "testcase_count": 18,
+      "file": "requirements\\TG-20260608085316\\testcases\\functions\\FUNC002.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\generate_testcases_FUNC002_raw.txt"
+    },
+    {
+      "function_id": "FUNC003",
+      "function_name": "Account Login",
+      "scenario_count": 1,
+      "testcase_count": 1,
+      "file": "requirements\\TG-20260608085316\\testcases\\functions\\FUNC003.json",
+      "raw_file": "requirements\\TG-20260608085316\\logs\\generate_testcases_FUNC003_raw.txt"
+    }
+  ]
+}

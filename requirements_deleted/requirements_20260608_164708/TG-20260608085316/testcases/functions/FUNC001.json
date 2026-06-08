@@ -1,0 +1,1005 @@
+[
+  {
+    "testcase_id": "TC001",
+    "scenario_id": "SC001",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with valid email format containing '@' and domain",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'valid.user@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'valid.user@example.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'valid.user@example.com'",
+      "A success message is displayed indicating registration is complete and verification email has been sent"
+    ],
+    "test_data": {
+      "email": "valid.user@example.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001"
+    ],
+    "traceability": "FR001, VAL001"
+  },
+  {
+    "testcase_id": "TC002",
+    "scenario_id": "SC002",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with email missing '@'",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'userexample.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the email field indicating the email format is invalid (e.g., 'Email must contain @')"
+    ],
+    "test_data": {
+      "email": "userexample.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL008"
+    ],
+    "traceability": "FR001, VAL001, VAL008"
+  },
+  {
+    "testcase_id": "TC003",
+    "scenario_id": "SC003",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with email missing domain",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'user@' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the email field indicating the email format is invalid (e.g., 'Email must contain a domain after @')"
+    ],
+    "test_data": {
+      "email": "user@",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL008"
+    ],
+    "traceability": "FR001, VAL001, VAL008"
+  },
+  {
+    "testcase_id": "TC004",
+    "scenario_id": "SC004",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT002",
+    "title": "Register with duplicate email",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "An existing account with email 'existing@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter 'existing@example.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create a new user account",
+      "A meaningful inline error message is displayed next to the email field indicating the email is already registered (e.g., 'This email is already registered')"
+    ],
+    "test_data": {
+      "email": "existing@example.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR001",
+      "VAL006",
+      "VAL008"
+    ],
+    "traceability": "FR001, BR001, VAL006, VAL008"
+  },
+  {
+    "testcase_id": "TC005",
+    "scenario_id": "SC005",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length exactly 8 characters",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'boundary8@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'boundary8@example.com' in the email field",
+      "Enter 'Abcd@123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'boundary8@example.com'"
+    ],
+    "test_data": {
+      "email": "boundary8@example.com",
+      "password": "Abcd@123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "traceability": "FR001, BR002, VAL002"
+  },
+  {
+    "testcase_id": "TC006",
+    "scenario_id": "SC006",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length exactly 12 characters",
+    "type": "Boundary",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'boundary12@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'boundary12@example.com' in the email field",
+      "Enter 'Abcd@1234xyz' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'boundary12@example.com'"
+    ],
+    "test_data": {
+      "email": "boundary12@example.com",
+      "password": "Abcd@1234xyz"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "traceability": "FR001, BR002, VAL002"
+  },
+  {
+    "testcase_id": "TC007",
+    "scenario_id": "SC007",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length 7 characters",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'short@example.com' in the email field",
+      "Enter 'Abc@123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the password field indicating the password must be between 8 and 12 characters (e.g., 'Password must be between 8 and 12 characters')"
+    ],
+    "test_data": {
+      "email": "short@example.com",
+      "password": "Abc@123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002",
+      "VAL008"
+    ],
+    "traceability": "FR001, BR002, VAL002, VAL008"
+  },
+  {
+    "testcase_id": "TC008",
+    "scenario_id": "SC008",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length 13 characters",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'long@example.com' in the email field",
+      "Enter 'Abcd@1234xyz!' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the password field indicating the password must be between 8 and 12 characters (e.g., 'Password must be between 8 and 12 characters')"
+    ],
+    "test_data": {
+      "email": "long@example.com",
+      "password": "Abcd@1234xyz!"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002",
+      "VAL008"
+    ],
+    "traceability": "FR001, BR002, VAL002, VAL008"
+  },
+  {
+    "testcase_id": "TC009",
+    "scenario_id": "SC009",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing uppercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'noupper@example.com' in the email field",
+      "Enter 'abcd@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one uppercase letter"
+    ],
+    "test_data": {
+      "email": "noupper@example.com",
+      "password": "abcd@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC010",
+    "scenario_id": "SC010",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing lowercase letter",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'nolower@example.com' in the email field",
+      "Enter 'ABCD@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one lowercase letter"
+    ],
+    "test_data": {
+      "email": "nolower@example.com",
+      "password": "ABCD@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC011",
+    "scenario_id": "SC011",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing digit",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'nodigit@example.com' in the email field",
+      "Enter 'Abcd@efgh' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one digit"
+    ],
+    "test_data": {
+      "email": "nodigit@example.com",
+      "password": "Abcd@efgh"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC012",
+    "scenario_id": "SC012",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password missing special character",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'nospecial@example.com' in the email field",
+      "Enter 'Abcd1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one special character from the allowed set"
+    ],
+    "test_data": {
+      "email": "nospecial@example.com",
+      "password": "Abcd1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC013",
+    "scenario_id": "SC013",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password containing consecutive spaces",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'consecutivespaces@example.com' in the email field",
+      "Enter 'Abc@  123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating consecutive spaces are not allowed in the password"
+    ],
+    "test_data": {
+      "email": "consecutivespaces@example.com",
+      "password": "Abc@  123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR004",
+      "VAL004"
+    ],
+    "traceability": "FR001, BR004, VAL004"
+  },
+  {
+    "testcase_id": "TC014",
+    "scenario_id": "SC014",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password having leading spaces",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'leadingspace@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'leadingspace@example.com' in the email field",
+      "Enter ' Abc@123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully because the password with leading spaces meets all other rules",
+      "The system sends a verification email to 'leadingspace@example.com'"
+    ],
+    "test_data": {
+      "email": "leadingspace@example.com",
+      "password": " Abc@123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL007"
+    ],
+    "traceability": "FR001, VAL007"
+  },
+  {
+    "testcase_id": "TC015",
+    "scenario_id": "SC015",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password having trailing spaces",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'trailingspace@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'trailingspace@example.com' in the email field",
+      "Enter 'Abc@123 ' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully because the password with trailing spaces meets all other rules",
+      "The system sends a verification email to 'trailingspace@example.com'"
+    ],
+    "test_data": {
+      "email": "trailingspace@example.com",
+      "password": "Abc@123 "
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL007"
+    ],
+    "traceability": "FR001, VAL007"
+  },
+  {
+    "testcase_id": "TC016",
+    "scenario_id": "SC016",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT007",
+    "title": "Register with password containing email prefix",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'john@example.com' in the email field",
+      "Enter 'John@123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password cannot contain the email prefix"
+    ],
+    "test_data": {
+      "email": "john@example.com",
+      "password": "John@123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR005",
+      "VAL005"
+    ],
+    "traceability": "FR001, BR005, VAL005"
+  },
+  {
+    "testcase_id": "TC017",
+    "scenario_id": "SC017",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB012",
+    "test_area_id": "CAT018",
+    "title": "Verify error message for duplicate email",
+    "type": "UX/UI",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "An existing account with email 'existing@example.com' already exists in the system"
+    ],
+    "test_steps": [
+      "Enter 'existing@example.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create a new user account",
+      "A meaningful inline error message is displayed next to the email field, such as 'This email is already registered' or 'Email already exists'"
+    ],
+    "test_data": {
+      "email": "existing@example.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "VAL008"
+    ],
+    "traceability": "VAL008"
+  },
+  {
+    "testcase_id": "TC018",
+    "scenario_id": "SC018",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB012",
+    "test_area_id": "CAT019",
+    "title": "Verify error message for invalid email format",
+    "type": "UX/UI",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'invalid-email' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the email field, such as 'Please enter a valid email address' or 'Invalid email format'"
+    ],
+    "test_data": {
+      "email": "invalid-email",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "VAL008"
+    ],
+    "traceability": "VAL008"
+  },
+  {
+    "testcase_id": "TC019",
+    "scenario_id": "SC019",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB012",
+    "test_area_id": "CAT020",
+    "title": "Verify error message for invalid password length",
+    "type": "UX/UI",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'valid@example.com' in the email field",
+      "Enter 'Abc@12' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the password field, such as 'Password must be between 8 and 12 characters'"
+    ],
+    "test_data": {
+      "email": "valid@example.com",
+      "password": "Abc@12"
+    },
+    "related_requirement_ids": [
+      "VAL008"
+    ],
+    "traceability": "VAL008"
+  },
+  {
+    "testcase_id": "TC020",
+    "scenario_id": "SC032",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password containing all required character types",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'allchars@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'allchars@example.com' in the email field",
+      "Enter 'Abcd@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'allchars@example.com'"
+    ],
+    "test_data": {
+      "email": "allchars@example.com",
+      "password": "Abcd@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC021",
+    "scenario_id": "SC033",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length between 8 and 12 characters",
+    "type": "Positive",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'midlength@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'midlength@example.com' in the email field",
+      "Enter 'Abcd@12345' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'midlength@example.com'"
+    ],
+    "test_data": {
+      "email": "midlength@example.com",
+      "password": "Abcd@12345"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "VAL002"
+    ],
+    "traceability": "FR001, BR002, VAL002"
+  },
+  {
+    "testcase_id": "TC022",
+    "scenario_id": "SC034",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT005",
+    "title": "Register with password containing single spaces (no consecutive spaces)",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'singlespace@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'singlespace@example.com' in the email field",
+      "Enter 'Abc @ 123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'singlespace@example.com'"
+    ],
+    "test_data": {
+      "email": "singlespace@example.com",
+      "password": "Abc @ 123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR004",
+      "VAL004"
+    ],
+    "traceability": "FR001, BR004, VAL004"
+  },
+  {
+    "testcase_id": "TC023",
+    "scenario_id": "SC035",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT007",
+    "title": "Register with password not containing email prefix",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'noprefix@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'noprefix@example.com' in the email field",
+      "Enter 'Abcd@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'noprefix@example.com'"
+    ],
+    "test_data": {
+      "email": "noprefix@example.com",
+      "password": "Abcd@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR005",
+      "VAL005"
+    ],
+    "traceability": "FR001, BR005, VAL005"
+  },
+  {
+    "testcase_id": "TC024",
+    "scenario_id": "SC036",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with email containing multiple '@' symbols",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'user@domain@example.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the email field indicating the email format is invalid (e.g., 'Invalid email format')"
+    ],
+    "test_data": {
+      "email": "user@domain@example.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL008"
+    ],
+    "traceability": "FR001, VAL001, VAL008"
+  },
+  {
+    "testcase_id": "TC025",
+    "scenario_id": "SC037",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password containing special character not in allowed set",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'notallowed@example.com' in the email field",
+      "Enter 'Abcd!1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one special character from the allowed set (e.g., @, #, $, %, ^, &, *)"
+    ],
+    "test_data": {
+      "email": "notallowed@example.com",
+      "password": "Abcd!1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC026",
+    "scenario_id": "SC038",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT004",
+    "title": "Register with password containing only allowed special characters",
+    "type": "Positive",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'allowedspecial@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'allowedspecial@example.com' in the email field",
+      "Enter 'Abcd@#$%^&*1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully",
+      "The system sends a verification email to 'allowedspecial@example.com'"
+    ],
+    "test_data": {
+      "email": "allowedspecial@example.com",
+      "password": "Abcd@#$%^&*1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR003",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR003, VAL003"
+  },
+  {
+    "testcase_id": "TC027",
+    "scenario_id": "SC041",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT006",
+    "title": "Register with password having both leading and trailing spaces",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page",
+      "No existing account with email 'bothspaces@example.com'"
+    ],
+    "test_steps": [
+      "Enter 'bothspaces@example.com' in the email field",
+      "Enter ' Abc@123 ' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system creates the user account successfully because the password with leading and trailing spaces meets all other rules",
+      "The system sends a verification email to 'bothspaces@example.com'"
+    ],
+    "test_data": {
+      "email": "bothspaces@example.com",
+      "password": " Abc@123 "
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL007"
+    ],
+    "traceability": "FR001, VAL007"
+  },
+  {
+    "testcase_id": "TC028",
+    "scenario_id": "SC042",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length 8 characters but missing required character types",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'missingtypes8@example.com' in the email field",
+      "Enter 'abcdefgh' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one uppercase letter, one digit, and one special character"
+    ],
+    "test_data": {
+      "email": "missingtypes8@example.com",
+      "password": "abcdefgh"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "BR003",
+      "VAL002",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR002, BR003, VAL002, VAL003"
+  },
+  {
+    "testcase_id": "TC029",
+    "scenario_id": "SC043",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT003",
+    "title": "Register with password length 12 characters but missing required character types",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'missingtypes12@example.com' in the email field",
+      "Enter 'abcdefghijkl' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password must contain at least one uppercase letter, one digit, and one special character"
+    ],
+    "test_data": {
+      "email": "missingtypes12@example.com",
+      "password": "abcdefghijkl"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR002",
+      "BR003",
+      "VAL002",
+      "VAL003"
+    ],
+    "traceability": "FR001, BR002, BR003, VAL002, VAL003"
+  },
+  {
+    "testcase_id": "TC030",
+    "scenario_id": "SC044",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB002",
+    "test_area_id": "CAT007",
+    "title": "Register with password containing email prefix in different case",
+    "type": "Negative",
+    "priority": "Medium",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'john@example.com' in the email field",
+      "Enter 'John@123' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "An error message is displayed indicating the password cannot contain the email prefix (case-sensitive comparison)"
+    ],
+    "test_data": {
+      "email": "john@example.com",
+      "password": "John@123"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "BR005",
+      "VAL005"
+    ],
+    "traceability": "FR001, BR005, VAL005"
+  },
+  {
+    "testcase_id": "TC031",
+    "scenario_id": "SC050",
+    "function_id": "FUNC001",
+    "sub_function_id": "SUB001",
+    "test_area_id": "CAT001",
+    "title": "Register with email containing spaces",
+    "type": "Negative",
+    "priority": "High",
+    "preconditions": [
+      "User is on the registration page"
+    ],
+    "test_steps": [
+      "Enter 'user name@example.com' in the email field",
+      "Enter 'Pass@1234' in the password field",
+      "Click the 'Register' button"
+    ],
+    "expected_results": [
+      "The system does not create the user account",
+      "A meaningful inline error message is displayed next to the email field indicating the email format is invalid (e.g., 'Email cannot contain spaces')"
+    ],
+    "test_data": {
+      "email": "user name@example.com",
+      "password": "Pass@1234"
+    },
+    "related_requirement_ids": [
+      "FR001",
+      "VAL001",
+      "VAL008"
+    ],
+    "traceability": "FR001, VAL001, VAL008"
+  }
+]

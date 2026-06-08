@@ -1,0 +1,39 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "category": "Security",
+      "question": "What are the password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "impact": "High",
+      "reason": "Missing complexity rules affect security and test coverage for password validation."
+    },
+    {
+      "question_id": "Q002",
+      "category": "Error Handling",
+      "question": "What error messages should be displayed for duplicate email, invalid password length, or failed email verification?",
+      "impact": "High",
+      "reason": "Error messages are critical for UX and negative test scenarios."
+    },
+    {
+      "question_id": "Q003",
+      "category": "Integration/API Behavior",
+      "question": "What is the email verification mechanism (e.g., link with expiry, OTP code, resend policy)?",
+      "impact": "High",
+      "reason": "Verification flow impacts test cases for timing, retries, and security."
+    },
+    {
+      "question_id": "Q004",
+      "category": "Business Rules",
+      "question": "Is there a limit on the number of account creation attempts from the same IP or email within a time period to prevent abuse?",
+      "impact": "Medium",
+      "reason": "Rate limiting is a common security requirement not addressed in current analysis."
+    },
+    {
+      "question_id": "Q005",
+      "category": "Edge Cases",
+      "question": "What happens if the email verification link expires or the user tries to login before verification?",
+      "impact": "High",
+      "reason": "Edge cases around verification expiry and pre-verification login attempts are not defined."
+    }
+  ]
+}

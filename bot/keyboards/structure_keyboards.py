@@ -6,7 +6,7 @@ def build_structure_review_keyboard(ticket_id: str):
         [
             [
                 InlineKeyboardButton(
-                    "Self Review",
+                    "AI Review",
                     callback_data=f"structure_self_review:{ticket_id}"
                 ),
                 InlineKeyboardButton(

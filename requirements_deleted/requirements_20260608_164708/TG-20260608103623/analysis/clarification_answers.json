@@ -1,0 +1,57 @@
+{
+  "raw_answers": "Q001:Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.\nQ003: Email format must contain @ and domain\nQ002: meaningful inline error\nQ004: The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.\nQ005: 8 ~ 12 characters allowed",
+  "answers": {
+    "Q001": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+    "Q003": "Email format must contain @ and domain",
+    "Q002": "meaningful inline error",
+    "Q004": "The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.",
+    "Q005": "8 ~ 12 characters allowed"
+  },
+  "answered_clarifications": [
+    {
+      "question_id": "Q001",
+      "question": "What is the password complexity requirement (e.g., must include uppercase, lowercase, digit, special character)?",
+      "category": "Security",
+      "impact": "High",
+      "reason": "Password complexity affects security and test coverage for valid/invalid passwords.",
+      "answer": "Character types: The password must contain at least one uppercase letter, one lowercase letter, one numeric digit, and one special character (e.g., @, #, $, %, ^, &, *). Restrictions: Consecutive spaces are forbidden. The password cannot contain the user's explicit email prefix or username to mitigate easy guessing.",
+      "answered_at": "2026-06-08T10:38:19.059355"
+    },
+    {
+      "question_id": "Q003",
+      "question": "What is the exact email format validation rule (e.g., must contain '@' and a domain)?",
+      "category": "Validation",
+      "impact": "High",
+      "reason": "Email format validation affects positive and negative test cases.",
+      "answer": "Email format must contain @ and domain",
+      "answered_at": "2026-06-08T10:38:19.059355"
+    },
+    {
+      "question_id": "Q002",
+      "question": "What error message should be displayed when a user tries to register with an already existing email?",
+      "category": "Error Handling",
+      "impact": "Medium",
+      "reason": "Error messages are needed for UX and validation test cases.",
+      "answer": "meaningful inline error",
+      "answered_at": "2026-06-08T10:38:19.059355"
+    },
+    {
+      "question_id": "Q004",
+      "question": "What is the email verification mechanism (e.g., link sent via email, token expiry time)?",
+      "category": "Security",
+      "impact": "High",
+      "reason": "Verification flow impacts test scenarios for successful and expired token handling.",
+      "answer": "The system will send a unique verification link via email immediately after registration. This link is valid for 24 hours. Users can request a resend of the code every 60 seconds.",
+      "answered_at": "2026-06-08T10:38:19.059355"
+    },
+    {
+      "question_id": "Q005",
+      "question": "Are the password length boundaries inclusive (i.e., 8 and 12 characters allowed)?",
+      "category": "Boundary Values",
+      "impact": "Medium",
+      "reason": "Boundary clarity is needed for exact test case design.",
+      "answer": "8 ~ 12 characters allowed",
+      "answered_at": "2026-06-08T10:38:19.059355"
+    }
+  ]
+}

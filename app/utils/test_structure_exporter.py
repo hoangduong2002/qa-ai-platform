@@ -217,7 +217,7 @@ def export_test_case_structure_to_excel(
                 )
 
     ws_review = wb.create_sheet(
-        "AI Self Review"
+        "AI Review"
     )
 
     ws_review.append(

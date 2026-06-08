@@ -1,0 +1,39 @@
+{
+  "clarification_questions": [
+    {
+      "question_id": "Q001",
+      "category": "Security",
+      "question": "What are the password complexity requirements (e.g., must include uppercase, lowercase, digit, special character)?",
+      "impact": "High",
+      "reason": "Password strength directly impacts security and test coverage for valid/invalid inputs."
+    },
+    {
+      "question_id": "Q002",
+      "category": "Validation",
+      "question": "What is the exact email format validation rule (e.g., RFC 5322, simple regex, or specific domain restrictions)?",
+      "impact": "High",
+      "reason": "Email format validation affects boundary and negative test cases for account creation."
+    },
+    {
+      "question_id": "Q003",
+      "category": "Error Handling",
+      "question": "What error messages should be displayed for duplicate email, invalid password length, and invalid email format?",
+      "impact": "Medium",
+      "reason": "Error messages are needed for UX validation and negative test case assertions."
+    },
+    {
+      "question_id": "Q004",
+      "category": "Business Rule",
+      "question": "What is the email verification process (e.g., time limit for verification, resend policy, link expiration)?",
+      "impact": "High",
+      "reason": "Missing details on verification flow affect test scenarios for FR002 and edge cases like expired links."
+    },
+    {
+      "question_id": "Q005",
+      "category": "Security",
+      "question": "Are there any rate limits or brute-force protection mechanisms for account creation or email verification attempts?",
+      "impact": "Medium",
+      "reason": "Security requirements like rate limiting are critical for preventing abuse and defining negative test cases."
+    }
+  ]
+}

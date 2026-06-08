@@ -2,12 +2,6 @@ You are a Senior QA Lead.
 
 Define the test generation scope based on the confirmed requirement summary.
 
-Requirement Summary:
-{requirement_summary}
-
-Human Review Comments:
-{review_comments}
-
 Rules:
 - Keep the exact JSON output schema shown below.
 - Do not add, remove, or rename top-level fields.
@@ -52,3 +46,9 @@ Format:
     ""
   ]
 }
+
+Requirement Summary:
+{requirement_summary}
+
+Human Review Comments:
+{review_comments}

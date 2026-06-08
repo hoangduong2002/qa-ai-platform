@@ -233,10 +233,10 @@ async def start(
         - Skip Clarifications: continue with open questions.
 
         /structure <ticket_id>
-        Generate function-based test case structure, run AI self review, improve it, export Excel, and ask for human approval.
+        Generate function-based test case structure, run AI review, improve it, export Excel, and ask for human approval.
 
         Structure Review Actions:
-        - Self Review: AI reviews and improves the current structure again.
+        - AI Review: AI reviews and improves the current structure again.
         - Comment: provide human feedback and let AI update the structure.
         - Wait: pause review and resume later with /structure <ticket_id>.
         - Approve: approve the current structure and save final approved version.
@@ -441,7 +441,15 @@ async def run_requirement_summary(
 async def continue_generation_with_structure_gate(
     message,
     ticket_id: str,
+    prepare_requirement_context: bool = True,
 ):
+    if prepare_requirement_context:
+        await message.reply_text(
+            f"Preparing requirement summary and generation context for {ticket_id}..."
+        )
+
+        await run_requirement_summary(ticket_id)
+
     await message.reply_text(
         f"Checking approved test case structure for {ticket_id}..."
     )
@@ -463,12 +471,6 @@ async def continue_generation_with_structure_gate(
 
     await message.reply_text(generation_gate_result.message)
 
-    await message.reply_text(
-        "Preparing requirement summary and generation context..."
-    )
-
-    await run_requirement_summary(ticket_id)
-
     generation_state = build_structured_generation_state(ticket_id)
 
     if not generation_state.get("approved_test_case_structure"):
@@ -480,9 +482,9 @@ async def continue_generation_with_structure_gate(
         "Starting structured generation pipeline:\n"
         "1. Generate scenarios\n"
         "2. Generate test cases by main function\n"
-        "3. Coverage review by main function\n"
-        "4. Improve test cases by main function\n"
-        "5. Final review by main function\n"
+        "3. Coverage review by deterministic check\n"
+        "4. Improve test cases if needed\n"
+        "5. Final review by deterministic check\n"
         "6. Export Excel"
     )
 
@@ -595,7 +597,7 @@ async def self_review_structure(update, context):
     message = get_message(update)
 
     await message.reply_text(
-        f"Running AI self review and improvement for structure: {ticket_id}"
+        f"Running AI review and improvement for structure: {ticket_id}"
     )
 
     state = run_initial_structure_flow(
@@ -605,7 +607,7 @@ async def self_review_structure(update, context):
     message = get_message(update)
 
     await message.reply_text(
-        "AI self review and structure improvement completed."
+        "AI review and structure improvement completed."
     )
 
     await send_excel_file_from_message(
