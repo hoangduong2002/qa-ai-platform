@@ -3,4 +3,5 @@
 __pycache__/
 *.pyc
 requirements/
+requirements_deleted/
 reports/
