@@ -1,3 +1,5 @@
+import os
+import logging
 from requests import session
 
 from app.utils.artifact_loader import load_ticket_artifacts
@@ -81,18 +83,18 @@ def _export_structure(ticket_id: str, state: dict):
 
 
 def run_initial_structure_flow(ticket_id: str):
-    session = load_structure_session(ticket_id)
+    """
+    Initial structure generation flow.
 
-    if session.get("current_version") and not session.get("approved"):
-        structure = load_latest_test_case_structure(ticket_id)
+    MVP optimized behavior:
+    - Generate test case structure only.
+    - Do NOT run automatic AI self review.
+    - Do NOT run automatic AI improve.
+    - Export the generated structure for human review.
+    - User can manually choose Self Review / Comment / Approve later.
 
-        state = {
-            "ticket_id": ticket_id,
-            "test_case_structure": structure,
-            "test_case_structure_review": {}
-        }
-
-        return _export_structure(ticket_id, state)
+    This reduces token usage significantly.
+    """
 
     state = load_ticket_artifacts(ticket_id)
     state["ticket_id"] = ticket_id
@@ -100,53 +102,56 @@ def run_initial_structure_flow(ticket_id: str):
     structure_result = generate_test_case_structure(state)
     state.update(structure_result)
 
-    save_test_case_structure_version(
-        ticket_id,
-        state["test_case_structure"],
-        "v0"
-    )
+    test_case_structure = state.get("test_case_structure")
 
-    review_result = review_test_case_structure(state)
-    state.update(review_result)
+    if not test_case_structure:
+        raise ValueError(
+            f"Failed to generate test case structure for {ticket_id}."
+        )
 
-    save_test_case_structure_review_version(
-        ticket_id,
-        state["test_case_structure_review"],
-        "v0"
-    )
-
-    improve_result = improve_test_case_structure(state)
-    state.update(improve_result)
+    version = "v1"
 
     save_test_case_structure_version(
         ticket_id,
-        state["test_case_structure"],
-        "v1"
-    )
-
-    second_review_result = review_test_case_structure(state)
-    state.update(second_review_result)
-
-    save_test_case_structure_review_version(
-        ticket_id,
-        state["test_case_structure_review"],
-        "v1"
+        test_case_structure,
+        version,
     )
 
     save_latest_test_case_structure(
         ticket_id,
-        state["test_case_structure"]
+        test_case_structure,
     )
 
     session = {
-        "current_version": "v1",
-        "review_iterations": 1,
-        "max_review_iterations": 3,
+        "current_version": version,
+        "review_iterations": 0,
+        "max_review_iterations": int(
+            os.getenv("MAX_STRUCTURE_REVIEW_ITERATIONS", "3")
+        ),
         "approved": False,
-        "waiting_human_review": True
+        "waiting_human_review": True,
+        "last_review_version": "",
+        "review_mode": "MANUAL_REVIEW_REQUIRED",
     }
 
     save_structure_session(ticket_id, session)
+
+    state["structure_session"] = session
+    state["current_version"] = version
+
+    # No AI review is generated in the initial flow.
+    # This placeholder keeps exporters/renderers safe if they expect the key.
+    state["test_case_structure_review"] = {
+        "review_mode": "NOT_REVIEWED",
+        "coverage_score": "",
+        "approved_by_ai": False,
+        "summary": (
+            "Structure was generated but not reviewed automatically. "
+            "Use Self Review if you want AI to review it."
+        ),
+        "issues": [],
+        "recommendations": [],
+    }
 
     return _export_structure(ticket_id, state)
 

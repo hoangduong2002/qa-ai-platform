@@ -162,6 +162,11 @@ from app.exporters.function_based_excel_exporter import (
     export_function_based_testcases_to_excel,
 )
 
+from app.services.testcase_review_service import run_testcase_ai_review
+from bot.renderers.testcase_review_text_renderer import (
+    render_testcase_review_chat_summary,
+)
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 logging.basicConfig(
@@ -504,8 +509,7 @@ def export_generated_testcases_excel(
     Export generated/improved test cases using the function-based Excel exporter.
 
     The exporter may already return a versioned file.
-    This wrapper creates a versioned copy only when the returned file is not
-    already the expected versioned file.
+    This wrapper creates a versioned copy only when needed.
     """
 
     artifacts = load_ticket_artifacts(ticket_id)
@@ -542,7 +546,6 @@ def export_generated_testcases_excel(
         coverage_review=coverage_review,
         final_coverage_review=final_coverage_review,
         approved_structure=approved_structure,
-        version=version,
     )
 
     if not version:
@@ -610,99 +613,42 @@ async def run_generation(
         )
 
     await message.reply_text(
-        f"Running test generation graph for {ticket_id}..."
+        f"Running test case generation graph for {ticket_id}..."
     )
 
-    try:
-        result = await asyncio.to_thread(
-            test_generation_graph.invoke,
-            generation_state,
-        )
-    except Exception as error:
-        await message.reply_text(
-            f"Test generation graph failed for {ticket_id}.\n"
-            f"Error type: {type(error).__name__}\n"
-            f"Error: {error}"
-        )
-        raise
+    result = test_generation_graph.invoke(generation_state)
 
     await message.reply_text(
-        f"Test generation graph completed for {ticket_id}."
+        f"Test case generation completed for {ticket_id}."
     )
 
     save_review_session(
         ticket_id,
         {
+            "review_iterations": 0,
             "improve_iterations": 0,
             "max_iterations": 3,
-            "accepted": False
+            "accepted": False,
         }
     )
 
-    merged_result = {
-        **generation_state,
-        **result,
-    }
-
-    analysis = merged_result.get("analysis", {})
-    scenarios = merged_result.get("scenarios", [])
-
-    original_testcases = merged_result.get("testcases", [])
-    improved_testcases = merged_result.get("improved_testcases", [])
-
-    testcases = improved_testcases or original_testcases
-
-    review = merged_result.get("coverage_review", {})
-    final_review = merged_result.get("final_coverage_review", {})
-
-    save_improvement_history_item(
-        ticket_id=ticket_id,
-        version="v0",
-        iteration=0,
-        coverage_score=(
-            final_review.get("final_coverage_score")
-            or final_review.get("coverage_score")
-            or ""
-        ),
-        improvement_score=final_review.get("improvement_score", ""),
-        note="Initial generation"
-    )
+    scenarios = result.get("scenarios", [])
+    testcases = result.get("testcases", [])
 
     summary_message = (
-        f"✅ Done: {ticket_id}\n\n"
+        f"✅ Test cases generated: {ticket_id}\n\n"
         f"Scenarios: {len(scenarios)}\n"
         f"Testcases: {len(testcases)}\n\n"
-        f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
-        f"Final Coverage: "
-        f"{final_review.get('final_coverage_score') or final_review.get('coverage_score', 'N/A')}\n\n"
-        f"Remaining Gaps:\n"
-    )
-
-    gaps = (
-        final_review.get("remaining_gaps")
-        or review.get("missing_coverage")
-        or review.get("missing_scenarios")
-        or []
-    )
-
-    if gaps:
-        for item in gaps[:5]:
-            summary_message += f"- {item}\n"
-    else:
-        summary_message += "- None\n"
-
-    summary_message += (
-        "\nDo you want AI to improve test cases again?"
-    )
-
-    await message.reply_text(
-        summary_message,
-        reply_markup=build_review_keyboard(ticket_id)
+        f"Please review the Excel file.\n\n"
+        f"Choose an action:\n"
+        f"- AI Review: run AI review only\n"
+        f"- Comment: improve test cases with your feedback\n"
+        f"- Accept: accept current test cases"
     )
 
     excel_file = export_generated_testcases_excel(
         ticket_id=ticket_id,
-        result=merged_result,
+        result=result,
         version="v0",
     )
 
@@ -711,6 +657,11 @@ async def run_generation(
         ticket_id,
         excel_file,
         caption=f"Generated testcases Excel file: {ticket_id}"
+    )
+
+    await message.reply_text(
+        summary_message,
+        reply_markup=build_review_keyboard(ticket_id),
     )
 
 async def ask_clarifications(
@@ -1193,12 +1144,40 @@ async def handle_requirement_file(
         f"Processing {ticket_id}..."
     )
 
-    await process_ticket(
-        update,
-        ticket_id
+    await analyze_existing_ticket(
+        message,
+        context,
+        ticket_id,
     )
 
 
+def run_comment_improve_testcases(
+    ticket_id: str,
+    comment: str,
+) -> dict:
+
+    session = load_review_session(ticket_id)
+    iteration = int(session.get("improve_iterations", 0)) + 1
+    max_iterations = int(session.get("max_iterations", 3))
+
+    if iteration > max_iterations:
+        raise ValueError("Maximum improve iterations reached.")
+
+    save_review_comment(
+        ticket_id,
+        iteration,
+        comment,
+    )
+
+    session["improve_iterations"] = iteration
+    session["accepted"] = False
+    save_review_session(ticket_id, session)
+
+    result = run_improve_cycle(ticket_id)
+
+    result["version"] = f"v{iteration}"
+
+    return result
 
 
 async def handle_text_message(
@@ -1206,6 +1185,16 @@ async def handle_text_message(
     context: ContextTypes.DEFAULT_TYPE
 ):
     
+    logger.warning(
+        "TEXT RECEIVED: %s",
+        update.message.text,
+    )
+
+    logger.warning(
+        "USER_DATA: %s",
+        context.user_data,
+    )
+
     handled = await handle_structure_comment_text(
         update,
         context
@@ -1305,113 +1294,75 @@ async def handle_text_message(
     #
     # Comment-based test case improvement
     #
-    comment_ticket_id = context.user_data.get(
-        "comment_improve_for"
+    comment_testcase_ticket_id = context.user_data.get(
+        "comment_testcase_ticket_id"
     )
 
-    if comment_ticket_id:
-        comment_text = update.message.text
-
-        session = increment_improve_iteration(
-            comment_ticket_id
+    if comment_testcase_ticket_id:
+        logger.warning(
+            "TESTCASE COMMENT FLOW ACTIVATED. ticket_id=%s",
+            comment_testcase_ticket_id,
         )
 
-        save_review_comment(
-            comment_ticket_id,
-            session.get("improve_iterations", 0),
-            comment_text
-        )
+        comment_text = update.message.text.strip()
 
         context.user_data.pop(
-            "comment_improve_for",
-            None
+            "comment_testcase_ticket_id",
+            None,
         )
 
         await message.reply_text(
-            f"Review comment saved for {comment_ticket_id}.\n"
-            f"Improving test cases with your comment...\n"
-            f"Iteration: {session.get('improve_iterations')}/"
-            f"{session.get('max_iterations')}"
+            f"Received your test case improvement comment.\n\n"
+            f"Requirement: {comment_testcase_ticket_id}\n"
+            f"Improving test cases now..."
         )
 
-        result = run_improve_cycle(
-            comment_ticket_id
-        )
-
-        analysis = result.get("analysis", {})
-        scenarios = result.get("scenarios", [])
-
-        testcases = (
-            result.get("improved_testcases")
-            or result.get("testcases", [])
-        )
-
-        review = result.get("coverage_review", {})
-        final_review = result.get("final_coverage_review", {})
-
-        session = load_review_session(
-            comment_ticket_id
-        )
-
-        version = f"v{session.get('improve_iterations', 0)}"
-
-        save_improvement_history_item(
-            ticket_id=comment_ticket_id,
-            version=version,
-            iteration=session.get("improve_iterations", 0),
-            coverage_score=final_review.get("coverage_score", ""),
-            improvement_score=final_review.get("improvement_score", ""),
-            note="Comment-based improvement"
-        )
-
-        improve_message = (
-            f"✅ Comment-based improvement completed: {comment_ticket_id}\n\n"
-            f"Iteration: {session.get('improve_iterations')}/"
-            f"{session.get('max_iterations')}\n"
-            f"Scenarios: {len(scenarios)}\n"
-            f"Testcases: {len(testcases)}\n\n"
-            f"Initial Coverage: {review.get('coverage_score', 'N/A')}\n"
-            f"Final Coverage: {final_review.get('coverage_score', 'N/A')}\n"
-            f"Improvement: +{final_review.get('improvement_score', 0)}\n\n"
-            f"Remaining Gaps:\n"
-        )
-
-        gaps = final_review.get("remaining_gaps") or []
-
-        if gaps:
-            for item in gaps[:5]:
-                improve_message += f"- {item}\n"
-        else:
-            improve_message += "- None\n"
-
-        if can_improve_again(comment_ticket_id):
-            improve_message += (
-                "\nDo you want AI to improve test cases again?"
-            )
-        else:
-            improve_message += (
-                "\nMaximum improvement iterations reached."
+        try:
+            result = run_comment_improve_testcases(
+                ticket_id=comment_testcase_ticket_id,
+                comment=comment_text,
             )
 
-        await message.reply_text(
-            improve_message,
-            reply_markup=build_review_keyboard(
-                comment_ticket_id
+            version = result.get("version", "improved")
+
+            testcases = (
+                result.get("improved_testcases")
+                or result.get("testcases")
+                or []
             )
-        )
 
-        excel_file = export_generated_testcases_excel(
-            ticket_id=comment_ticket_id,
-            result=result,
-            version=version,
-        )
+            excel_file = export_generated_testcases_excel(
+                ticket_id=comment_testcase_ticket_id,
+                result=result,
+                version=version,
+            )
 
-        await send_excel_file_from_message(
-            message,
-            comment_ticket_id,
-            excel_file,
-            caption=f"Generated testcases Excel file: {comment_ticket_id}"
-        )
+            await send_excel_file_from_message(
+                message,
+                comment_testcase_ticket_id,
+                excel_file,
+                caption=f"Improved testcases Excel file: {comment_testcase_ticket_id}",
+            )
+
+            await message.reply_text(
+                f"✅ Test cases improved: {comment_testcase_ticket_id}\n\n"
+                f"Version: {version}\n"
+                f"Testcases: {len(testcases)}\n\n"
+                f"Choose next action:",
+                reply_markup=build_review_keyboard(
+                    comment_testcase_ticket_id
+                ),
+            )
+
+        except Exception as error:
+            logger.exception(
+                "Failed to improve test cases by comment. ticket_id=%s",
+                comment_testcase_ticket_id,
+            )
+
+            await message.reply_text(
+                f"Failed to improve test cases:\n{error}"
+            )
 
         return
 
@@ -1499,6 +1450,81 @@ async def handle_review_action(
         return
 
     action = parts[0]
+
+    if data.startswith("testcase_ai_review:"):
+        await query.answer()
+        ticket_id = data.split(":")[1]
+
+        await query.message.reply_text(
+            f"Running AI test case review for {ticket_id}..."
+        )
+
+        try:
+            result = run_testcase_ai_review(ticket_id)
+            review = result.get("coverage_review", {})
+
+            summary_text = render_testcase_review_chat_summary(
+                ticket_id=ticket_id,
+                review=review,
+            )
+
+            await query.message.reply_text(summary_text)
+
+            excel_file = export_generated_testcases_excel(
+                ticket_id=ticket_id,
+                result=result,
+                version="review",
+            )
+
+            await send_excel_file_from_message(
+                query.message,
+                ticket_id,
+                excel_file,
+                caption=f"Reviewed testcases Excel file: {ticket_id}",
+            )
+
+            await query.message.reply_text(
+                "Choose next action:",
+                reply_markup=build_review_keyboard(ticket_id),
+            )
+
+        except Exception as error:
+            await query.message.reply_text(
+                f"Failed to review test cases:\n{error}"
+            )
+
+        return
+    
+    if data.startswith("testcase_comment:"):
+        await query.answer()
+        ticket_id = data.split(":")[1]
+
+        context.user_data["comment_testcase_ticket_id"] = ticket_id
+
+        await query.message.reply_text(
+            "Please enter your test case improvement comment."
+        )
+
+        return
+    
+    if data.startswith("testcase_accept:"):
+        await query.answer()
+
+        ticket_id = data.split(":")[1]
+
+        try:
+            mark_accepted(ticket_id)
+
+            await query.message.reply_text(
+                f"✅ Test cases accepted for {ticket_id}."
+            )
+
+        except Exception as error:
+            await query.message.reply_text(
+                f"Failed to accept test cases:\n{error}"
+            )
+
+        return
 
     if action in [
         "answer_clarifications",

@@ -352,53 +352,72 @@ def _build_scenario_index(scenarios: list) -> dict:
     return index
 
 
+def _build_testcase_index(testcases: list) -> dict:
+    index = {}
+
+    for testcase in testcases:
+        if not isinstance(testcase, dict):
+            continue
+
+        testcase_id = testcase.get("testcase_id")
+
+        if not testcase_id:
+            continue
+
+        index[testcase_id] = testcase
+
+    return index
+
+
 def _normalize_compact_patch_testcase(
     testcase: dict,
     scenario_index: dict,
+    original_testcase_index: dict,
 ) -> dict:
     """
     Normalize compact improve patch into internal schema.
 
-    Compact patch:
-    {
-      "testcase_id": "TC001",
-      "scenario_id": "SC001",
-      "title": "...",
-      "type": "Positive",
-      "priority": "High",
-      "preconditions": [],
-      "steps": [],
-      "expected": []
-    }
+    Priority for metadata enrichment:
+    1. scenario_id from scenario_index
+    2. original testcase by testcase_id
+    3. fallback to any field already provided by patch
 
-    Internal schema:
-    {
-      "testcase_id": "TC001",
-      "scenario_id": "SC001",
-      "function_id": "FUNC001",
-      "sub_function_id": "SUB001",
-      "test_area_id": "CAT001",
-      "title": "...",
-      "type": "Positive",
-      "priority": "High",
-      "preconditions": [],
-      "test_steps": [],
-      "expected_results": [],
-      "related_requirement_ids": ["FR001"],
-      "traceability": "FR001"
-    }
+    This prevents improved patches from wiping out function_id,
+    sub_function_id, test_area_id, and traceability.
     """
 
     if not isinstance(testcase, dict):
         return {}
 
-    scenario_id = testcase.get("scenario_id", "")
+    testcase_id = testcase.get("testcase_id", "")
+    original_testcase = original_testcase_index.get(testcase_id, {})
+
+    scenario_id = (
+        testcase.get("scenario_id")
+        or original_testcase.get("scenario_id")
+        or ""
+    )
+
+    # Reject fake or hallucinated scenario ids.
+    if str(scenario_id).startswith("MISS_SC_"):
+        scenario_id = original_testcase.get("scenario_id", "")
+
     scenario_info = scenario_index.get(scenario_id, {})
+
+    # If patch changed scenario_id to an unknown scenario, preserve original.
+    if scenario_id and not scenario_info and original_testcase:
+        original_scenario_id = original_testcase.get("scenario_id", "")
+        original_scenario_info = scenario_index.get(original_scenario_id, {})
+
+        if original_scenario_info:
+            scenario_id = original_scenario_id
+            scenario_info = original_scenario_info
 
     related_requirement_ids = (
         testcase.get("related_requirement_ids")
         or testcase.get("requirement_ids")
         or scenario_info.get("related_requirement_ids")
+        or original_testcase.get("related_requirement_ids")
         or []
     )
 
@@ -409,52 +428,84 @@ def _normalize_compact_patch_testcase(
     test_steps = (
         testcase.get("steps")
         or testcase.get("test_steps")
+        or original_testcase.get("test_steps")
         or []
     )
 
     expected_results = (
         testcase.get("expected")
         or testcase.get("expected_results")
+        or original_testcase.get("expected_results")
         or []
     )
 
+    testcase_type = (
+        testcase.get("type")
+        or original_testcase.get("type")
+        or ""
+    )
+
     return {
-        "testcase_id": testcase.get("testcase_id", ""),
+        "testcase_id": testcase_id,
         "scenario_id": scenario_id,
         "function_id": (
             testcase.get("function_id")
-            or scenario_info.get("function_id", "")
+            or scenario_info.get("function_id")
+            or original_testcase.get("function_id")
+            or ""
         ),
         "sub_function_id": (
             testcase.get("sub_function_id")
-            or scenario_info.get("sub_function_id", "")
+            or scenario_info.get("sub_function_id")
+            or original_testcase.get("sub_function_id")
+            or ""
         ),
         "test_area_id": (
             testcase.get("test_area_id")
-            or scenario_info.get("test_area_id", "")
+            or scenario_info.get("test_area_id")
+            or original_testcase.get("test_area_id")
+            or ""
         ),
-        "title": testcase.get("title", ""),
-        "type": testcase.get("type", ""),
+        "title": (
+            testcase.get("title")
+            or original_testcase.get("title")
+            or ""
+        ),
+        "type": testcase_type,
         "technique": _normalize_technique(
-            testcase.get("technique"),
-            testcase.get("type", ""),
+            testcase.get("technique")
+            or original_testcase.get("technique"),
+            testcase_type,
         ),
-        "priority": testcase.get("priority", ""),
+        "priority": (
+            testcase.get("priority")
+            or original_testcase.get("priority")
+            or ""
+        ),
         "preconditions": _normalize_list_field(
-            testcase.get("preconditions", [])
+            testcase.get("preconditions")
+            or original_testcase.get("preconditions")
+            or []
         ),
         "test_steps": _normalize_list_field(test_steps),
         "expected_results": _normalize_list_field(expected_results),
         "related_requirement_ids": related_requirement_ids,
-        "traceability": ", ".join(related_requirement_ids),
+        "traceability": (
+            testcase.get("traceability")
+            or scenario_info.get("traceability")
+            or original_testcase.get("traceability")
+            or ", ".join(related_requirement_ids)
+        ),
     }
 
 
 def _normalize_compact_patch_testcases(
     patch_testcases: list,
     scenarios: list,
+    original_testcases: list,
 ) -> list:
     scenario_index = _build_scenario_index(scenarios)
+    original_testcase_index = _build_testcase_index(original_testcases)
 
     normalized = []
 
@@ -462,6 +513,7 @@ def _normalize_compact_patch_testcases(
         normalized_item = _normalize_compact_patch_testcase(
             testcase=patch_item,
             scenario_index=scenario_index,
+            original_testcase_index=original_testcase_index,
         )
 
         if normalized_item:
@@ -542,7 +594,12 @@ def merge_improved_testcases(
             existing = testcase_map[testcase_id]
 
             merged_item = dict(existing)
-            merged_item.update(patch_item)
+
+            for key, value in patch_item.items():
+                if value in ["", None, [], {}]:
+                    continue
+
+                merged_item[key] = value
 
             testcase_map[testcase_id] = merged_item
         else:
@@ -1141,9 +1198,10 @@ def _generate_improve_patch_for_function(
         raw_patch_testcases = normalize_testcases(parsed)
 
         patch_testcases = _normalize_compact_patch_testcases(
-            patch_testcases=raw_patch_testcases,
-            scenarios=function_scenarios,
-        )
+        patch_testcases=raw_patch_testcases,
+        scenarios=function_scenarios,
+        original_testcases=function_testcases,
+    )
 
     except Exception as error:
         error_file = save_raw_response(

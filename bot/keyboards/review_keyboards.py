@@ -7,40 +7,23 @@ from app.utils.review_session import (
 
 
 def build_review_keyboard(ticket_id: str):
-    session = load_review_session(ticket_id)
-
-    keyboard = []
-
-    if can_improve_again(ticket_id):
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    (
-                        "🔄 Improve Again "
-                        f"({session.get('improve_iterations', 0)}/"
-                        f"{session.get('max_iterations', 3)})"
-                    ),
-                    callback_data=f"improve:{ticket_id}"
-                )
-            ]
-        )
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    "💬 Comment & Improve",
-                    callback_data=f"comment_improve:{ticket_id}"
-                )
-            ]
-        )
-
-    keyboard.append(
+    return InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(
-                "✅ Accept",
-                callback_data=f"accept:{ticket_id}"
-            )
+            [
+                InlineKeyboardButton(
+                    "AI Review",
+                    callback_data=f"testcase_ai_review:{ticket_id}",
+                ),
+                InlineKeyboardButton(
+                    "Comment & Improve",
+                    callback_data=f"testcase_comment:{ticket_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "Accept",
+                    callback_data=f"testcase_accept:{ticket_id}",
+                ),
+            ],
         ]
     )
-
-    return InlineKeyboardMarkup(keyboard)
