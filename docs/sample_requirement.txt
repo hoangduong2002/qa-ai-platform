@@ -1,0 +1,95 @@
+Feature: Corporate User Registration and Email Verification
+
+As a corporate user, I want to register an account using my company email so that I can access the customer portal after verifying my email address.
+
+Business Context:
+The customer portal is only available for corporate customers. Public email domains should not be allowed. The system must prevent duplicate accounts, weak passwords, and suspicious registration attempts.
+
+Functional Requirements:
+
+1. User Registration
+- The user can register using:
+  - First name
+  - Last name
+  - Company email
+  - Phone number
+  - Password
+  - Confirm password
+  - Acceptance of Terms and Conditions
+- All fields are mandatory.
+- The Register button is disabled until all required fields are filled and Terms and Conditions are accepted.
+- After successful registration, the account status is Pending Verification.
+- The user cannot log in until email verification is completed.
+
+2. Email Rules
+- Email must be in a valid email format.
+- Email must be unique in the system.
+- Email comparison must be case-insensitive.
+- Leading and trailing spaces in email must be trimmed before validation.
+- Public email domains are not allowed, including gmail.com, yahoo.com, outlook.com, hotmail.com.
+- Disposable email domains are not allowed.
+- Company email domain must not be on the blocked domain list.
+- Maximum email length is 254 characters.
+- Local part before @ must not exceed 64 characters.
+
+3. Password Rules
+- Password length must be between 8 and 128 characters.
+- Password must contain at least:
+  - One uppercase letter
+  - One lowercase letter
+  - One digit
+  - One special character
+- Password must not contain the user’s email local part.
+- Password must not contain the user’s first name or last name.
+- Password and Confirm Password must match.
+- Password must be stored securely and must never be displayed in plain text in logs, API response, UI, or database export.
+
+4. Phone Number Rules
+- Phone number is mandatory.
+- Phone number must contain only digits and optional leading plus sign.
+- Phone number length must be between 8 and 15 digits excluding the plus sign.
+- Phone number must be unique per account.
+- The same phone number cannot be used for multiple active accounts.
+
+5. Email Verification
+- After successful registration, the system sends a verification email.
+- Verification link expires after 24 hours.
+- If the user clicks a valid verification link within 24 hours, account status changes from Pending Verification to Active.
+- If the user clicks an expired link, the system displays an expired link message and allows the user to request a new verification email.
+- If the user requests resend verification email, the system sends a new verification link and invalidates the old link.
+- Resend verification email is limited to 3 times per hour.
+- If the account is already verified, clicking the verification link shows an “Account already verified” message and does not change account status.
+
+6. Login Restriction
+- A Pending Verification user cannot log in.
+- An Active user can log in with correct email and password.
+- A blocked account cannot log in even if email and password are correct.
+
+7. Security and Abuse Prevention
+- Registration endpoint must be protected against SQL injection, XSS payloads, and script injection in input fields.
+- The system must rate limit registration attempts by IP address to 5 attempts per minute.
+- The system must rate limit registration attempts by email address to 3 attempts per hour.
+- If rate limit is exceeded, the system returns a clear error message and does not create an account.
+- Concurrent registration requests using the same email must result in only one account being created.
+- Concurrent registration requests using the same phone number must result in only one account being created.
+
+8. Error Handling
+- Validation errors must be displayed next to the corresponding field.
+- The system must not expose internal server errors or database errors to the user.
+- Error messages should be user-friendly and consistent.
+- If email service is temporarily unavailable during registration, the account should not become Active automatically.
+- If email service fails after account creation, the account remains Pending Verification and the user can request resend verification email later.
+
+Out of Scope:
+- Social login registration.
+- Admin approval workflow.
+- Manual account activation by support team.
+- Two-factor authentication.
+- Password reset.
+
+Open Questions:
+- What is the official list of disposable email domains?
+- Should phone number uniqueness apply globally or only within the same company?
+- Should blocked domains be configurable by admin?
+- What is the exact error message wording for each validation error?
+- Should verification token expiry be exactly 24 hours or end of day in user timezone?

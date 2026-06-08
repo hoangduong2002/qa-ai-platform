@@ -500,6 +500,14 @@ def export_generated_testcases_excel(
     result: dict,
     version: str = "latest"
 ) -> str:
+    """
+    Export generated/improved test cases using the function-based Excel exporter.
+
+    The exporter may already return a versioned file.
+    This wrapper creates a versioned copy only when the returned file is not
+    already the expected versioned file.
+    """
+
     artifacts = load_ticket_artifacts(ticket_id)
 
     testcases = (
@@ -525,31 +533,6 @@ def export_generated_testcases_excel(
     approved_structure = (
         result.get("approved_test_case_structure")
         or artifacts.get("approved_test_case_structure")
-        or load_approved_test_case_structure(ticket_id)
-        or {}
-    )
-
-    analysis = (
-        result.get("analysis")
-        or artifacts.get("analysis")
-        or {}
-    )
-
-    clarifications = (
-        result.get("clarifications")
-        or artifacts.get("clarifications")
-        or {}
-    )
-
-    clarification_answers = (
-        result.get("clarification_answers")
-        or artifacts.get("clarification_answers")
-        or {}
-    )
-
-    requirement_summary = (
-        result.get("requirement_summary")
-        or artifacts.get("requirement_summary")
         or {}
     )
 
@@ -559,16 +542,14 @@ def export_generated_testcases_excel(
         coverage_review=coverage_review,
         final_coverage_review=final_coverage_review,
         approved_structure=approved_structure,
-        analysis=analysis,
-        clarifications=clarifications,
-        clarification_answers=clarification_answers,
-        requirement_summary=requirement_summary,
+        version=version,
     )
 
-    if not version or version == "latest":
+    if not version:
         return excel_file
 
     source_file = Path(excel_file)
+
     versioned_file = (
         source_file.parent
         / f"{ticket_id}_function_based_testcases_{version}.xlsx"
@@ -1243,7 +1224,7 @@ async def handle_text_message(
     ):
         if (
             update.message.text.strip()
-            == "CONFIRM DELETE ALL"
+            == "1234"
         ):
             context.user_data.pop(
                 "confirm_delete_all",
@@ -1877,8 +1858,7 @@ async def delete_all(
     await message.reply_text(
         "⚠️ WARNING\n\n"
         "This will delete ALL requirements.\n\n"
-        "Type:\n"
-        "CONFIRM DELETE ALL"
+        "Please Enter DELETE ALL PASSWORD"
     )
 
 
