@@ -22,6 +22,40 @@ from app.utils.function_improve_store import (
 logger = logging.getLogger(__name__)
 
 
+def _short_error(
+    error: Exception,
+    max_length: int = 300,
+) -> str:
+    text = str(error)
+
+    if not text:
+        return type(error).__name__
+
+    # Chỉ lấy dòng đầu để tránh in cả JSON context dài ra terminal.
+    first_line = text.splitlines()[0]
+
+    if len(first_line) > max_length:
+        return first_line[:max_length] + "..."
+
+    return first_line
+
+
+def _log_function_improve_fallback(
+    ticket_id: str,
+    function_id: str,
+    error_file: str,
+    error: Exception,
+) -> None:
+    logger.warning(
+        "Function improve failed; fallback will be used. "
+        "ticket_id=%s, function_id=%s, error_file=%s, error=%s",
+        ticket_id,
+        function_id,
+        error_file,
+        _short_error(error),
+    )
+
+
 def normalize_testcases(data):
     if isinstance(data, list):
         return data
@@ -290,10 +324,10 @@ def repair_json_with_llm(
     The repaired response is still parsed and validated by the normal pipeline.
     """
 
-    logger.warning(
+    logger.info(
         "Attempting to repair malformed improve JSON. ticket_id=%s, error=%s",
         ticket_id,
-        original_error,
+        _short_error(original_error),
     )
 
     repair_prompt = f"""
@@ -557,6 +591,45 @@ def _get_parallel_workers(function_count: int) -> int:
     return min(function_count, configured_workers)
 
 
+def _is_fail_fast_improve_enabled() -> bool:
+    value = os.getenv("IMPROVE_FAIL_FAST", "false")
+    return value.strip().lower() in ["1", "true", "yes", "y"]
+
+
+def _build_fallback_improve_result(
+    function_id: str,
+    function_item: dict,
+    function_testcases: list,
+    error: Exception,
+) -> dict:
+    """
+    Fallback result when improve fails for one function.
+
+    Improve is a quality enhancement step. A JSON parsing failure in improve
+    should not drop test cases or fail the entire generation pipeline.
+    """
+
+    logger.info(
+        "Using original test cases as fallback. function_id=%s, error=%s",
+        function_id,
+        _short_error(error),
+    )
+
+    return {
+        "function_id": function_id,
+        "function_name": _get_function_name(function_item),
+        "original_count": len(function_testcases),
+        "patch_count": 0,
+        "improved_count": len(function_testcases),
+        "patch_testcases": [],
+        "improved_testcases": function_testcases,
+        "file": "",
+        "raw_file": "",
+        "fallback_used": True,
+        "fallback_reason": str(error),
+    }
+
+
 def _build_function_improve_prompt(
     requirement_summary: dict,
     test_scope: dict,
@@ -700,11 +773,19 @@ def _generate_improve_patch_for_function(
             ),
         )
 
-        logger.exception(
-            "Function-level improve failed. ticket_id=%s, function_id=%s",
-            ticket_id,
-            function_id,
-        )
+        if _is_fail_fast_improve_enabled():
+            logger.exception(
+                "Function-level improve failed. ticket_id=%s, function_id=%s",
+                ticket_id,
+                function_id,
+            )
+        else:
+            _log_function_improve_fallback(
+                ticket_id=ticket_id,
+                function_id=function_id,
+                error_file=error_file,
+                error=error,
+            )
 
         raise ValueError(
             f"Failed to improve test cases for {function_id}.\n"
@@ -771,6 +852,69 @@ def _renumber_master_testcases(testcases: list) -> list:
         renumbered.append(item)
 
     return renumbered
+
+
+def _validate_no_duplicate_testcase_ids(testcases: list) -> None:
+    seen = set()
+    duplicated = []
+
+    for testcase in testcases:
+        if not isinstance(testcase, dict):
+            continue
+
+        testcase_id = testcase.get("testcase_id")
+
+        if not testcase_id:
+            continue
+
+        if testcase_id in seen:
+            duplicated.append(testcase_id)
+        else:
+            seen.add(testcase_id)
+
+    if duplicated:
+        raise ValueError(
+            "Duplicate testcase_id detected after function improve merge: "
+            f"{sorted(set(duplicated))[:20]}"
+        )
+
+
+def _deduplicate_function_results(
+    function_results: list[dict],
+) -> list[dict]:
+    """
+    Keep only one improve result per function_id.
+
+    This prevents duplicated function outputs from being merged multiple times
+    into the master test case suite.
+    """
+
+    deduplicated = {}
+    duplicate_counts = {}
+
+    for result in function_results:
+        function_id = result.get("function_id")
+
+        if not function_id:
+            continue
+
+        if function_id in deduplicated:
+            duplicate_counts[function_id] = (
+                duplicate_counts.get(function_id, 1) + 1
+            )
+
+        deduplicated[function_id] = result
+
+    if duplicate_counts:
+        logger.warning(
+            "Duplicate function improve results detected and deduplicated: %s",
+            duplicate_counts,
+        )
+
+    return [
+        deduplicated[function_id]
+        for function_id in sorted(deduplicated.keys())
+    ]
 
 
 def improve_testcases(state):
@@ -894,59 +1038,102 @@ def improve_testcases(state):
 
             future_map[future] = function_id
 
-        for future in as_completed(future_map):
-            function_id = future_map[future]
+            for future in as_completed(future_map):
+                function_id = future_map[future]
 
-            try:
-                result = future.result()
-                function_results.append(result)
+                try:
+                    result = future.result()
+                    function_results.append(result)
 
-                logger.info(
-                    "Function improve result received. ticket_id=%s, function_id=%s, improved_count=%s",
-                    ticket_id,
-                    function_id,
-                    result.get("improved_count"),
+                    logger.info(
+                        "Function improve result received. ticket_id=%s, function_id=%s, improved_count=%s",
+                        ticket_id,
+                        function_id,
+                        result.get("improved_count"),
+                    )
+
+                except Exception as error:
+                    errors.append(
+                        {
+                            "function_id": function_id,
+                            "error": str(error),
+                        }
+                    )
+
+                    if _is_fail_fast_improve_enabled():
+                        logger.exception(
+                            "Function improve failed. ticket_id=%s, function_id=%s",
+                            ticket_id,
+                            function_id,
+                        )
+                    else:
+                        logger.warning(
+                            "Function improve failed, fallback will be used. "
+                            "ticket_id=%s, function_id=%s, error=%s",
+                            ticket_id,
+                            function_id,
+                            _short_error(error),
+                        )
+
+                    if not _is_fail_fast_improve_enabled():
+                        group = executable_groups[function_id]
+
+                        fallback_result = _build_fallback_improve_result(
+                            function_id=function_id,
+                            function_item=group["function"],
+                            function_testcases=group["testcases"],
+                            error=error,
+                        )
+
+                        function_results.append(fallback_result)
+
+        if errors:
+            error_file = save_raw_response(
+                ticket_id,
+                "improve_testcases_function_errors",
+                json.dumps(
+                    errors,
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+            )
+
+            if _is_fail_fast_improve_enabled():
+                raise ValueError(
+                    "One or more main functions failed during parallel improve.\n"
+                    f"Error details saved to: {error_file}\n"
+                    f"Errors: {errors}"
                 )
 
-            except Exception as error:
-                logger.exception(
-                    "Function improve failed. ticket_id=%s, function_id=%s",
-                    ticket_id,
-                    function_id,
-                )
+            logger.warning(
+                "One or more function improves failed, but fallback was used. "
+                "ticket_id=%s, error_file=%s",
+                ticket_id,
+                error_file,
+            )
 
-                errors.append(
-                    {
-                        "function_id": function_id,
-                        "error": str(error),
-                    }
-                )
+    function_results = _deduplicate_function_results(
+        function_results
+    )
 
-    if errors:
-        error_file = save_raw_response(
-            ticket_id,
-            "improve_testcases_function_errors",
-            json.dumps(
-                errors,
-                indent=2,
-                ensure_ascii=False,
-            ),
-        )
-
-        raise ValueError(
-            "One or more main functions failed during parallel improve.\n"
-            f"Error details saved to: {error_file}\n"
-            f"Errors: {errors}"
-        )
-
-    function_results.sort(key=lambda item: item["function_id"])
+    function_results.sort(
+        key=lambda item: item["function_id"]
+    )
 
     merged_testcases = []
 
     for result in function_results:
-        merged_testcases.extend(result["improved_testcases"])
+        merged_testcases.extend(
+            result["improved_testcases"]
+        )
 
-    merged_testcases = _renumber_master_testcases(merged_testcases)
+    merged_testcases = _renumber_master_testcases(
+        merged_testcases
+    )
+
+    _validate_no_duplicate_testcase_ids(
+        merged_testcases
+    )
 
     validate_merged_testcases(
         original_testcases=original_testcases,
@@ -979,11 +1166,14 @@ def improve_testcases(state):
                 "original_count": result["original_count"],
                 "patch_count": result["patch_count"],
                 "improved_count": result["improved_count"],
-                "file": result["file"],
-                "raw_file": result["raw_file"],
+                "file": result.get("file", ""),
+                "raw_file": result.get("raw_file", ""),
+                "fallback_used": result.get("fallback_used", False),
+                "fallback_reason": result.get("fallback_reason", ""),
             }
             for result in function_results
         ],
+        "errors": errors,
     }
 
     manifest_file = save_function_improve_manifest(

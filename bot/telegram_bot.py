@@ -1,6 +1,7 @@
 import os
 import shutil
 import asyncio
+import logging
 
 from pathlib import Path
 from datetime import datetime
@@ -100,6 +101,7 @@ from app.utils.test_structure_store import (
     save_approved_test_case_structure,
     load_structure_session,
     set_pending_generation_after_approval,
+    load_approved_test_case_structure
 )
 
 from app.application.generation_orchestrator import (
@@ -110,10 +112,6 @@ from app.application.generation_orchestrator import (
 from app.application.export_orchestrator import (
     export_generation_result_to_excel,
     save_generation_history,
-)
-
-from app.application.export_orchestrator import (
-    export_generation_result_to_excel,
 )
 
 from app.application.structure_review_orchestrator import (
@@ -159,6 +157,19 @@ from bot.handlers.structure_handlers import (
     handle_structure_callback,
     handle_structure_comment_text
 )
+
+from app.exporters.function_based_excel_exporter import (
+    export_function_based_testcases_to_excel,
+)
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -487,15 +498,6 @@ def export_generated_testcases_excel(
     result: dict,
     version: str = "latest"
 ) -> str:
-    """
-    Export the latest generated/improved test cases using the
-    function-based multi-sheet Excel exporter.
-
-    The exporter creates the base function-based workbook.
-    This wrapper keeps the Telegram flow simple and also creates
-    a versioned copy for each generation/improvement cycle.
-    """
-
     artifacts = load_ticket_artifacts(ticket_id)
 
     testcases = (
@@ -521,6 +523,31 @@ def export_generated_testcases_excel(
     approved_structure = (
         result.get("approved_test_case_structure")
         or artifacts.get("approved_test_case_structure")
+        or load_approved_test_case_structure(ticket_id)
+        or {}
+    )
+
+    analysis = (
+        result.get("analysis")
+        or artifacts.get("analysis")
+        or {}
+    )
+
+    clarifications = (
+        result.get("clarifications")
+        or artifacts.get("clarifications")
+        or {}
+    )
+
+    clarification_answers = (
+        result.get("clarification_answers")
+        or artifacts.get("clarification_answers")
+        or {}
+    )
+
+    requirement_summary = (
+        result.get("requirement_summary")
+        or artifacts.get("requirement_summary")
         or {}
     )
 
@@ -530,6 +557,10 @@ def export_generated_testcases_excel(
         coverage_review=coverage_review,
         final_coverage_review=final_coverage_review,
         approved_structure=approved_structure,
+        analysis=analysis,
+        clarifications=clarifications,
+        clarification_answers=clarification_answers,
+        requirement_summary=requirement_summary,
     )
 
     if not version or version == "latest":
@@ -547,61 +578,6 @@ def export_generated_testcases_excel(
     shutil.copyfile(source_file, versioned_file)
 
     return str(versioned_file)
-
-
-async def continue_generation_with_structure_gate(
-    message,
-    ticket_id: str,
-):
-    """
-    The only allowed gateway to structured test case generation.
-
-    Flow:
-    1. Check structure approval first.
-    2. If not approved, return structure review action.
-    3. If approved, then run requirement summary and generation.
-    """
-
-    await message.reply_text(
-        f"Checking approved test case structure for {ticket_id}..."
-    )
-
-    generation_gate_result = prepare_generation(ticket_id)
-
-    if generation_gate_result.status != "READY_TO_GENERATE":
-        await send_app_result(
-            message,
-            ticket_id,
-            generation_gate_result,
-        )
-        return
-
-    await message.reply_text(generation_gate_result.message)
-
-    await message.reply_text(
-        "Preparing requirement summary and generation context..."
-    )
-
-    generation_state = await run_requirement_summary(ticket_id)
-
-    structured_generation_state = build_structured_generation_state(ticket_id)
-    generation_state.update(structured_generation_state)
-
-    await message.reply_text(
-        "Starting structured generation pipeline:\n"
-        "1. Generate scenarios\n"
-        "2. Generate test cases by main function\n"
-        "3. Coverage review\n"
-        "4. Improve test cases\n"
-        "5. Final review\n"
-        "6. Export Excel"
-    )
-
-    await run_generation(
-        message,
-        ticket_id,
-        generation_state,
-    )
 
 
 async def self_review_structure(update, context):
@@ -761,6 +737,10 @@ async def ask_clarifications(
     questions: list,
     mode: str
 ):
+    max_questions = int(os.getenv("MAX_CLARIFICATIONS_PER_ROUND", "5"))
+
+    questions = questions[:max_questions]
+
     clarification_message = (
         f"❓ Clarifications found for {ticket_id}\n\n"
     )
@@ -769,11 +749,15 @@ async def ask_clarifications(
         clarification_message += (
             f"{item.get('question_id', '')}: "
             f"{item.get('question', '')}\n"
-            f"Impact: {item.get('impact', 'N/A')}\n\n"
+            f"Priority: {item.get('priority') or item.get('impact', 'N/A')}\n"
+            f"Impact: {item.get('impact_area', item.get('category', 'N/A'))}\n\n"
         )
 
     clarification_message += (
-        f"Total clarification questions: {len(questions)}\n\n"
+        f"Showing {len(questions)} clarification question(s).\n\n"
+        "Please answer in this format:\n"
+        "Q001: your answer\n"
+        "Q002: your answer\n\n"
         "Do you want to answer these clarifications?"
     )
 
@@ -781,8 +765,8 @@ async def ask_clarifications(
         clarification_message,
         reply_markup=build_clarification_keyboard(
             ticket_id,
-            mode
-        )
+            mode,
+        ),
     )
 
 

@@ -152,6 +152,116 @@ def _get_function_name(function_item: dict) -> str:
     )
 
 
+def _get_sub_functions(function_item: dict) -> list[dict]:
+    if not isinstance(function_item, dict):
+        return []
+
+    sub_functions = (
+        function_item.get("sub_functions")
+        or function_item.get("subfunctions")
+        or function_item.get("children")
+        or []
+    )
+
+    if not isinstance(sub_functions, list):
+        return []
+
+    return sub_functions
+
+
+def _get_sub_function_id(sub_function_item: dict) -> str:
+    if not isinstance(sub_function_item, dict):
+        return ""
+
+    return (
+        sub_function_item.get("sub_function_id")
+        or sub_function_item.get("subfunction_id")
+        or sub_function_item.get("id")
+        or ""
+    )
+
+
+def _get_sub_function_name(sub_function_item: dict) -> str:
+    if not isinstance(sub_function_item, dict):
+        return ""
+
+    return (
+        sub_function_item.get("name")
+        or sub_function_item.get("title")
+        or sub_function_item.get("sub_function_name")
+        or ""
+    )
+
+
+def _get_test_areas(sub_function_item: dict) -> list[dict]:
+    if not isinstance(sub_function_item, dict):
+        return []
+
+    test_areas = (
+        sub_function_item.get("test_areas")
+        or sub_function_item.get("detailed_test_areas")
+        or sub_function_item.get("areas")
+        or []
+    )
+
+    if not isinstance(test_areas, list):
+        return []
+
+    return test_areas
+
+
+def _get_test_area_id(test_area_item: dict) -> str:
+    if not isinstance(test_area_item, dict):
+        return ""
+
+    return (
+        test_area_item.get("test_area_id")
+        or test_area_item.get("area_id")
+        or test_area_item.get("id")
+        or ""
+    )
+
+
+def _get_test_area_name(test_area_item: dict) -> str:
+    if not isinstance(test_area_item, dict):
+        return ""
+
+    return (
+        test_area_item.get("name")
+        or test_area_item.get("title")
+        or test_area_item.get("test_area_name")
+        or ""
+    )
+
+
+def _get_related_requirement_ids_from_structure(item: dict) -> list[str]:
+    if not isinstance(item, dict):
+        return []
+
+    value = (
+        item.get("related_requirement_ids")
+        or item.get("requirement_ids")
+        or item.get("related_requirements")
+        or []
+    )
+
+    if isinstance(value, str):
+        return [
+            requirement_id.strip()
+            for requirement_id in value.split(",")
+            if requirement_id.strip()
+        ]
+
+    if isinstance(value, list):
+        return [
+            str(requirement_id).strip()
+            for requirement_id in value
+            if str(requirement_id).strip()
+        ]
+
+    return []
+
+
 def _get_item_function_id(item: dict) -> str:
     if not isinstance(item, dict):
         return ""
@@ -186,17 +296,21 @@ def _group_testcases_by_function(
 
         function_id = _get_item_function_id(testcase)
 
-        if function_id not in groups:
+        if not function_id:
             function_id = "UNMAPPED"
 
-            if function_id not in groups:
-                groups[function_id] = {
-                    "function": {
-                        "function_id": "UNMAPPED",
-                        "name": "Unmapped Test Cases",
-                    },
-                    "testcases": [],
-                }
+        if function_id not in groups:
+            groups[function_id] = {
+                "function": {
+                    "function_id": function_id,
+                    "name": (
+                        "Unmapped Test Cases"
+                        if function_id == "UNMAPPED"
+                        else function_id
+                    ),
+                },
+                "testcases": [],
+            }
 
         groups[function_id]["testcases"].append(testcase)
 
@@ -281,6 +395,133 @@ def _create_summary_sheet(
         "Final Approved By AI",
         final_coverage_review.get("approved_by_ai", ""),
     )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_test_case_structure_sheet(
+    wb: Workbook,
+    approved_structure: dict,
+) -> None:
+    ws = wb.create_sheet("Test Case Structure")
+
+    ws.append(
+        [
+            "Function ID",
+            "Function Name",
+            "Sub Function ID",
+            "Sub Function Name",
+            "Test Area ID",
+            "Test Area Name",
+            "Description",
+            "Related Requirement IDs",
+            "Traceability",
+            "Priority",
+            "Included",
+            "Notes",
+        ]
+    )
+
+    functions = _get_functions(approved_structure)
+
+    for function_item in functions:
+        function_id = _get_function_id(function_item)
+        function_name = _get_function_name(function_item)
+
+        function_requirement_ids = _get_related_requirement_ids_from_structure(
+            function_item
+        )
+
+        sub_functions = _get_sub_functions(function_item)
+
+        if not sub_functions:
+            ws.append(
+                [
+                    function_id,
+                    function_name,
+                    "",
+                    "",
+                    "",
+                    "",
+                    _to_text(
+                        function_item.get("description")
+                        or function_item.get("summary")
+                        or ""
+                    ),
+                    _to_text(function_requirement_ids),
+                    ", ".join(function_requirement_ids),
+                    function_item.get("priority", ""),
+                    function_item.get("included", True),
+                    _to_text(function_item.get("notes", "")),
+                ]
+            )
+            continue
+
+        for sub_function_item in sub_functions:
+            sub_function_id = _get_sub_function_id(sub_function_item)
+            sub_function_name = _get_sub_function_name(sub_function_item)
+
+            sub_function_requirement_ids = (
+                _get_related_requirement_ids_from_structure(sub_function_item)
+                or function_requirement_ids
+            )
+
+            test_areas = _get_test_areas(sub_function_item)
+
+            if not test_areas:
+                ws.append(
+                    [
+                        function_id,
+                        function_name,
+                        sub_function_id,
+                        sub_function_name,
+                        "",
+                        "",
+                        _to_text(
+                            sub_function_item.get("description")
+                            or sub_function_item.get("summary")
+                            or ""
+                        ),
+                        _to_text(sub_function_requirement_ids),
+                        ", ".join(sub_function_requirement_ids),
+                        sub_function_item.get("priority", ""),
+                        sub_function_item.get("included", True),
+                        _to_text(sub_function_item.get("notes", "")),
+                    ]
+                )
+                continue
+
+            for test_area_item in test_areas:
+                test_area_id = _get_test_area_id(test_area_item)
+                test_area_name = _get_test_area_name(test_area_item)
+
+                test_area_requirement_ids = (
+                    _get_related_requirement_ids_from_structure(test_area_item)
+                    or sub_function_requirement_ids
+                )
+
+                ws.append(
+                    [
+                        function_id,
+                        function_name,
+                        sub_function_id,
+                        sub_function_name,
+                        test_area_id,
+                        test_area_name,
+                        _to_text(
+                            test_area_item.get("description")
+                            or test_area_item.get("summary")
+                            or test_area_item.get("test_objective")
+                            or ""
+                        ),
+                        _to_text(test_area_requirement_ids),
+                        ", ".join(test_area_requirement_ids),
+                        test_area_item.get("priority", ""),
+                        test_area_item.get("included", True),
+                        _to_text(test_area_item.get("notes", "")),
+                    ]
+                )
 
     _apply_table_style(ws)
     _auto_width(ws)
@@ -452,6 +693,66 @@ def _create_final_review_sheet(
     _auto_width(ws)
 
 
+def _build_requirement_coverage_index(
+    testcases: list,
+) -> dict:
+    coverage = {}
+
+    for testcase in testcases:
+        if not isinstance(testcase, dict):
+            continue
+
+        requirement_ids = testcase.get("related_requirement_ids", [])
+
+        if isinstance(requirement_ids, str):
+            requirement_ids = [
+                item.strip()
+                for item in requirement_ids.split(",")
+                if item.strip()
+            ]
+
+        if not isinstance(requirement_ids, list):
+            continue
+
+        for requirement_id in requirement_ids:
+            if not requirement_id:
+                continue
+
+            requirement_id = str(requirement_id).strip()
+
+            if not requirement_id:
+                continue
+
+            if requirement_id not in coverage:
+                coverage[requirement_id] = {
+                    "scenario_ids": set(),
+                    "testcase_ids": set(),
+                    "function_ids": set(),
+                    "testcase_titles": [],
+                }
+
+            coverage_item = coverage[requirement_id]
+
+            scenario_id = testcase.get("scenario_id", "")
+            testcase_id = testcase.get("testcase_id", "")
+            function_id = testcase.get("function_id", "")
+            title = testcase.get("title", "")
+
+            if scenario_id:
+                coverage_item["scenario_ids"].add(str(scenario_id))
+
+            if testcase_id:
+                coverage_item["testcase_ids"].add(str(testcase_id))
+
+            if function_id:
+                coverage_item["function_ids"].add(str(function_id))
+
+            if title:
+                coverage_item["testcase_titles"].append(str(title))
+
+    return coverage
+
+
 def _create_traceability_matrix_sheet(
     wb: Workbook,
     testcases: list,
@@ -498,6 +799,307 @@ def _create_traceability_matrix_sheet(
 
     _apply_table_style(ws)
     _auto_width(ws)
+    
+    
+def _extract_requirement_items(analysis: dict) -> list:
+    if not isinstance(analysis, dict):
+        return []
+
+    items = (
+        analysis.get("requirement_items")
+        or analysis.get("requirements")
+        or []
+    )
+
+    if isinstance(items, list):
+        return items
+
+    return []
+
+
+def _create_requirements_sheet(
+    wb: Workbook,
+    analysis: dict,
+) -> None:
+    ws = wb.create_sheet("Requirements")
+
+    ws.append(
+        [
+            "Requirement ID",
+            "Type",
+            "Description",
+            "Priority",
+            "Source",
+            "Status",
+        ]
+    )
+
+    requirement_items = _extract_requirement_items(analysis)
+
+    for item in requirement_items:
+        if not isinstance(item, dict):
+            continue
+
+        ws.append(
+            [
+                item.get("requirement_id", ""),
+                item.get("type", ""),
+                item.get("description", ""),
+                item.get("priority", ""),
+                item.get("source", ""),
+                item.get("status", ""),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+    
+    
+def _extract_clarification_questions(clarifications: dict) -> list:
+    if not isinstance(clarifications, dict):
+        return []
+
+    questions = (
+        clarifications.get("clarification_questions")
+        or clarifications.get("questions")
+        or []
+    )
+
+    if isinstance(questions, list):
+        return questions
+
+    return []
+
+
+def _extract_answered_clarifications(clarification_answers: dict) -> list:
+    if not isinstance(clarification_answers, dict):
+        return []
+
+    answered = (
+        clarification_answers.get("answered_clarifications")
+        or clarification_answers.get("answers")
+        or []
+    )
+
+    if isinstance(answered, list):
+        return answered
+
+    return []
+
+
+def _create_clarifications_sheet(
+    wb: Workbook,
+    clarifications: dict,
+    clarification_answers: dict,
+) -> None:
+    ws = wb.create_sheet("Clarifications")
+
+    ws.append(
+        [
+            "Question ID",
+            "Category",
+            "Priority",
+            "Impact Area",
+            "Blocking",
+            "Question",
+            "Answer",
+            "Status",
+            "Related Requirement IDs",
+            "Reason",
+        ]
+    )
+
+    questions = _extract_clarification_questions(clarifications)
+    answered = _extract_answered_clarifications(clarification_answers)
+
+    answer_by_id = {}
+
+    for item in answered:
+        if not isinstance(item, dict):
+            continue
+
+        question_id = item.get("question_id", "")
+
+        if question_id:
+            answer_by_id[question_id] = item
+
+    for item in questions:
+        if not isinstance(item, dict):
+            continue
+
+        question_id = item.get("question_id", "")
+        answer = answer_by_id.get(question_id, {})
+
+        ws.append(
+            [
+                question_id,
+                item.get("category", ""),
+                item.get("priority", item.get("impact", "")),
+                item.get("impact_area", ""),
+                item.get("blocking", ""),
+                item.get("question", ""),
+                answer.get("answer", ""),
+                "Answered" if answer else "Open",
+                _to_text(item.get("related_requirement_ids", [])),
+                item.get("reason", ""),
+            ]
+        )
+
+    # Also include answered clarifications that no longer exist in current open questions.
+    existing_question_ids = {
+        item.get("question_id", "")
+        for item in questions
+        if isinstance(item, dict)
+    }
+
+    for item in answered:
+        if not isinstance(item, dict):
+            continue
+
+        question_id = item.get("question_id", "")
+
+        if question_id in existing_question_ids:
+            continue
+
+        ws.append(
+            [
+                question_id,
+                item.get("category", ""),
+                item.get("priority", ""),
+                item.get("impact_area", ""),
+                item.get("blocking", ""),
+                item.get("question", ""),
+                item.get("answer", ""),
+                "Answered",
+                _to_text(item.get("related_requirement_ids", [])),
+                item.get("reason", ""),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+    
+    
+def _create_requirement_summary_sheet(
+    wb: Workbook,
+    requirement_summary: dict,
+) -> None:
+    ws = wb.create_sheet("Requirement Summary")
+
+    ws.append(["Section", "Content"])
+
+    if not isinstance(requirement_summary, dict):
+        requirement_summary = {}
+
+    for key in [
+        "executive_summary",
+        "functional_summary",
+        "confirmed_business_rules",
+        "validation_rules",
+        "open_questions",
+        "assumptions",
+        "risks",
+    ]:
+        ws.append(
+            [
+                key,
+                _to_text(requirement_summary.get(key, "")),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_requirement_matrix_sheet(
+    wb: Workbook,
+    analysis: dict,
+    testcases: list,
+) -> None:
+    ws = wb.create_sheet("Requirement Matrix")
+
+    ws.append(
+        [
+            "Requirement ID",
+            "Type",
+            "Description",
+            "Function IDs",
+            "Scenario IDs",
+            "Test Case IDs",
+            "Test Case Count",
+            "Coverage Status",
+        ]
+    )
+
+    requirement_items = _extract_requirement_items(analysis)
+    coverage_index = _build_requirement_coverage_index(testcases)
+
+    requirement_ids_from_analysis = set()
+
+    for item in requirement_items:
+        if not isinstance(item, dict):
+            continue
+
+        requirement_id = (
+            item.get("requirement_id")
+            or item.get("id")
+            or ""
+        )
+
+        requirement_id = str(requirement_id).strip()
+
+        if not requirement_id:
+            continue
+
+        requirement_ids_from_analysis.add(requirement_id)
+
+        coverage = coverage_index.get(requirement_id, {})
+
+        testcase_ids = sorted(coverage.get("testcase_ids", []))
+        scenario_ids = sorted(coverage.get("scenario_ids", []))
+        function_ids = sorted(coverage.get("function_ids", []))
+
+        ws.append(
+            [
+                requirement_id,
+                item.get("type", ""),
+                item.get("description", ""),
+                ", ".join(function_ids),
+                ", ".join(scenario_ids),
+                ", ".join(testcase_ids),
+                len(testcase_ids),
+                "Covered" if testcase_ids else "Not Covered",
+            ]
+        )
+
+    # Include requirement IDs found in test cases but missing from analysis.
+    for requirement_id in sorted(
+        set(coverage_index.keys()) - requirement_ids_from_analysis
+    ):
+        coverage = coverage_index.get(requirement_id, {})
+
+        testcase_ids = sorted(coverage.get("testcase_ids", []))
+        scenario_ids = sorted(coverage.get("scenario_ids", []))
+        function_ids = sorted(coverage.get("function_ids", []))
+
+        ws.append(
+            [
+                requirement_id,
+                "Unknown",
+                (
+                    "Requirement ID found in test cases but missing from "
+                    "analysis.requirement_items"
+                ),
+                ", ".join(function_ids),
+                ", ".join(scenario_ids),
+                ", ".join(testcase_ids),
+                len(testcase_ids),
+                "Covered - Missing Requirement Definition",
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
 
 
 def export_function_based_testcases_to_excel(
@@ -506,11 +1108,15 @@ def export_function_based_testcases_to_excel(
     coverage_review: dict | None = None,
     final_coverage_review: dict | None = None,
     approved_structure: dict | None = None,
+    analysis: dict | None = None,
+    clarifications: dict | None = None,
+    clarification_answers: dict | None = None,
+    requirement_summary: dict | None = None,
 ) -> str:
     coverage_review = coverage_review or {}
     final_coverage_review = final_coverage_review or {}
 
-    if approved_structure is None:
+    if not approved_structure:
         approved_structure = load_approved_test_case_structure(ticket_id)
 
     wb = Workbook()
@@ -519,6 +1125,11 @@ def export_function_based_testcases_to_excel(
         testcases=testcases,
         approved_structure=approved_structure or {},
     )
+    
+    analysis = analysis or {}
+    clarifications = clarifications or {}
+    clarification_answers = clarification_answers or {}
+    requirement_summary = requirement_summary or {}
 
     _create_summary_sheet(
         wb=wb,
@@ -527,6 +1138,33 @@ def export_function_based_testcases_to_excel(
         testcases=testcases,
         coverage_review=coverage_review,
         final_coverage_review=final_coverage_review,
+    )
+
+    _create_requirements_sheet(
+        wb=wb,
+        analysis=analysis,
+    )
+
+    _create_requirement_matrix_sheet(
+        wb=wb,
+        analysis=analysis,
+        testcases=testcases,
+    )
+
+    _create_clarifications_sheet(
+        wb=wb,
+        clarifications=clarifications,
+        clarification_answers=clarification_answers,
+    )
+
+    _create_requirement_summary_sheet(
+        wb=wb,
+        requirement_summary=requirement_summary,
+    )
+
+    _create_test_case_structure_sheet(
+        wb=wb,
+        approved_structure=approved_structure or {},
     )
 
     _create_master_testcases_sheet(

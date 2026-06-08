@@ -381,6 +381,163 @@ def _build_function_prompt(
             ),
         )
     )
+    
+
+def _get_batch_size() -> int:
+    configured_value = os.getenv("TESTCASE_SCENARIO_BATCH_SIZE", "5")
+
+    try:
+        batch_size = int(configured_value)
+    except ValueError:
+        logger.warning(
+            "Invalid TESTCASE_SCENARIO_BATCH_SIZE value: %s. Falling back to 5.",
+            configured_value,
+        )
+        batch_size = 5
+
+    return max(batch_size, 1)
+
+
+def _get_batch_parallel_workers(batch_count: int) -> int:
+    configured_value = os.getenv("TESTCASE_BATCH_PARALLEL_WORKERS", "2")
+
+    try:
+        configured_workers = int(configured_value)
+    except ValueError:
+        logger.warning(
+            "Invalid TESTCASE_BATCH_PARALLEL_WORKERS value: %s. Falling back to 2.",
+            configured_value,
+        )
+        configured_workers = 2
+
+    configured_workers = max(configured_workers, 1)
+
+    return min(batch_count, configured_workers)
+
+
+def _chunk_list(items: list, chunk_size: int) -> list[list]:
+    return [
+        items[index:index + chunk_size]
+        for index in range(0, len(items), chunk_size)
+    ]
+
+
+def _renumber_function_testcases(
+    testcases: list,
+    function_id: str,
+) -> list:
+    renumbered = []
+
+    for index, testcase in enumerate(testcases, start=1):
+        item = dict(testcase)
+        item["testcase_id"] = f"{function_id}_TC{index:03d}"
+        item["function_id"] = item.get("function_id") or function_id
+        renumbered.append(item)
+
+    return renumbered
+
+
+def _generate_testcases_for_scenario_batch(
+    ticket_id: str,
+    requirement_summary: dict,
+    test_scope: dict,
+    function_id: str,
+    function_item: dict,
+    batch_index: int,
+    function_scenarios_batch: list,
+) -> dict:
+    logger.info(
+        "Generating test cases for function batch. ticket_id=%s, function_id=%s, batch_index=%s, scenario_count=%s",
+        ticket_id,
+        function_id,
+        batch_index,
+        len(function_scenarios_batch),
+    )
+
+    llm = get_llm()
+
+    final_prompt = _build_function_prompt(
+        requirement_summary=requirement_summary,
+        test_scope=test_scope,
+        function_item=function_item,
+        function_scenarios=function_scenarios_batch,
+    )
+
+    response = llm.invoke(
+        final_prompt,
+        ticket_id=ticket_id,
+        node_name=f"generate_testcases_{function_id}_batch_{batch_index}",
+    )
+
+    raw_file = save_raw_response(
+        ticket_id,
+        f"generate_testcases_{function_id}_batch_{batch_index}_raw",
+        response.content,
+    )
+
+    try:
+        try:
+            parsed = parse_json(response.content)
+        except Exception as parse_error:
+            parsed = repair_json_with_llm(
+                ticket_id=ticket_id,
+                function_id=f"{function_id}_batch_{batch_index}",
+                malformed_json_text=response.content,
+                original_error=parse_error,
+            )
+
+        testcases = normalize_testcases(parsed)
+
+        expected_scenario_ids = {
+            scenario.get("scenario_id")
+            for scenario in function_scenarios_batch
+            if isinstance(scenario, dict) and scenario.get("scenario_id")
+        }
+
+        _validate_testcases_for_function(
+            testcases=testcases,
+            function_id=function_id,
+            expected_scenario_ids=expected_scenario_ids,
+        )
+
+    except Exception as error:
+        error_file = save_raw_response(
+            ticket_id,
+            f"generate_testcases_{function_id}_batch_{batch_index}_parse_error",
+            (
+                f"Failed to parse or validate test cases for {function_id}, batch {batch_index}.\n\n"
+                f"Function:\n"
+                f"{json.dumps(function_item, indent=2, ensure_ascii=False)}\n\n"
+                f"Scenarios:\n"
+                f"{json.dumps(function_scenarios_batch, indent=2, ensure_ascii=False)}\n\n"
+                f"Error:\n{error}\n\n"
+                f"Raw response file:\n{raw_file}\n"
+            ),
+        )
+
+        raise ValueError(
+            f"Failed to generate test cases for {function_id}, batch {batch_index}.\n"
+            f"Raw response saved to: {raw_file}\n"
+            f"Parse debug saved to: {error_file}\n"
+            f"Original error: {error}"
+        ) from error
+
+    logger.info(
+        "Generated test cases for function batch. ticket_id=%s, function_id=%s, batch_index=%s, testcase_count=%s",
+        ticket_id,
+        function_id,
+        batch_index,
+        len(testcases),
+    )
+
+    return {
+        "function_id": function_id,
+        "batch_index": batch_index,
+        "scenario_count": len(function_scenarios_batch),
+        "testcase_count": len(testcases),
+        "testcases": testcases,
+        "raw_file": raw_file,
+    }
 
 
 def _generate_testcases_for_function(
@@ -394,90 +551,128 @@ def _generate_testcases_for_function(
     """
     Generate test cases for one main function.
 
-    This function is designed to be executed in parallel.
-    It creates its own LLM instance to avoid sharing client state across threads.
+    The function is further split into scenario batches to prevent
+    oversized LLM responses and malformed JSON.
     """
 
     logger.info(
-        "Generating test cases for function. ticket_id=%s, function_id=%s, scenario_count=%s",
+        "Generating test cases for function using scenario batches. ticket_id=%s, function_id=%s, scenario_count=%s",
         ticket_id,
         function_id,
         len(function_scenarios),
     )
 
-    llm = get_llm()
-
-    final_prompt = _build_function_prompt(
-        requirement_summary=requirement_summary,
-        test_scope=test_scope,
-        function_item=function_item,
-        function_scenarios=function_scenarios,
+    batch_size = _get_batch_size()
+    scenario_batches = _chunk_list(
+        function_scenarios,
+        batch_size,
     )
 
-    response = llm.invoke(
-        final_prompt,
-        ticket_id=ticket_id,
-        node_name=f"generate_testcases_{function_id}",
+    batch_worker_count = _get_batch_parallel_workers(
+        len(scenario_batches)
     )
 
-    raw_file = save_raw_response(
+    logger.info(
+        "Function split into batches. ticket_id=%s, function_id=%s, batch_count=%s, batch_size=%s, batch_workers=%s",
         ticket_id,
-        f"generate_testcases_{function_id}_raw",
-        response.content,
+        function_id,
+        len(scenario_batches),
+        batch_size,
+        batch_worker_count,
     )
 
-    try:
-        try:
-            parsed = parse_json(response.content)
-        except Exception as parse_error:
-            parsed = repair_json_with_llm(
-                ticket_id=ticket_id,
-                function_id=function_id,
-                malformed_json_text=response.content,
-                original_error=parse_error,
+    batch_results = []
+    batch_errors = []
+
+    with ThreadPoolExecutor(max_workers=batch_worker_count) as executor:
+        future_map = {}
+
+        for batch_index, scenario_batch in enumerate(
+            scenario_batches,
+            start=1,
+        ):
+            future = executor.submit(
+                _generate_testcases_for_scenario_batch,
+                ticket_id,
+                requirement_summary,
+                test_scope,
+                function_id,
+                function_item,
+                batch_index,
+                scenario_batch,
             )
 
-        testcases = normalize_testcases(parsed)
+            future_map[future] = batch_index
 
-        expected_scenario_ids = {
-            scenario.get("scenario_id")
-            for scenario in function_scenarios
-            if isinstance(scenario, dict) and scenario.get("scenario_id")
-        }
+        for future in as_completed(future_map):
+            batch_index = future_map[future]
 
-        _validate_testcases_for_function(
-            testcases=testcases,
-            function_id=function_id,
-            expected_scenario_ids=expected_scenario_ids,
-        )
+            try:
+                batch_results.append(future.result())
+            except Exception as error:
+                logger.exception(
+                    "Function batch generation failed. ticket_id=%s, function_id=%s, batch_index=%s",
+                    ticket_id,
+                    function_id,
+                    batch_index,
+                )
 
-    except Exception as error:
-        logger.exception(
-            "Failed to generate test cases for function. ticket_id=%s, function_id=%s",
-            ticket_id,
-            function_id,
-        )
+                batch_errors.append(
+                    {
+                        "function_id": function_id,
+                        "batch_index": batch_index,
+                        "error": str(error),
+                    }
+                )
 
+    if batch_errors:
         error_file = save_raw_response(
             ticket_id,
-            f"generate_testcases_{function_id}_parse_error",
-            (
-                f"Failed to parse or validate test cases for {function_id}.\n\n"
-                f"Function:\n"
-                f"{json.dumps(function_item, indent=2, ensure_ascii=False)}\n\n"
-                f"Scenarios:\n"
-                f"{json.dumps(function_scenarios, indent=2, ensure_ascii=False)}\n\n"
-                f"Error:\n{error}\n\n"
-                f"Raw response file:\n{raw_file}\n"
+            f"generate_testcases_{function_id}_batch_errors",
+            json.dumps(
+                batch_errors,
+                indent=2,
+                ensure_ascii=False,
             ),
         )
 
         raise ValueError(
-            f"Failed to generate test cases for {function_id}.\n"
-            f"Raw response saved to: {raw_file}\n"
-            f"Parse debug saved to: {error_file}\n"
-            f"Original error: {error}"
-        ) from error
+            f"One or more scenario batches failed for {function_id}.\n"
+            f"Error details saved to: {error_file}\n"
+            f"Errors: {batch_errors}"
+        )
+
+    batch_results.sort(key=lambda item: item["batch_index"])
+
+    testcases = []
+
+    for batch_result in batch_results:
+        testcases.extend(batch_result["testcases"])
+
+    expected_scenario_ids = {
+        scenario.get("scenario_id")
+        for scenario in function_scenarios
+        if isinstance(scenario, dict) and scenario.get("scenario_id")
+    }
+
+    generated_scenario_ids = {
+        testcase.get("scenario_id")
+        for testcase in testcases
+        if isinstance(testcase, dict) and testcase.get("scenario_id")
+    }
+
+    missing_scenario_ids = expected_scenario_ids - generated_scenario_ids
+
+    if missing_scenario_ids:
+        raise ValueError(
+            f"Function {function_id} is missing test cases after batch merge for scenarios: "
+            f"{sorted(missing_scenario_ids)}"
+        )
+
+    testcases = _renumber_function_testcases(
+        testcases,
+        function_id,
+    )
 
     function_file = save_function_testcases(
         ticket_id=ticket_id,
@@ -486,9 +681,10 @@ def _generate_testcases_for_function(
     )
 
     logger.info(
-        "Generated test cases for function. ticket_id=%s, function_id=%s, testcase_count=%s, file=%s",
+        "Generated test cases for function. ticket_id=%s, function_id=%s, scenario_count=%s, testcase_count=%s, file=%s",
         ticket_id,
         function_id,
+        len(function_scenarios),
         len(testcases),
         function_file,
     )
@@ -500,7 +696,10 @@ def _generate_testcases_for_function(
         "testcase_count": len(testcases),
         "testcases": testcases,
         "file": function_file,
-        "raw_file": raw_file,
+        "raw_file": "",
+        "batch_count": len(batch_results),
+        "batch_size": batch_size,
+        "batch_results": batch_results,
     }
 
 

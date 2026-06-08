@@ -118,32 +118,37 @@ async def handle_structure_callback(
 
             result = approve_structure_app(ticket_id)
 
-            if pending_generation and after_approve_callback:
-                set_pending_generation_after_approval(
-                    ticket_id,
-                    False,
-                )
-
-                await query.message.reply_text(
-                    f"✅ Test case structure approved for {ticket_id}.\n\n"
-                    f"Continuing generation automatically because this "
-                    f"structure review was started from /generate."
-                )
-
-                await after_approve_callback(
-                    query.message,
-                    ticket_id,
-                )
-
-                return True
-
-            await query.message.reply_text(result.message)
-
         except Exception as error:
             await query.message.reply_text(
                 f"Failed to approve structure:\n{error}"
             )
+            return True
 
+        if pending_generation and after_approve_callback:
+            set_pending_generation_after_approval(
+                ticket_id,
+                False,
+            )
+
+            await query.message.reply_text(
+                f"✅ Test case structure approved for {ticket_id}.\n\n"
+                f"Continuing generation automatically because this "
+                f"structure review was started from /generate."
+            )
+
+            try:
+                await after_approve_callback(
+                    query.message,
+                    ticket_id,
+                )
+            except Exception as error:
+                await query.message.reply_text(
+                    f"Structure was approved, but automatic generation failed:\n{error}\n\n"
+                    f"You can retry generation with:\n/generate {ticket_id}"
+                )
+
+            return True
+        await query.message.reply_text(result.message)
         return True
 
     return False
