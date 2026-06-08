@@ -9,6 +9,8 @@ from atlassian import Jira
 from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
 
+from app.utils.jira_content_cleaner import clean_jira_html
+
 
 def _safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name or "attachment")
@@ -68,17 +70,19 @@ def _get_jira_client() -> Jira:
     )
 
 
-def _to_text(value: Any) -> str:
+def _to_text(value) -> str:
     if value is None:
         return ""
 
     if isinstance(value, str):
-        return value
+        return clean_jira_html(value)
 
-    return json.dumps(
-        value,
-        indent=2,
-        ensure_ascii=False,
+    return clean_jira_html(
+        json.dumps(
+            value,
+            indent=2,
+            ensure_ascii=False,
+        )
     )
 
 
@@ -147,7 +151,12 @@ def _download_attachment(
     )
 
     with output_file.open("wb") as file:
-        file.write(response.content)
+        if isinstance(response, bytes):
+            file.write(response)
+        elif hasattr(response, "content"):
+            file.write(response.content)
+        else:
+            file.write(bytes(response))
 
 
 def _download_and_extract_attachments(
@@ -424,17 +433,25 @@ def create_requirement_from_jira(
                     f"Failed to fetch subtask: {error}\n\n"
                 )
 
-    requirement_file = jira_dir / f"{issue_key}.md"
+        raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
+        cleaned_markdown_file = jira_dir / f"{issue_key}.md"
 
-    requirement_file.write_text(
-        markdown,
-        encoding="utf-8",
-    )
+        raw_markdown_file.write_text(
+            markdown,
+            encoding="utf-8",
+        )
 
-    create_workspace_from_text(
-        ticket_id,
-        markdown,
-        source=f"jira:{issue_key}",
-    )
+        cleaned_markdown = clean_jira_html(markdown)
 
-    return ticket_id
+        cleaned_markdown_file.write_text(
+            cleaned_markdown,
+            encoding="utf-8",
+        )
+
+        create_workspace_from_text(
+            ticket_id,
+            cleaned_markdown,
+            source=f"jira:{issue_key}",
+        )
+
+        return ticket_id

@@ -63,6 +63,7 @@ tqdm==4.67.3
 # Jira (MVP2)
 # =========================
 atlassian-python-api==4.0.7
+beautifulsoup4==4.14.3
 
 # =========================
 # Optional (Future MVP2)
