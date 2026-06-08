@@ -173,7 +173,7 @@ def run_structure_self_review(ticket_id: str):
     state.update(improve_result)
 
     new_iteration = current_iteration + 1
-    new_version = f"v{new_iteration + 1}"
+    new_version = f"v{new_iteration}"
 
     save_test_case_structure_version(
         ticket_id,
@@ -237,7 +237,7 @@ def run_structure_comment_improve(
     state.update(improve_result)
 
     new_iteration = current_iteration + 1
-    new_version = f"v{new_iteration + 1}"
+    new_version = f"v{new_iteration}"
 
     save_test_case_structure_version(
         ticket_id,

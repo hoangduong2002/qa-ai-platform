@@ -53,6 +53,7 @@ def default_structure_session() -> dict:
         "max_review_iterations": 3,
         "approved": False,
         "waiting_human_review": False,
+        "pending_generation_after_approval": False,
     }
 
 
@@ -183,3 +184,17 @@ def ensure_approved_test_case_structure(ticket_id: str) -> dict:
         )
 
     return structure
+
+
+def set_pending_generation_after_approval(
+    ticket_id: str,
+    pending: bool,
+) -> str:
+    session = load_structure_session(ticket_id)
+    session["pending_generation_after_approval"] = pending
+    return save_structure_session(ticket_id, session)
+
+
+def has_pending_generation_after_approval(ticket_id: str) -> bool:
+    session = load_structure_session(ticket_id)
+    return bool(session.get("pending_generation_after_approval", False))

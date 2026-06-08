@@ -1,5 +1,7 @@
 import os
 import shutil
+import asyncio
+
 from pathlib import Path
 from datetime import datetime
 
@@ -96,7 +98,8 @@ from app.services.test_structure_service import (
 from app.utils.test_structure_store import (
     load_test_case_structure_version,
     save_approved_test_case_structure,
-    load_structure_session
+    load_structure_session,
+    set_pending_generation_after_approval,
 )
 
 from app.application.generation_orchestrator import (
@@ -435,6 +438,11 @@ async def continue_generation_with_structure_gate(
     generation_gate_result = prepare_generation(ticket_id)
 
     if generation_gate_result.status != "READY_TO_GENERATE":
+        set_pending_generation_after_approval(
+            ticket_id,
+            True,
+        )
+
         await send_app_result(
             message,
             ticket_id,
@@ -646,7 +654,18 @@ async def run_generation(
         f"Running test generation graph for {ticket_id}..."
     )
 
-    result = test_generation_graph.invoke(generation_state)
+    try:
+        result = await asyncio.to_thread(
+            test_generation_graph.invoke,
+            generation_state,
+        )
+    except Exception as error:
+        await message.reply_text(
+            f"Test generation graph failed for {ticket_id}.\n"
+            f"Error type: {type(error).__name__}\n"
+            f"Error: {error}"
+        )
+        raise
 
     await message.reply_text(
         f"Test generation graph completed for {ticket_id}."
@@ -1497,7 +1516,8 @@ async def handle_review_action(
 
     handled = await handle_structure_callback(
         update,
-        context
+        context,
+        after_approve_callback=continue_generation_with_structure_gate,
     )
 
     if handled:
@@ -1886,6 +1906,10 @@ def main():
         Application
         .builder()
         .token(BOT_TOKEN)
+        .connect_timeout(30)
+        .read_timeout(180)
+        .write_timeout(180)
+        .pool_timeout(30)
         .build()
     )
 
