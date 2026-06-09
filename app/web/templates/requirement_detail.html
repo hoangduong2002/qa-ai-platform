@@ -2,563 +2,1125 @@
 
 {% block content %}
 
-<div class="fixed-actions">
-    <h3>Actions</h3>
+<div class="portal-layout">
 
-    <div class="action-row">
+    <aside class="sidebar">
         <a
-            class="button secondary"
-            href="/portal/requirements/{{ ticket_id }}/edit"
-        >
-            Edit
-        </a>
-
-        <form
-            method="post"
-            action="/portal/requirements/{{ ticket_id }}/sanitize"
-            data-loading="true"
-            data-loading-title="Sanitizing requirement..."
-            data-loading-message="Removing sensitive data and preparing clean requirement context."
-        >
-            <button type="submit">
-                Run Sanitizer
-            </button>
-        </form>
-
-        <form
-            method="post"
-            action="/portal/requirements/{{ ticket_id }}/analyze"
-            data-loading="true"
-            data-loading-title="Analyzing requirement..."
-            data-loading-message="AI is extracting requirement items and clarification questions."
-        >
-            <button type="submit" class="success">
-                Analyze
-            </button>
-        </form>
-
-        {% if has_analysis %}
-            <a
-                class="button success"
-                href="/portal/requirements/{{ ticket_id }}/analysis/excel"
-            >
-                Download Analysis Excel
-            </a>
-        {% endif %}
-
-        {% if has_analysis and clarifications and clarifications | length > 0 %}
-            <a
-                class="button warning"
-                href="/portal/requirements/{{ ticket_id }}/clarifications"
-            >
-                Answer Clarifications
-            </a>
-        {% endif %}
-
-        <form
-            method="post"
-            action="/portal/requirements/{{ ticket_id }}/summary"
-            data-loading="true"
-            data-loading-title="Generating requirement summary..."
-            data-loading-message="AI is creating the structured requirement summary."
-        >
-            <button type="submit" class="success">
-                Generate Summary
-            </button>
-        </form>
-
-        <form
-            method="post"
-            action="/portal/requirements/{{ ticket_id }}/delete"
-            onsubmit="return confirm('Delete this requirement?')"
-        >
-            <button type="submit" class="danger">
-                Delete
-            </button>
-        </form>
-
-        <a
-            class="button secondary"
+            class="sidebar-back"
             href="/portal"
         >
-            Back
+            <span class="sidebar-back-icon">←</span>
+            <span>Back to Portal</span>
         </a>
-    </div>
-</div>
 
-<div class="page-with-fixed-actions">
+        <div class="sidebar-section">
+            <div class="sidebar-title">
+                Tabs
+            </div>
 
-    <div class="card">
-        <h2>Requirement: {{ ticket_id }}</h2>
+            <a
+                class="sidebar-link {% if tab == 'analysis' %}active{% endif %}"
+                href="/portal/requirements/{{ ticket_id }}?tab=analysis"
+            >
+                Requirement Analysis
+            </a>
 
-        <p>
-            <b>Summary:</b> {{ ticket.summary }}
-        </p>
+            <a
+                class="sidebar-link {% if tab == 'design' %}active{% endif %}"
+                href="/portal/requirements/{{ ticket_id }}?tab=design"
+            >
+                Test Design
+            </a>
+        </div>
 
-        <p>
-            <b>Source:</b> {{ ticket.source }}
-        </p>
-
-        {% if ticket.created_at %}
-            <p>
-                <b>Created:</b> {{ ticket.created_at }}
-            </p>
-        {% endif %}
-
-        {% if ticket.updated_at %}
-            <p>
-                <b>Updated:</b> {{ ticket.updated_at }}
-            </p>
-        {% endif %}
-
-        {% if has_sanitized %}
-            <span class="status ok">Sanitized</span>
-        {% else %}
-            <span class="status missing">Not Sanitized</span>
-        {% endif %}
-
-        {% if has_analysis %}
-            <span class="status ok">Analysis Ready</span>
-        {% else %}
-            <span class="status missing">No Analysis</span>
-        {% endif %}
-
-        {% if has_clarifications %}
-            <span class="status ok">Clarifications Ready</span>
-        {% else %}
-            <span class="status missing">No Clarifications</span>
-        {% endif %}
-
-        {% if has_summary %}
-            <span class="status ok">Summary Ready</span>
-        {% else %}
-            <span class="status missing">No Summary</span>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Raw Description</h3>
-
-        {% if description %}
-            <pre>{{ description }}</pre>
-        {% else %}
-            <p>No description found.</p>
-        {% endif %}
-    </div>    
-
-    <div class="card">
-        <h3>Uploaded / Extracted Content</h3>
-
-        {% if uploaded_content %}
-            <pre>{{ uploaded_content }}</pre>
-        {% else %}
-            <p>No uploaded content found.</p>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Sanitized Requirement</h3>
-
-        {% if sanitized_requirement %}
-            <pre>{{ sanitized_requirement }}</pre>
-        {% else %}
-            <p>
-                No sanitized requirement found.
-                Click <b>Run Sanitizer</b> or <b>Analyze</b>.
-            </p>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Requirement Analysis</h3>
-
-        {% if requirement_analysis %}
-            <div class="summary-grid">
-                <div class="metric-card">
-                    <div class="metric-label">Requirement Items</div>
-                    <div class="metric-value">
-                        {{ requirement_items | length if requirement_items else 0 }}
-                    </div>
+        {% if tab == "analysis" %}
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Navigation
                 </div>
 
-                <div class="metric-card">
-                    <div class="metric-label">Clarification Questions</div>
-                    <div class="metric-value">
-                        {{ clarifications | length if clarifications else 0 }}
-                    </div>
+                <a class="sidebar-link" href="#requirement-info">
+                    Requirement Info
+                </a>
+
+                <a class="sidebar-link" href="#sanitized-requirement">
+                    Sanitized Requirement
+                </a>
+
+                <a class="sidebar-link" href="#requirement-analysis">
+                    Requirement Analysis
+                </a>
+
+                <a class="sidebar-link" href="#requirement-items">
+                    Requirement Items
+                </a>
+
+                <a class="sidebar-link" href="#clarifications">
+                    Clarification Questions
+                </a>
+
+                <a class="sidebar-link" href="#requirement-summary">
+                    Requirement Summary
+                </a>
+
+                <a class="sidebar-link" href="#raw-source-data">
+                    Raw Source Data
+                </a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Actions
                 </div>
 
-                <div class="metric-card">
-                    <div class="metric-label">Has Summary</div>
-                    <div class="metric-value">
-                        {% if requirement_summary %}Yes{% else %}No{% endif %}
+                <a
+                    class="button sidebar-button secondary"
+                    href="/portal/requirements/{{ ticket_id }}/edit"
+                >
+                    Edit Requirement
+                </a>
+
+                <form
+                    method="post"
+                    action="/portal/requirements/{{ ticket_id }}/sanitize"
+                    data-loading="true"
+                    data-loading-title="Sanitizing requirement..."
+                    data-loading-message="Removing sensitive data and preparing clean requirement context."
+                >
+                    <button type="submit" class="sidebar-button">
+                        Run Sanitizer
+                    </button>
+                </form>
+
+                <form
+                    method="post"
+                    action="/portal/requirements/{{ ticket_id }}/analyze"
+                    data-loading="true"
+                    data-loading-title="Analyzing requirement..."
+                    data-loading-message="AI is extracting requirement items and clarification questions."
+                >
+                    <button type="submit" class="sidebar-button success">
+                        Analyze
+                    </button>
+                </form>
+
+                {% if has_analysis and clarifications and clarifications | length > 0 %}
+                    <a
+                        class="button sidebar-button warning"
+                        href="/portal/requirements/{{ ticket_id }}/clarifications"
+                    >
+                        Answer Clarifications
+                    </a>
+                {% endif %}
+
+                <form
+                    method="post"
+                    action="/portal/requirements/{{ ticket_id }}/summary"
+                    data-loading="true"
+                    data-loading-title="Generating requirement summary..."
+                    data-loading-message="AI is creating the structured requirement summary."
+                >
+                    <button type="submit" class="sidebar-button success">
+                        Generate Summary
+                    </button>
+                </form>
+
+                {% if has_analysis %}
+                    <a
+                        class="button sidebar-button success"
+                        href="/portal/requirements/{{ ticket_id }}/analysis/excel"
+                    >
+                        Download Analysis Excel
+                    </a>
+                {% endif %}
+            </div>
+
+            <div class="sidebar-danger-zone">
+                <div class="sidebar-danger-title">
+                    Danger Zone
+                </div>
+
+                <form
+                    method="post"
+                    action="/portal/requirements/{{ ticket_id }}/delete"
+                    onsubmit="return confirm('Delete this requirement? This action will move it to deleted folder.')"
+                >
+                    <button
+                        type="submit"
+                        class="sidebar-button danger"
+                    >
+                        Delete Requirement
+                    </button>
+                </form>
+            </div>
+        {% endif %}
+
+        {% if tab == "design" %}
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Navigation
+                </div>
+
+                <a class="sidebar-link" href="#test-case-structure">
+                    Test Case Structure
+                </a>
+
+                <a class="sidebar-link" href="#structure-review">
+                    AI Structure Review
+                </a>
+
+                <a class="sidebar-link" href="#structure-comment-improve">
+                    Comment & Update
+                </a>
+
+                <a class="sidebar-link" href="#structure-editor">
+                    Structure Editor
+                </a>
+
+                <a class="sidebar-link" href="#test-cases">
+                    Test Cases
+                </a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Structure Actions
+                </div>
+
+                {% if has_summary %}
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/structure/generate"
+                        data-loading="true"
+                        data-loading-title="Generating test case structure..."
+                        data-loading-message="AI is generating structure and exporting structure Excel."
+                    >
+                        <button type="submit" class="sidebar-button success">
+                            Generate Structure
+                        </button>
+                    </form>
+                {% endif %}
+
+                {% if selected_structure_json %}
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/structure/self-review"
+                        data-loading="true"
+                        data-loading-title="Running structure self review..."
+                        data-loading-message="AI is reviewing the selected test case structure version."
+                    >
+                        <input
+                            type="hidden"
+                            name="structure_version"
+                            value="{{ structure_version }}"
+                        >
+
+                        <button type="submit" class="sidebar-button success">
+                            Self Review Structure
+                        </button>
+                    </form>
+
+                    <a
+                        class="button sidebar-button warning"
+                        href="#structure-comment-improve"
+                    >
+                        Comment & Update
+                    </a>
+
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/structure/approve"
+                        onsubmit="return confirm('Approve selected structure version?')"
+                    >
+                        <input
+                            type="hidden"
+                            name="structure_version"
+                            value="{{ structure_version }}"
+                        >
+
+                        <button type="submit" class="sidebar-button warning">
+                            Approve Selected Structure
+                        </button>
+                    </form>
+
+                    <a
+                        class="button sidebar-button success"
+                        href="/portal/requirements/{{ ticket_id }}/structure/excel?structure_version={{ structure_version }}"
+                    >
+                        Download Structure Excel
+                    </a>
+                {% endif %}
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    Test Case Actions
+                </div>
+
+                <button
+                    type="button"
+                    class="sidebar-button secondary"
+                    disabled
+                    title="Will be wired in next step"
+                >
+                    Generate Test Cases
+                </button>
+
+                <button
+                    type="button"
+                    class="sidebar-button secondary"
+                    disabled
+                    title="Will be wired in next step"
+                >
+                    Approve Selected Test Cases
+                </button>
+            </div>
+        {% endif %}
+    </aside>
+
+    <section class="content-area">
+
+        {% if tab == "analysis" %}
+
+            <div id="requirement-info" class="card">
+                <h2>Requirement: {{ ticket_id }}</h2>
+
+                <p>
+                    <b>Summary:</b> {{ ticket.summary }}
+                </p>
+
+                <p>
+                    <b>Source:</b> {{ ticket.source }}
+                </p>
+
+                {% if ticket.created_at %}
+                    <p>
+                        <b>Created:</b> {{ ticket.created_at }}
+                    </p>
+                {% endif %}
+
+                {% if ticket.updated_at %}
+                    <p>
+                        <b>Updated:</b> {{ ticket.updated_at }}
+                    </p>
+                {% endif %}
+
+                {% if has_sanitized %}
+                    <span class="status ok">Sanitized</span>
+                {% else %}
+                    <span class="status missing">Not Sanitized</span>
+                {% endif %}
+
+                {% if has_analysis %}
+                    <span class="status ok">Analysis Ready</span>
+                {% else %}
+                    <span class="status missing">No Analysis</span>
+                {% endif %}
+
+                {% if has_clarifications %}
+                    <span class="status ok">Clarifications Ready</span>
+                {% else %}
+                    <span class="status missing">No Clarifications</span>
+                {% endif %}
+
+                {% if has_summary %}
+                    <span class="status ok">Summary Ready</span>
+                {% else %}
+                    <span class="status missing">No Summary</span>
+                {% endif %}
+            </div>
+
+            <div id="sanitized-requirement" class="card">
+                <h3>Sanitized Requirement</h3>
+
+                {% if sanitized_requirement %}
+                    <pre>{{ sanitized_requirement }}</pre>
+                {% else %}
+                    <p>
+                        No sanitized requirement found.
+                        Click <b>Run Sanitizer</b> or <b>Analyze</b>.
+                    </p>
+                {% endif %}
+            </div>
+
+            <div id="requirement-analysis" class="card">
+                <h3>Requirement Analysis</h3>
+
+                {% if requirement_analysis %}
+                    <div class="summary-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Requirement Items</div>
+                            <div class="metric-value">
+                                {{ requirement_items | length if requirement_items else 0 }}
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-label">Clarification Questions</div>
+                            <div class="metric-value">
+                                {{ clarifications | length if clarifications else 0 }}
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-label">Has Summary</div>
+                            <div class="metric-value">
+                                {% if requirement_summary %}Yes{% else %}No{% endif %}
+                            </div>
+                        </div>
                     </div>
+
+                    {% if requirement_analysis.business_goals %}
+                        <div class="section-block">
+                            <div class="section-title">Business Goals</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.business_goals %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.actors %}
+                        <div class="section-block">
+                            <div class="section-title">Actors</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.actors %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.entities %}
+                        <div class="section-block">
+                            <div class="section-title">Entities</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.entities %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.workflows %}
+                        <div class="section-block">
+                            <div class="section-title">Workflows</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.workflows %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.constraints %}
+                        <div class="section-block">
+                            <div class="section-title">Constraints</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.constraints %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.risks %}
+                        <div class="section-block">
+                            <div class="section-title">Risks</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.risks %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_analysis.ambiguities %}
+                        <div class="section-block">
+                            <div class="section-title">Ambiguities</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_analysis.ambiguities %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p>No requirement analysis output found. Click <b>Analyze</b>.</p>
+                {% endif %}
+            </div>
+
+            <div id="requirement-items" class="card">
+                <h3>Requirement Items</h3>
+
+                {% if requirement_items %}
+                    <table class="visual-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 120px;">ID</th>
+                                <th style="width: 160px;">Type</th>
+                                <th>Requirement</th>
+                                <th style="width: 140px;">Priority</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for item in requirement_items %}
+                                <tr>
+                                    <td>
+                                        <b>
+                                            {{ item.id or item.requirement_id or item.item_id or "REQ-" ~ loop.index }}
+                                        </b>
+                                    </td>
+
+                                    <td>
+                                        {{ item.type or item.category or item.requirement_type or "N/A" }}
+                                    </td>
+
+                                    <td>
+                                        {{ item.text or item.description or item.requirement or item.title or item }}
+                                    </td>
+
+                                    <td>
+                                        {% set priority = item.priority or "N/A" %}
+                                        <span class="badge {{ priority | lower }}">
+                                            {{ priority }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No requirement items found. Click <b>Analyze</b>.</p>
+                {% endif %}
+            </div>
+
+            <div id="clarifications" class="card">
+                <h3>Clarification Questions</h3>
+
+                {% if has_analysis %}
+                    {% if clarifications and clarifications | length > 0 %}
+                        <p>
+                            These questions should be answered before generating final summary or test cases.
+                        </p>
+
+                        {% for item in clarifications %}
+                            <div class="question-card">
+                                <div class="question-id">
+                                    {{ item.question_id
+                                        or item.clarification_id
+                                        or item.id
+                                        or "Q" ~ loop.index }}
+                                </div>
+
+                                {% set question_text =
+                                    item.question
+                                    or item.question_text
+                                    or item.text
+                                    or item.description
+                                    or item.title
+                                    or item.content
+                                    or item.detail
+                                    or item.details
+                                    or item.message
+                                %}
+
+                                <p>
+                                    <b>Question:</b><br>
+                                    {% if question_text %}
+                                        {{ question_text }}
+                                    {% else %}
+                                        <i>No question text found in this clarification item.</i>
+                                    {% endif %}
+                                </p>
+
+                                {% if item.impact %}
+                                    <p>
+                                        <b>Impact:</b><br>
+                                        {{ item.impact }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.reason %}
+                                    <p>
+                                        <b>Reason:</b><br>
+                                        {{ item.reason }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.context %}
+                                    <p>
+                                        <b>Context:</b><br>
+                                        {{ item.context }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.related_requirement %}
+                                    <p>
+                                        <b>Related Requirement:</b><br>
+                                        {{ item.related_requirement }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.related_requirement_id %}
+                                    <p>
+                                        <b>Related Requirement ID:</b><br>
+                                        {{ item.related_requirement_id }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.category %}
+                                    <p>
+                                        <b>Category:</b><br>
+                                        {{ item.category }}
+                                    </p>
+                                {% endif %}
+
+                                {% if item.priority %}
+                                    <p>
+                                        <b>Priority:</b>
+                                        <span class="badge {{ item.priority | lower }}">
+                                            {{ item.priority }}
+                                        </span>
+                                    </p>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+
+                        <a
+                            class="button warning"
+                            href="/portal/requirements/{{ ticket_id }}/clarifications"
+                        >
+                            Answer Clarifications
+                        </a>
+                    {% else %}
+                        <p>
+                            No clarification questions found.
+                            To generate new clarification questions, click <b>Analyze</b>.
+                        </p>
+                    {% endif %}
+                {% else %}
+                    <p>
+                        No analysis found.
+                        Click <b>Analyze</b> to generate clarification questions.
+                    </p>
+                {% endif %}
+            </div>
+
+            <div id="requirement-summary" class="card">
+                <div class="section-header">
+                    <h3>Requirement Summary</h3>
+
+                    {% if requirement_summary %}
+                        <a
+                            class="button success"
+                            href="/portal/requirements/{{ ticket_id }}/summary/excel"
+                        >
+                            Download Excel
+                        </a>
+                    {% endif %}
+                </div>
+
+                {% if requirement_summary %}
+
+                    {% if requirement_summary.overview %}
+                        <div class="section-block">
+                            <div class="section-title">Overview</div>
+                            <p>{{ requirement_summary.overview }}</p>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.functional_requirements %}
+                        <div class="section-block">
+                            <div class="section-title">Functional Requirements</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.functional_requirements %}
+                                    <li>{{ item.text or item.description or item.requirement or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.business_rules %}
+                        <div class="section-block">
+                            <div class="section-title">Business Rules</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.business_rules %}
+                                    <li>{{ item.text or item.description or item.rule or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.validations %}
+                        <div class="section-block">
+                            <div class="section-title">Validations</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.validations %}
+                                    <li>{{ item.text or item.description or item.validation or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.integrations %}
+                        <div class="section-block">
+                            <div class="section-title">Integrations</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.integrations %}
+                                    <li>{{ item.text or item.description or item.integration or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.error_handling %}
+                        <div class="section-block">
+                            <div class="section-title">Error Handling</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.error_handling %}
+                                    <li>{{ item.text or item.description or item.error or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.non_functional_requirements %}
+                        <div class="section-block">
+                            <div class="section-title">Non-functional Requirements</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.non_functional_requirements %}
+                                    <li>{{ item.text or item.description or item.requirement or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.assumptions %}
+                        <div class="section-block">
+                            <div class="section-title">Assumptions</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.assumptions %}
+                                    <li>{{ item.text or item.description or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if requirement_summary.out_of_scope %}
+                        <div class="section-block">
+                            <div class="section-title">Out of Scope</div>
+
+                            <ul class="info-list">
+                                {% for item in requirement_summary.out_of_scope %}
+                                    <li>{{ item.text or item.description or item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                {% else %}
+                    <p>No requirement summary found. Click <b>Generate Summary</b>.</p>
+                {% endif %}
+            </div>
+
+            <details id="raw-source-data" class="card">
+                <summary>
+                    Raw Source Data
+                </summary>
+
+                <h4>Raw Description</h4>
+                {% if description %}
+                    <pre>{{ description }}</pre>
+                {% else %}
+                    <p>No description found.</p>
+                {% endif %}
+
+                <h4>Uploaded / Extracted Content</h4>
+                {% if uploaded_content %}
+                    <pre>{{ uploaded_content }}</pre>
+                {% else %}
+                    <p>No uploaded content found.</p>
+                {% endif %}
+            </details>
+
+        {% endif %}
+
+        {% if tab == "design" %}
+
+            <div class="card">
+                <h2>Test Design: {{ ticket_id }}</h2>
+
+                {% if has_summary %}
+                    <span class="status ok">Requirement Summary Ready</span>
+                {% else %}
+                    <span class="status missing">No Requirement Summary</span>
+                {% endif %}
+
+                {% if has_approved_structure %}
+                    <span class="status ok">Structure Approved</span>
+                {% else %}
+                    <span class="status missing">No Approved Structure</span>
+                {% endif %}
+
+                <p>
+                    This workspace is used to manage test case structure, test cases,
+                    versions, reviews, improvements, and approvals.
+                </p>
+            </div>
+
+            <div id="test-case-structure" class="card">
+                <div class="section-header">
+                    <h3>Test Case Structure</h3>
+
+                    {% if selected_structure_json %}
+                        <a
+                            class="button success"
+                            href="/portal/requirements/{{ ticket_id }}/structure/excel?structure_version={{ structure_version }}"
+                        >
+                            Download Structure Excel
+                        </a>
+                    {% endif %}
+                </div>
+
+                {% if has_summary %}
+                    <div class="version-toolbar">
+                        <form
+                            method="get"
+                            action="/portal/requirements/{{ ticket_id }}"
+                        >
+                            <input
+                                type="hidden"
+                                name="tab"
+                                value="design"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="testcase_version"
+                                value="{{ testcase_version }}"
+                            >
+
+                            <label>
+                                <b>Structure Version</b>
+                            </label>
+
+                            <select
+                                name="structure_version"
+                                onchange="this.form.submit()"
+                            >
+                                {% if structure_versions %}
+                                    {% for item in structure_versions %}
+                                        <option
+                                            value="{{ item.version }}"
+                                            {% if structure_version == item.version %}selected{% endif %}
+                                        >
+                                            {{ item.label }}
+                                        </option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="latest" selected>
+                                        No structure generated
+                                    </option>
+                                {% endif %}
+                            </select>
+                        </form>
+
+                        {% if structure_session %}
+                            <span class="status {% if structure_session.approved %}ok{% else %}missing{% endif %}">
+                                {% if structure_session.approved %}
+                                    Approved
+                                {% else %}
+                                    Not Approved
+                                {% endif %}
+                            </span>
+
+                            {% if structure_session.current_version %}
+                                <span class="status ok">
+                                    Current: {{ structure_session.current_version }}
+                                </span>
+                            {% endif %}
+
+                            {% if structure_session.approved_version %}
+                                <span class="status ok">
+                                    Approved Version: {{ structure_session.approved_version }}
+                                </span>
+                            {% endif %}
+
+                            {% if structure_session.last_review_version %}
+                                <span class="status ok">
+                                    Last Review: {{ structure_session.last_review_version }}
+                                </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+
+                    {% if selected_structure_json %}
+                        <form
+                            method="post"
+                            action="/portal/requirements/{{ ticket_id }}/structure/approve"
+                            onsubmit="return confirm('Approve selected structure version?')"
+                        >
+                            <input
+                                type="hidden"
+                                name="structure_version"
+                                value="{{ structure_version }}"
+                            >
+
+                            <button type="submit" class="warning">
+                                Approve Selected Version
+                            </button>
+                        </form>
+                    {% else %}
+                        <div class="placeholder-box">
+                            <p>
+                                No test case structure found.
+                                Use <b>Generate Structure</b> from the sidebar to create the first version.
+                            </p>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p>
+                        Requirement Summary is required before generating test case structure.
+                        Go to <b>Requirement Analysis</b> tab and click <b>Generate Summary</b>.
+                    </p>
+                {% endif %}
+            </div>
+
+            <div id="structure-review" class="card">
+                <h3>AI Structure Review</h3>
+
+                {% if selected_structure_review %}
+                    <div class="section-block">
+                        {% if selected_structure_review.review_mode %}
+                            <p>
+                                <b>Review Mode:</b>
+                                {{ selected_structure_review.review_mode }}
+                            </p>
+                        {% endif %}
+
+                        {% if selected_structure_review.coverage_score %}
+                            <p>
+                                <b>Coverage Score:</b>
+                                {{ selected_structure_review.coverage_score }}
+                            </p>
+                        {% endif %}
+
+                        {% if selected_structure_review.approved_by_ai is defined %}
+                            <p>
+                                <b>Approved by AI:</b>
+                                {% if selected_structure_review.approved_by_ai %}
+                                    Yes
+                                {% else %}
+                                    No
+                                {% endif %}
+                            </p>
+                        {% endif %}
+
+                        {% if selected_structure_review.summary %}
+                            <p>
+                                <b>Summary:</b><br>
+                                {{ selected_structure_review.summary }}
+                            </p>
+                        {% endif %}
+
+                        {% if selected_structure_review.issues %}
+                            <div class="section-block">
+                                <div class="section-title">Issues</div>
+
+                                <ul class="info-list">
+                                    {% for item in selected_structure_review.issues %}
+                                        <li>
+                                            {{ item.description or item.text or item.issue or item }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        {% if selected_structure_review.gaps %}
+                            <div class="section-block">
+                                <div class="section-title">Gaps</div>
+
+                                <ul class="info-list">
+                                    {% for item in selected_structure_review.gaps %}
+                                        <li>
+                                            {{ item.description or item.text or item.gap or item }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        {% if selected_structure_review.recommendations %}
+                            <div class="section-block">
+                                <div class="section-title">Recommendations</div>
+
+                                <ul class="info-list">
+                                    {% for item in selected_structure_review.recommendations %}
+                                        <li>
+                                            {{ item.description or item.text or item.recommendation or item }}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    {% if selected_structure_json %}
+                        <div class="placeholder-box">
+                            No AI self review found for selected structure version.
+                            Use <b>Self Review Structure</b> from the sidebar to generate review.
+                        </div>
+                    {% else %}
+                        <p>No structure selected.</p>
+                    {% endif %}
+                {% endif %}
+
+                {% if selected_structure_review_json %}
+                    <details class="card">
+                        <summary>
+                            Raw Structure Review JSON
+                        </summary>
+
+                        <pre>{{ selected_structure_review_json }}</pre>
+                    </details>
+                {% endif %}
+            </div>
+
+            {% if selected_structure_json %}
+                <div id="structure-comment-improve" class="card">
+                    <h3>Comment & Update Structure</h3>
+
+                    <p>
+                        Add your review comment below. The system will improve the latest
+                        structure and create a new version. It will not run self review automatically.
+                        Click <b>Self Review Structure</b> manually after improve if needed.
+                    </p>
+
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/structure/comment-improve"
+                        data-loading="true"
+                        data-loading-title="Improving structure..."
+                        data-loading-message="AI is updating the structure based on your comment and creating a new version."
+                    >
+                        <label>
+                            <b>Review Comment</b>
+                        </label>
+
+                        <textarea
+                            name="improve_comment"
+                            rows="5"
+                            placeholder="Example: Add missing test areas for CR01 mismatch, assertion expiration, and card reinsertion behavior."
+                            required
+                        ></textarea>
+
+                        <button type="submit" class="success">
+                            Improve Structure from Comment
+                        </button>
+                    </form>
+                </div>
+
+                <div id="structure-editor" class="card">
+                    <h3>Structure Editor</h3>
+
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/structure/save"
+                        data-loading="true"
+                        data-loading-title="Saving structure version..."
+                        data-loading-message="Validating JSON and saving as a new structure version."
+                    >
+                        <label>
+                            <b>Edit Selected Structure JSON</b>
+                        </label>
+
+                        <textarea
+                            name="structure_json"
+                            class="editor-textarea"
+                            rows="30"
+                        >{{ selected_structure_json }}</textarea>
+
+                        <button type="submit" class="success">
+                            Save as New Version
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+
+            <div id="test-cases" class="card">
+                <div class="section-header">
+                    <h3>Test Cases</h3>
+                </div>
+
+                <div class="version-toolbar">
+                    <label>
+                        <b>Test Case Version</b>
+                    </label>
+
+                    <select
+                        onchange="window.location.href=this.value"
+                    >
+                        <option
+                            value="/portal/requirements/{{ ticket_id }}?tab=design&structure_version={{ structure_version }}&testcase_version=latest"
+                            {% if testcase_version == "latest" %}selected{% endif %}
+                        >
+                            Latest Draft
+                        </option>
+
+                        <option
+                            value="/portal/requirements/{{ ticket_id }}?tab=design&structure_version={{ structure_version }}&testcase_version=approved"
+                            {% if testcase_version == "approved" %}selected{% endif %}
+                        >
+                            Approved
+                        </option>
+                    </select>
+                </div>
+
+                <div class="placeholder-box">
+                    <p>
+                        Test case version selector is ready.
+                    </p>
+
+                    <p>
+                        Next step will wire this section to generated test case files under:
+                    </p>
+
+                    <pre>requirements/{{ ticket_id }}/testcases/</pre>
+
+                    <p>
+                        It will support:
+                    </p>
+
+                    <ul>
+                        <li>View selected test case version</li>
+                        <li>Edit selected test cases JSON</li>
+                        <li>Save edited test cases as new version</li>
+                        <li>Approve selected version, not only latest</li>
+                        <li>Download test cases Excel</li>
+                    </ul>
                 </div>
             </div>
 
-            {% if requirement_analysis.business_goals %}
-                <div class="section-block">
-                    <div class="section-title">Business Goals</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.business_goals %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.actors %}
-                <div class="section-block">
-                    <div class="section-title">Actors</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.actors %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.entities %}
-                <div class="section-block">
-                    <div class="section-title">Entities</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.entities %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.workflows %}
-                <div class="section-block">
-                    <div class="section-title">Workflows</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.workflows %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.constraints %}
-                <div class="section-block">
-                    <div class="section-title">Constraints</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.constraints %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.risks %}
-                <div class="section-block">
-                    <div class="section-title">Risks</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.risks %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_analysis.ambiguities %}
-                <div class="section-block">
-                    <div class="section-title">Ambiguities</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_analysis.ambiguities %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-        {% else %}
-            <p>No requirement analysis output found. Click <b>Analyze</b>.</p>
         {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Requirement Items</h3>
-
-        {% if requirement_items %}
-            <table class="visual-table">
-                <thead>
-                    <tr>
-                        <th style="width: 120px;">ID</th>
-                        <th style="width: 160px;">Type</th>
-                        <th>Requirement</th>
-                        <th style="width: 140px;">Priority</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {% for item in requirement_items %}
-                        <tr>
-                            <td>
-                                <b>
-                                    {{ item.id or item.requirement_id or item.item_id or "REQ-" ~ loop.index }}
-                                </b>
-                            </td>
-
-                            <td>
-                                {{ item.type or item.category or item.requirement_type or "N/A" }}
-                            </td>
-
-                            <td>
-                                {{ item.text or item.description or item.requirement or item.title or item }}
-                            </td>
-
-                            <td>
-                                {% set priority = item.priority or "N/A" %}
-                                <span class="badge {{ priority | lower }}">
-                                    {{ priority }}
-                                </span>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p>No requirement items found. Click <b>Analyze</b>.</p>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <h3>Clarification Questions</h3>
-
-        {% if clarifications and clarifications | length > 0 %}
-            <p>
-                These questions should be answered before generating final summary or test cases.
-            </p>
-
-            {% for item in clarifications %}
-                <div class="question-card">
-                    <div class="question-id">
-                        {{ item.question_id
-                            or item.clarification_id
-                            or item.id
-                            or "Q" ~ loop.index }}
-                    </div>
-
-                    {% set question_text =
-                        item.question
-                        or item.question_text
-                        or item.text
-                        or item.description
-                        or item.title
-                        or item.content
-                        or item.detail
-                        or item.details
-                        or item.message
-                    %}
-
-                    <p>
-                        <b>Question:</b><br>
-                        {% if question_text %}
-                            {{ question_text }}
-                        {% else %}
-                            <i>No question text found in this clarification item.</i>
-                        {% endif %}
-                    </p>
-
-                    {% if item.impact %}
-                        <p>
-                            <b>Impact:</b><br>
-                            {{ item.impact }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.reason %}
-                        <p>
-                            <b>Reason:</b><br>
-                            {{ item.reason }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.context %}
-                        <p>
-                            <b>Context:</b><br>
-                            {{ item.context }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.related_requirement %}
-                        <p>
-                            <b>Related Requirement:</b><br>
-                            {{ item.related_requirement }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.related_requirement_id %}
-                        <p>
-                            <b>Related Requirement ID:</b><br>
-                            {{ item.related_requirement_id }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.category %}
-                        <p>
-                            <b>Category:</b><br>
-                            {{ item.category }}
-                        </p>
-                    {% endif %}
-
-                    {% if item.priority %}
-                        <p>
-                            <b>Priority:</b>
-                            <span class="badge {{ item.priority | lower }}">
-                                {{ item.priority }}
-                            </span>
-                        </p>
-                    {% endif %}
-                </div>
-            {% endfor %}
-
-            <a
-                class="button warning"
-                href="/portal/requirements/{{ ticket_id }}/clarifications"
-            >
-                Answer Clarifications
-            </a>
-        {% else %}
-            <p>
-                No clarification questions found.
-                To generate new clarification questions, click <b>Analyze</b>.
-            </p>
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <div class="section-header">
-            <h3>Requirement Summary</h3>
-
-            {% if requirement_summary %}
-                <a
-                    class="button success"
-                    href="/portal/requirements/{{ ticket_id }}/summary/excel"
-                >
-                    Download Excel
-                </a>
-            {% endif %}
-        </div>
-
-        {% if requirement_summary %}
-
-            {% if requirement_summary.overview %}
-                <div class="section-block">
-                    <div class="section-title">Overview</div>
-                    <p>{{ requirement_summary.overview }}</p>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.functional_requirements %}
-                <div class="section-block">
-                    <div class="section-title">Functional Requirements</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.functional_requirements %}
-                            <li>{{ item.text or item.description or item.requirement or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.business_rules %}
-                <div class="section-block">
-                    <div class="section-title">Business Rules</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.business_rules %}
-                            <li>{{ item.text or item.description or item.rule or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.validations %}
-                <div class="section-block">
-                    <div class="section-title">Validations</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.validations %}
-                            <li>{{ item.text or item.description or item.validation or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.integrations %}
-                <div class="section-block">
-                    <div class="section-title">Integrations</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.integrations %}
-                            <li>{{ item.text or item.description or item.integration or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.error_handling %}
-                <div class="section-block">
-                    <div class="section-title">Error Handling</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.error_handling %}
-                            <li>{{ item.text or item.description or item.error or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.non_functional_requirements %}
-                <div class="section-block">
-                    <div class="section-title">Non-functional Requirements</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.non_functional_requirements %}
-                            <li>{{ item.text or item.description or item.requirement or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.assumptions %}
-                <div class="section-block">
-                    <div class="section-title">Assumptions</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.assumptions %}
-                            <li>{{ item.text or item.description or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if requirement_summary.out_of_scope %}
-                <div class="section-block">
-                    <div class="section-title">Out of Scope</div>
-
-                    <ul class="info-list">
-                        {% for item in requirement_summary.out_of_scope %}
-                            <li>{{ item.text or item.description or item }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-        {% else %}
-            <p>No requirement summary found. Click <b>Generate Summary</b>.</p>
-        {% endif %}
-    </div>
-
+    </section>
 </div>
 
 {% endblock %}

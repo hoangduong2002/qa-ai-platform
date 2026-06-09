@@ -36,8 +36,25 @@ from app.services.web_requirement_service import (
     export_requirement_analysis_to_excel
 )
 
-from fastapi.responses import FileResponse
-from fastapi.responses import FileResponse
+from app.services.web_design_artifact_service import (
+    approve_structure_version,
+    export_structure_version_to_excel,
+    generate_structure_for_web,
+    get_structure_session_for_web,
+    get_structure_version_json,
+    list_structure_versions,
+    save_structure_json_as_new_version,
+    get_structure_review,
+    get_structure_review_json,
+    self_review_structure_version,
+    improve_structure_with_comment_for_web,
+)
+
+from fastapi.responses import (
+    FileResponse,
+    RedirectResponse,
+    HTMLResponse,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -145,9 +162,59 @@ async def create_requirement_from_jira(
 async def requirement_detail(
     request: Request,
     ticket_id: str,
+    tab: str = "analysis",
+    structure_version: str = "latest",
+    testcase_version: str = "latest",
 ):
     detail = get_requirement_detail(
         ticket_id
+    )
+
+    if tab not in [
+        "analysis",
+        "design",
+    ]:
+        tab = "analysis"
+
+    structure_versions = list_structure_versions(
+        ticket_id
+    )
+
+    selected_structure_json = get_structure_version_json(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    selected_structure_review = get_structure_review(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    selected_structure_review_json = get_structure_review_json(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    structure_session = get_structure_session_for_web(
+        ticket_id
+    )
+
+    detail.update(
+        {
+            "tab": tab,
+            "structure_version": structure_version,
+            "testcase_version": testcase_version,
+            "structure_versions": structure_versions,
+            "selected_structure_json": selected_structure_json,
+            "selected_structure_review": selected_structure_review,
+            "selected_structure_review_json": selected_structure_review_json,
+            "structure_session": structure_session,
+            "has_testcase_structure": bool(selected_structure_json),
+            "has_structure_review": bool(selected_structure_review),
+            "has_approved_structure": bool(
+                structure_session.get("approved")
+            ),
+        }
     )
 
     return templates.TemplateResponse(
@@ -155,7 +222,6 @@ async def requirement_detail(
         "requirement_detail.html",
         detail,
     )
-
 
 @router.get(
     "/requirements/{ticket_id}/edit",
@@ -337,5 +403,121 @@ async def submit_clarification_answers(
 
     return RedirectResponse(
         url=f"/portal/requirements/{ticket_id}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/requirements/{ticket_id}/structure/generate",
+)
+async def generate_structure(
+    ticket_id: str,
+):
+    generate_structure_for_web(
+        ticket_id=ticket_id,
+    )
+
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}?tab=design&structure_version=latest",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/requirements/{ticket_id}/structure/save",
+)
+async def save_structure_version(
+    ticket_id: str,
+    structure_json: str = Form(...),
+):
+    new_version = save_structure_json_as_new_version(
+        ticket_id=ticket_id,
+        structure_json=structure_json,
+    )
+
+    return RedirectResponse(
+        url=(
+            f"/portal/requirements/{ticket_id}"
+            f"?tab=design&structure_version={new_version}"
+        ),
+        status_code=303,
+    )
+
+
+@router.post(
+    "/requirements/{ticket_id}/structure/approve",
+)
+async def approve_selected_structure(
+    ticket_id: str,
+    structure_version: str = Form(...),
+):
+    approve_structure_version(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    return RedirectResponse(
+        url=(
+            f"/portal/requirements/{ticket_id}"
+            f"?tab=design&structure_version=approved"
+        ),
+        status_code=303,
+    )
+
+
+@router.get(
+    "/requirements/{ticket_id}/structure/excel",
+)
+async def download_structure_excel(
+    ticket_id: str,
+    structure_version: str = "latest",
+):
+    excel_file = export_structure_version_to_excel(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    return FileResponse(
+        path=str(excel_file),
+        filename=excel_file.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.post(
+    "/requirements/{ticket_id}/structure/self-review",
+)
+async def self_review_selected_structure(
+    ticket_id: str,
+    structure_version: str = Form(...),
+):
+    self_review_structure_version(
+        ticket_id=ticket_id,
+        version=structure_version,
+    )
+
+    return RedirectResponse(
+        url=(
+            f"/portal/requirements/{ticket_id}"
+            f"?tab=design&structure_version={structure_version}"
+        ),
+        status_code=303,
+    )
+
+
+@router.post(
+    "/requirements/{ticket_id}/structure/comment-improve",
+)
+async def improve_structure_with_comment(
+    ticket_id: str,
+    improve_comment: str = Form(...),
+):
+    improve_structure_with_comment_for_web(
+        ticket_id=ticket_id,
+        comment=improve_comment,
+    )
+
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}?tab=design&structure_version=latest",
         status_code=303,
     )

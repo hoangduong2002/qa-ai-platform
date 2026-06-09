@@ -208,62 +208,112 @@ def _get_next_structure_version(session: dict) -> str:
     return f"v{current_number + 1}"
 
 
-def run_structure_comment_improve(ticket_id: str, comment: str):
-    session = load_structure_session(ticket_id)
+def _next_structure_version(
+    current_version: str,
+) -> str:
+    try:
+        number = int(
+            current_version.replace("v", "")
+        )
+    except Exception:
+        number = 1
 
-    if session.get("approved"):
-        raise ValueError("Structure is already approved.")
+    return f"v{number + 1}"
 
-    current_iteration = session.get("review_iterations", 0)
-    max_iterations = session.get("max_review_iterations", 3)
 
-    if current_iteration >= max_iterations:
-        raise ValueError("Maximum structure review iterations reached.")
-
+def run_structure_comment_improve(
+    ticket_id: str,
+    comment: str,
+):
     state = load_ticket_artifacts(ticket_id)
-    state["ticket_id"] = ticket_id
-    state["test_case_structure"] = load_latest_test_case_structure(ticket_id)
-    state["structure_review_comments"] = [comment]
 
-    if not state["test_case_structure"]:
+    latest_structure = load_latest_test_case_structure(
+        ticket_id
+    )
+
+    if not latest_structure:
         raise ValueError(
-            f"No latest test case structure found for {ticket_id}."
+            f"No latest test case structure found for {ticket_id}"
         )
 
-    new_iteration = current_iteration + 1
-    new_version = _get_next_structure_version(session)
+    session = load_structure_session(
+        ticket_id
+    )
 
-    improve_result = improve_test_case_structure(state)
-    state.update(improve_result)
+    current_version = session.get(
+        "current_version",
+        "v1",
+    )
+
+    state["ticket_id"] = ticket_id
+    state["test_case_structure"] = latest_structure
+    state["structure_review_comments"] = [
+        comment,
+    ]
+
+    improve_result = improve_test_case_structure(
+        state
+    )
+
+    state.update(
+        improve_result
+    )
+
+    improved_structure = state.get(
+        "test_case_structure"
+    )
+
+    if not improved_structure:
+        raise ValueError(
+            "Improve structure failed: no improved structure returned."
+        )
+
+    next_version = _next_structure_version(
+        current_version
+    )
 
     save_test_case_structure_version(
-        ticket_id,
-        state["test_case_structure"],
-        new_version,
+        ticket_id=ticket_id,
+        structure=improved_structure,
+        version=next_version,
     )
 
     save_latest_test_case_structure(
-        ticket_id,
-        state["test_case_structure"],
+        ticket_id=ticket_id,
+        structure=improved_structure,
     )
 
-    review_result = review_test_case_structure(state)
-    state.update(review_result)
-
-    save_test_case_structure_review_version(
-        ticket_id,
-        state["test_case_structure_review"],
-        new_version,
-    )
-
-    session["current_version"] = new_version
-    session["review_iterations"] = new_iteration
-    session["last_review_version"] = new_version
+    session["current_version"] = next_version
+    session["approved"] = False
     session["waiting_human_review"] = True
+    session["last_improve_comment"] = comment
 
-    save_structure_session(ticket_id, session)
+    # Important:
+    # Do not auto-review after comment improve.
+    # User will manually click Self Review Structure if needed.
+    session.pop(
+        "last_review_version",
+        None,
+    )
 
-    return _export_structure(ticket_id, state)
+    save_structure_session(
+        ticket_id,
+        session,
+    )
+
+    export_test_case_structure_to_excel(
+        ticket_id=ticket_id,
+        structure=improved_structure,
+        review={},
+    )
+
+    return {
+        "ticket_id": ticket_id,
+        "previous_version": current_version,
+        "new_version": next_version,
+        "test_case_structure": improved_structure,
+        "structure_session": session,
+    }
 
 
 def approve_structure(ticket_id: str):
