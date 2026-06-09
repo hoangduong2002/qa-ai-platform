@@ -26,14 +26,6 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 
-from graph.requirement_question_graph import (
-    requirement_question_graph
-)
-
-from graph.requirement_summary_graph import (
-    requirement_summary_graph
-)
-
 from graph.test_generation_graph import (
     test_generation_graph
 )
@@ -173,6 +165,11 @@ from bot.renderers.testcase_review_text_renderer import (
 
 from app.services.jira_requirement_service import (
     create_requirement_from_jira,
+)
+
+from app.services.requirement_workflow_service import (
+    run_requirement_questions,
+    run_requirement_summary,
 )
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -439,18 +436,6 @@ async def export_requirement_intelligence(
     )
 
 
-async def run_requirement_summary(
-    ticket_id: str
-):
-    requirement_summary_graph.invoke(
-        {
-            "ticket_id": ticket_id
-        }
-    )
-
-    return load_ticket_artifacts(ticket_id)
-
-
 async def continue_generation_with_structure_gate(
     message,
     ticket_id: str,
@@ -710,24 +695,7 @@ async def ask_clarifications(
             mode,
         ),
     )
-
-
-async def run_requirement_questions(
-    ticket_id: str
-):
-    result = requirement_question_graph.invoke(
-        {
-            "ticket_id": ticket_id
-        }
-    )
-
-    save_clarification_questions_snapshot(
-        ticket_id,
-        result.get("clarifications", {})
-    )
-
-    return result
-
+    
 
 async def process_ticket(update: Update, ticket_id: str):
     message = get_message(update)

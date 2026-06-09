@@ -1,0 +1,191 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="fixed-actions">
+    <h3>Clarification Actions</h3>
+
+    <div class="action-row">
+        <button
+            type="submit"
+            form="clarificationForm"
+            class="success"
+        >
+            Save Clarification Answers
+        </button>
+
+        <a
+            class="button secondary"
+            href="/portal/requirements/{{ ticket_id }}"
+        >
+            Back
+        </a>
+    </div>
+</div>
+
+<div class="page-with-fixed-actions">
+
+    <div class="card">
+        <h2>Answer Clarifications: {{ ticket_id }}</h2>
+
+        <p>
+            Please answer the clarification questions below. Your answers will be saved as additional requirement context.
+        </p>
+
+        <p>
+            After saving answers, click <b>Analyze</b> or <b>Generate Summary</b> again from the requirement detail page.
+        </p>
+    </div>
+
+    {% if questions and questions | length > 0 %}
+        <form
+            id="clarificationForm"
+            method="post"
+            action="/portal/requirements/{{ ticket_id }}/clarifications"
+            data-loading="true"
+            data-loading-title="Saving clarification answers..."
+            data-loading-message="Saving answers and updating requirement context."
+        >
+            {% for item in questions %}
+
+                {% set question_id =
+                    item.question_id
+                    or item.clarification_id
+                    or item.id
+                    or "Q" ~ loop.index
+                %}
+
+                {% set question_text =
+                    item.question
+                    or item.question_text
+                    or item.text
+                    or item.description
+                    or item.title
+                    or item.content
+                    or item.detail
+                    or item.details
+                    or item.message
+                %}
+
+                <div class="question-card">
+                    <div class="question-id">
+                        {{ question_id }}
+                    </div>
+
+                    <p>
+                        <b>Question:</b><br>
+                        {% if question_text %}
+                            {{ question_text }}
+                        {% else %}
+                            <i>No question text found in this clarification item.</i>
+                        {% endif %}
+                    </p>
+
+                    {% if item.impact %}
+                        <p>
+                            <b>Impact:</b><br>
+                            {{ item.impact }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.reason %}
+                        <p>
+                            <b>Reason:</b><br>
+                            {{ item.reason }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.context %}
+                        <p>
+                            <b>Context:</b><br>
+                            {{ item.context }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.category %}
+                        <p>
+                            <b>Category:</b><br>
+                            {{ item.category }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.type %}
+                        <p>
+                            <b>Type:</b><br>
+                            {{ item.type }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.related_requirement %}
+                        <p>
+                            <b>Related Requirement:</b><br>
+                            {{ item.related_requirement }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.related_requirement_id %}
+                        <p>
+                            <b>Related Requirement ID:</b><br>
+                            {{ item.related_requirement_id }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.priority %}
+                        <p>
+                            <b>Priority:</b>
+                            <span class="badge {{ item.priority | lower }}">
+                                {{ item.priority }}
+                            </span>
+                        </p>
+                    {% endif %}
+
+                    <label>
+                        <b>Your Answer</b>
+                    </label>
+
+                    <textarea
+                        name="answer__{{ question_id }}"
+                        rows="5"
+                        placeholder="Enter clarification answer..."
+                    ></textarea>
+                </div>
+
+            {% endfor %}
+
+            <div class="card">
+                <button type="submit" class="success">
+                    Save Clarification Answers
+                </button>
+
+                <a
+                    class="button secondary"
+                    href="/portal/requirements/{{ ticket_id }}"
+                >
+                    Cancel
+                </a>
+            </div>
+        </form>
+    {% else %}
+        <div class="card">
+            <h3>No Clarification Questions</h3>
+
+            <p>
+                No clarification questions found.
+            </p>
+
+            <p>
+                To generate new clarification questions, go back to the requirement detail page and click <b>Analyze</b>.
+            </p>
+
+            <a
+                class="button secondary"
+                href="/portal/requirements/{{ ticket_id }}"
+            >
+                Back to Requirement
+            </a>
+        </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}

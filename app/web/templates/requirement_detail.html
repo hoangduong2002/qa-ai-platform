@@ -1,0 +1,564 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="fixed-actions">
+    <h3>Actions</h3>
+
+    <div class="action-row">
+        <a
+            class="button secondary"
+            href="/portal/requirements/{{ ticket_id }}/edit"
+        >
+            Edit
+        </a>
+
+        <form
+            method="post"
+            action="/portal/requirements/{{ ticket_id }}/sanitize"
+            data-loading="true"
+            data-loading-title="Sanitizing requirement..."
+            data-loading-message="Removing sensitive data and preparing clean requirement context."
+        >
+            <button type="submit">
+                Run Sanitizer
+            </button>
+        </form>
+
+        <form
+            method="post"
+            action="/portal/requirements/{{ ticket_id }}/analyze"
+            data-loading="true"
+            data-loading-title="Analyzing requirement..."
+            data-loading-message="AI is extracting requirement items and clarification questions."
+        >
+            <button type="submit" class="success">
+                Analyze
+            </button>
+        </form>
+
+        {% if has_analysis %}
+            <a
+                class="button success"
+                href="/portal/requirements/{{ ticket_id }}/analysis/excel"
+            >
+                Download Analysis Excel
+            </a>
+        {% endif %}
+
+        {% if has_analysis and clarifications and clarifications | length > 0 %}
+            <a
+                class="button warning"
+                href="/portal/requirements/{{ ticket_id }}/clarifications"
+            >
+                Answer Clarifications
+            </a>
+        {% endif %}
+
+        <form
+            method="post"
+            action="/portal/requirements/{{ ticket_id }}/summary"
+            data-loading="true"
+            data-loading-title="Generating requirement summary..."
+            data-loading-message="AI is creating the structured requirement summary."
+        >
+            <button type="submit" class="success">
+                Generate Summary
+            </button>
+        </form>
+
+        <form
+            method="post"
+            action="/portal/requirements/{{ ticket_id }}/delete"
+            onsubmit="return confirm('Delete this requirement?')"
+        >
+            <button type="submit" class="danger">
+                Delete
+            </button>
+        </form>
+
+        <a
+            class="button secondary"
+            href="/portal"
+        >
+            Back
+        </a>
+    </div>
+</div>
+
+<div class="page-with-fixed-actions">
+
+    <div class="card">
+        <h2>Requirement: {{ ticket_id }}</h2>
+
+        <p>
+            <b>Summary:</b> {{ ticket.summary }}
+        </p>
+
+        <p>
+            <b>Source:</b> {{ ticket.source }}
+        </p>
+
+        {% if ticket.created_at %}
+            <p>
+                <b>Created:</b> {{ ticket.created_at }}
+            </p>
+        {% endif %}
+
+        {% if ticket.updated_at %}
+            <p>
+                <b>Updated:</b> {{ ticket.updated_at }}
+            </p>
+        {% endif %}
+
+        {% if has_sanitized %}
+            <span class="status ok">Sanitized</span>
+        {% else %}
+            <span class="status missing">Not Sanitized</span>
+        {% endif %}
+
+        {% if has_analysis %}
+            <span class="status ok">Analysis Ready</span>
+        {% else %}
+            <span class="status missing">No Analysis</span>
+        {% endif %}
+
+        {% if has_clarifications %}
+            <span class="status ok">Clarifications Ready</span>
+        {% else %}
+            <span class="status missing">No Clarifications</span>
+        {% endif %}
+
+        {% if has_summary %}
+            <span class="status ok">Summary Ready</span>
+        {% else %}
+            <span class="status missing">No Summary</span>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Raw Description</h3>
+
+        {% if description %}
+            <pre>{{ description }}</pre>
+        {% else %}
+            <p>No description found.</p>
+        {% endif %}
+    </div>    
+
+    <div class="card">
+        <h3>Uploaded / Extracted Content</h3>
+
+        {% if uploaded_content %}
+            <pre>{{ uploaded_content }}</pre>
+        {% else %}
+            <p>No uploaded content found.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Sanitized Requirement</h3>
+
+        {% if sanitized_requirement %}
+            <pre>{{ sanitized_requirement }}</pre>
+        {% else %}
+            <p>
+                No sanitized requirement found.
+                Click <b>Run Sanitizer</b> or <b>Analyze</b>.
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Requirement Analysis</h3>
+
+        {% if requirement_analysis %}
+            <div class="summary-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Requirement Items</div>
+                    <div class="metric-value">
+                        {{ requirement_items | length if requirement_items else 0 }}
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Clarification Questions</div>
+                    <div class="metric-value">
+                        {{ clarifications | length if clarifications else 0 }}
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Has Summary</div>
+                    <div class="metric-value">
+                        {% if requirement_summary %}Yes{% else %}No{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if requirement_analysis.business_goals %}
+                <div class="section-block">
+                    <div class="section-title">Business Goals</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.business_goals %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.actors %}
+                <div class="section-block">
+                    <div class="section-title">Actors</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.actors %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.entities %}
+                <div class="section-block">
+                    <div class="section-title">Entities</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.entities %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.workflows %}
+                <div class="section-block">
+                    <div class="section-title">Workflows</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.workflows %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.constraints %}
+                <div class="section-block">
+                    <div class="section-title">Constraints</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.constraints %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.risks %}
+                <div class="section-block">
+                    <div class="section-title">Risks</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.risks %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_analysis.ambiguities %}
+                <div class="section-block">
+                    <div class="section-title">Ambiguities</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_analysis.ambiguities %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% else %}
+            <p>No requirement analysis output found. Click <b>Analyze</b>.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Requirement Items</h3>
+
+        {% if requirement_items %}
+            <table class="visual-table">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">ID</th>
+                        <th style="width: 160px;">Type</th>
+                        <th>Requirement</th>
+                        <th style="width: 140px;">Priority</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in requirement_items %}
+                        <tr>
+                            <td>
+                                <b>
+                                    {{ item.id or item.requirement_id or item.item_id or "REQ-" ~ loop.index }}
+                                </b>
+                            </td>
+
+                            <td>
+                                {{ item.type or item.category or item.requirement_type or "N/A" }}
+                            </td>
+
+                            <td>
+                                {{ item.text or item.description or item.requirement or item.title or item }}
+                            </td>
+
+                            <td>
+                                {% set priority = item.priority or "N/A" %}
+                                <span class="badge {{ priority | lower }}">
+                                    {{ priority }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No requirement items found. Click <b>Analyze</b>.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Clarification Questions</h3>
+
+        {% if clarifications and clarifications | length > 0 %}
+            <p>
+                These questions should be answered before generating final summary or test cases.
+            </p>
+
+            {% for item in clarifications %}
+                <div class="question-card">
+                    <div class="question-id">
+                        {{ item.question_id
+                            or item.clarification_id
+                            or item.id
+                            or "Q" ~ loop.index }}
+                    </div>
+
+                    {% set question_text =
+                        item.question
+                        or item.question_text
+                        or item.text
+                        or item.description
+                        or item.title
+                        or item.content
+                        or item.detail
+                        or item.details
+                        or item.message
+                    %}
+
+                    <p>
+                        <b>Question:</b><br>
+                        {% if question_text %}
+                            {{ question_text }}
+                        {% else %}
+                            <i>No question text found in this clarification item.</i>
+                        {% endif %}
+                    </p>
+
+                    {% if item.impact %}
+                        <p>
+                            <b>Impact:</b><br>
+                            {{ item.impact }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.reason %}
+                        <p>
+                            <b>Reason:</b><br>
+                            {{ item.reason }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.context %}
+                        <p>
+                            <b>Context:</b><br>
+                            {{ item.context }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.related_requirement %}
+                        <p>
+                            <b>Related Requirement:</b><br>
+                            {{ item.related_requirement }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.related_requirement_id %}
+                        <p>
+                            <b>Related Requirement ID:</b><br>
+                            {{ item.related_requirement_id }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.category %}
+                        <p>
+                            <b>Category:</b><br>
+                            {{ item.category }}
+                        </p>
+                    {% endif %}
+
+                    {% if item.priority %}
+                        <p>
+                            <b>Priority:</b>
+                            <span class="badge {{ item.priority | lower }}">
+                                {{ item.priority }}
+                            </span>
+                        </p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <a
+                class="button warning"
+                href="/portal/requirements/{{ ticket_id }}/clarifications"
+            >
+                Answer Clarifications
+            </a>
+        {% else %}
+            <p>
+                No clarification questions found.
+                To generate new clarification questions, click <b>Analyze</b>.
+            </p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="section-header">
+            <h3>Requirement Summary</h3>
+
+            {% if requirement_summary %}
+                <a
+                    class="button success"
+                    href="/portal/requirements/{{ ticket_id }}/summary/excel"
+                >
+                    Download Excel
+                </a>
+            {% endif %}
+        </div>
+
+        {% if requirement_summary %}
+
+            {% if requirement_summary.overview %}
+                <div class="section-block">
+                    <div class="section-title">Overview</div>
+                    <p>{{ requirement_summary.overview }}</p>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.functional_requirements %}
+                <div class="section-block">
+                    <div class="section-title">Functional Requirements</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.functional_requirements %}
+                            <li>{{ item.text or item.description or item.requirement or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.business_rules %}
+                <div class="section-block">
+                    <div class="section-title">Business Rules</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.business_rules %}
+                            <li>{{ item.text or item.description or item.rule or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.validations %}
+                <div class="section-block">
+                    <div class="section-title">Validations</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.validations %}
+                            <li>{{ item.text or item.description or item.validation or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.integrations %}
+                <div class="section-block">
+                    <div class="section-title">Integrations</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.integrations %}
+                            <li>{{ item.text or item.description or item.integration or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.error_handling %}
+                <div class="section-block">
+                    <div class="section-title">Error Handling</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.error_handling %}
+                            <li>{{ item.text or item.description or item.error or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.non_functional_requirements %}
+                <div class="section-block">
+                    <div class="section-title">Non-functional Requirements</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.non_functional_requirements %}
+                            <li>{{ item.text or item.description or item.requirement or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.assumptions %}
+                <div class="section-block">
+                    <div class="section-title">Assumptions</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.assumptions %}
+                            <li>{{ item.text or item.description or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if requirement_summary.out_of_scope %}
+                <div class="section-block">
+                    <div class="section-title">Out of Scope</div>
+
+                    <ul class="info-list">
+                        {% for item in requirement_summary.out_of_scope %}
+                            <li>{{ item.text or item.description or item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+        {% else %}
+            <p>No requirement summary found. Click <b>Generate Summary</b>.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endblock %}

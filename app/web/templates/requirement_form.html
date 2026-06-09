@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h2>Add Requirement</h2>
+
+    <form
+        method="post"
+        action="/portal/requirements"
+        enctype="multipart/form-data"
+    >
+        <label>Requirement Name</label>
+        <input
+            type="text"
+            name="requirement_name"
+            placeholder="Example: LOGIN-001 or EVNWCL-5221"
+            required
+        />
+
+        <label>Requirement Text</label>
+        <textarea
+            name="description"
+            rows="14"
+            placeholder="Paste requirement text here..."
+        ></textarea>
+
+        <label>Upload Files</label>
+        <input
+            type="file"
+            name="files"
+            multiple
+        />
+
+        <button type="submit">
+            Save Requirement
+        </button>
+
+        <a class="button secondary" href="/portal">
+            Cancel
+        </a>
+    </form>
+</div>
+
+{% endblock %}

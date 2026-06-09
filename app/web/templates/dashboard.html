@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h2>Requirement Management</h2>
+
+    <a class="button success" href="/portal/requirements/new">
+        Add Requirement
+    </a>
+</div>
+
+<div class="card">
+    <h2>Load Requirement from Jira</h2>
+
+    <form method="post" action="/portal/requirements/from-jira">
+        <label>Jira Ticket ID</label>
+        <input
+            type="text"
+            name="issue_key"
+            placeholder="Example: EVNWCL-5221"
+            required
+        />
+
+        <button type="submit">
+            Load from Jira & Save Requirement
+        </button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Requirements</h2>
+
+    {% if requirements %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Requirement ID</th>
+                    <th>Summary</th>
+                    <th>Source</th>
+                    <th>Sanitized</th>
+                    <th>Analysis</th>
+                    <th>Updated</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in requirements %}
+                    <tr>
+                        <td>{{ item.ticket_id }}</td>
+                        <td>{{ item.summary }}</td>
+                        <td>{{ item.source }}</td>
+                        <td>
+                            {% if item.has_sanitized %}
+                                ✅
+                            {% else %}
+                                ❌
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.has_analysis %}
+                                ✅
+                            {% else %}
+                                ❌
+                            {% endif %}
+                        </td>
+                        <td>{{ item.updated_at }}</td>
+                        <td>
+                            <a class="button secondary" href="/portal/requirements/{{ item.ticket_id }}">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No requirements found.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

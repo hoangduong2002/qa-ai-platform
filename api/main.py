@@ -1,13 +1,24 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from graph.testcase_graph import graph
+from app.web.portal_router import router as portal_router
 
 
 app = FastAPI(
     title="QA AI Platform",
     version="0.1.0"
 )
+
+app.include_router(portal_router)
+
+@app.get("/")
+async def root():
+    return RedirectResponse(
+        url="/portal",
+        status_code=302,
+    )
 
 
 class GenerateTestcaseRequest(BaseModel):

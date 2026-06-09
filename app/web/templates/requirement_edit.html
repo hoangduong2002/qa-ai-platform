@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h2>Edit Requirement: {{ ticket_id }}</h2>
+
+    <form
+        method="post"
+        action="/portal/requirements/{{ ticket_id }}/edit"
+    >
+        <label>Summary</label>
+        <input
+            type="text"
+            name="summary"
+            value="{{ ticket.summary }}"
+            required
+        />
+
+        <label>Description</label>
+        <textarea
+            name="description"
+            rows="16"
+        >{{ description }}</textarea>
+
+        <label>Comments</label>
+        <textarea
+            name="comments"
+            rows="8"
+        >{{ comments }}</textarea>
+
+        <button type="submit">
+            Save Changes
+        </button>
+
+        <a class="button secondary" href="/portal/requirements/{{ ticket_id }}">
+            Cancel
+        </a>
+    </form>
+</div>
+
+{% endblock %}
