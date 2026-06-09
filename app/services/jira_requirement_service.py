@@ -10,6 +10,7 @@ from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
 
 from app.utils.jira_content_cleaner import clean_jira_html
+from app.utils.requirement_sanitizer import clean_requirement_text
 
 
 def _safe_filename(name: str) -> str:
@@ -71,18 +72,8 @@ def _get_jira_client() -> Jira:
 
 
 def _to_text(value) -> str:
-    if value is None:
-        return ""
-
-    if isinstance(value, str):
-        return clean_jira_html(value)
-
-    return clean_jira_html(
-        json.dumps(
-            value,
-            indent=2,
-            ensure_ascii=False,
-        )
+    return clean_requirement_text(
+        value,
     )
 
 
@@ -433,25 +424,23 @@ def create_requirement_from_jira(
                     f"Failed to fetch subtask: {error}\n\n"
                 )
 
-        raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
-        cleaned_markdown_file = jira_dir / f"{issue_key}.md"
+            raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
+            markdown_file = jira_dir / f"{issue_key}.md"
 
-        raw_markdown_file.write_text(
-            markdown,
-            encoding="utf-8",
-        )
+            raw_markdown_file.write_text(
+                markdown,
+                encoding="utf-8",
+            )
 
-        cleaned_markdown = clean_jira_html(markdown)
+            markdown_file.write_text(
+                markdown,
+                encoding="utf-8",
+            )
 
-        cleaned_markdown_file.write_text(
-            cleaned_markdown,
-            encoding="utf-8",
-        )
+            create_workspace_from_text(
+                ticket_id,
+                markdown,
+                source=f"jira:{issue_key}",
+            )
 
-        create_workspace_from_text(
-            ticket_id,
-            cleaned_markdown,
-            source=f"jira:{issue_key}",
-        )
-
-        return ticket_id
+            return ticket_id

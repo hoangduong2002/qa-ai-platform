@@ -3,6 +3,10 @@ import shutil
 import asyncio
 import logging
 
+from app.services.requirement_sanitization_service import (
+    sanitize_requirement_for_analysis,
+)
+
 from pathlib import Path
 from datetime import datetime
 
