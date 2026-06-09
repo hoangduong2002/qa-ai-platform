@@ -359,7 +359,18 @@
             </div>
 
             <div id="scenarios" class="card">
-                <h3>Scenarios</h3>
+                <div class="section-header">
+                    <h3>Scenarios</h3>
+
+                    {% if selected_scenarios_json %}
+                        <a
+                            class="button success"
+                            href="/portal/requirements/{{ ticket_id }}/scenarios/excel?scenario_version={{ scenario_version }}"
+                        >
+                            Download Excel
+                        </a>
+                    {% endif %}
+                </div>
                 <div class="version-toolbar">
                     <form method="get" action="/portal/requirements/{{ ticket_id }}">
                         <input type="hidden" name="tab" value="design">
@@ -413,7 +424,18 @@
             </div>
 
             <div id="test-cases" class="card">
-                <h3>Test Cases</h3>
+                <div class="section-header">
+                    <h3>Test Cases</h3>
+
+                    {% if selected_testcases_json %}
+                        <a
+                            class="button success"
+                            href="/portal/requirements/{{ ticket_id }}/testcases/excel?testcase_version={{ testcase_version }}"
+                        >
+                            Download Excel
+                        </a>
+                    {% endif %}
+                </div>
                 <div class="version-toolbar">
                     <form method="get" action="/portal/requirements/{{ ticket_id }}">
                         <input type="hidden" name="tab" value="design">

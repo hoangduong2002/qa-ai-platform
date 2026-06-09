@@ -1,0 +1,197 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="card">
+    <div class="section-header">
+        <h2>QA AI Platform Report Preview</h2>
+
+        <div class="mini-actions">
+            <a
+                class="button secondary"
+                href="/portal"
+            >
+                Back to Dashboard
+            </a>
+
+            <a
+                class="button success"
+                href="/portal/reports/download"
+            >
+                Download Excel Report
+            </a>
+        </div>
+    </div>
+
+    <p>
+        This preview uses the same data source as Telegram <b>/report</b>:
+        requirement artifacts and AI usage logs.
+    </p>
+</div>
+
+<div class="summary-grid">
+    <div class="metric-card">
+        <div class="metric-label">Requirements</div>
+        <div class="metric-value">{{ summary.requirement_count }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">AI Requests</div>
+        <div class="metric-value">{{ summary.ai_request_count }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Input Tokens</div>
+        <div class="metric-value">{{ summary.input_tokens }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Output Tokens</div>
+        <div class="metric-value">{{ summary.output_tokens }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Total Tokens</div>
+        <div class="metric-value">{{ summary.total_tokens }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Duration Seconds</div>
+        <div class="metric-value">{{ summary.duration_seconds }}</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Requirement Summary</h3>
+
+    {% if requirement_rows %}
+        <table class="visual-table">
+            <thead>
+                <tr>
+                    <th>Requirement ID</th>
+                    <th>Name</th>
+                    <th>Created At</th>
+                    <th>Status</th>
+                    <th>Scenarios</th>
+                    <th>Test Cases</th>
+                    <th>Improve Iterations</th>
+                    <th>AI Requests</th>
+                    <th>Input Tokens</th>
+                    <th>Output Tokens</th>
+                    <th>Total Tokens</th>
+                    <th>Duration Seconds</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in requirement_rows %}
+                    <tr>
+                        <td><b>{{ row.ticket_id }}</b></td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.created_at }}</td>
+                        <td>{{ row.status }}</td>
+                        <td>{{ row.scenario_count }}</td>
+                        <td>{{ row.testcase_count }}</td>
+                        <td>{{ row.improve_iterations }}</td>
+                        <td>{{ row.ai_request_count }}</td>
+                        <td>{{ row.input_tokens }}</td>
+                        <td>{{ row.output_tokens }}</td>
+                        <td>{{ row.total_tokens }}</td>
+                        <td>{{ row.duration_seconds }}</td>
+                        <td>
+                            <a
+                                class="button"
+                                href="/portal/requirements/{{ row.ticket_id }}"
+                            >
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No requirement summary data found.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>AI Usage by Node</h3>
+
+    {% if node_rows %}
+        <table class="visual-table">
+            <thead>
+                <tr>
+                    <th>Node</th>
+                    <th>AI Requests</th>
+                    <th>Input Tokens</th>
+                    <th>Output Tokens</th>
+                    <th>Total Tokens</th>
+                    <th>Duration Seconds</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in node_rows %}
+                    <tr>
+                        <td><b>{{ row.node }}</b></td>
+                        <td>{{ row.ai_request_count }}</td>
+                        <td>{{ row.input_tokens }}</td>
+                        <td>{{ row.output_tokens }}</td>
+                        <td>{{ row.total_tokens }}</td>
+                        <td>{{ row.duration_seconds }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No AI usage by node data found.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Recent AI Usage Logs</h3>
+
+    {% if log_rows %}
+        <table class="visual-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Requirement ID</th>
+                    <th>Node</th>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>Input Tokens</th>
+                    <th>Output Tokens</th>
+                    <th>Total Tokens</th>
+                    <th>Duration Seconds</th>
+                    <th>Prompt Chars</th>
+                    <th>Response Chars</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in log_rows %}
+                    <tr>
+                        <td>{{ row.timestamp }}</td>
+                        <td>{{ row.ticket_id }}</td>
+                        <td>{{ row.node_name }}</td>
+                        <td>{{ row.provider }}</td>
+                        <td>{{ row.model }}</td>
+                        <td>{{ row.input_tokens }}</td>
+                        <td>{{ row.output_tokens }}</td>
+                        <td>{{ row.total_tokens }}</td>
+                        <td>{{ row.duration_seconds }}</td>
+                        <td>{{ row.prompt_chars }}</td>
+                        <td>{{ row.response_chars }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No AI usage logs found.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

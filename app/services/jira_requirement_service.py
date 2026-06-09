@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -8,13 +10,29 @@ from atlassian import Jira
 
 from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
-
-from app.utils.jira_content_cleaner import clean_jira_html
 from app.utils.requirement_sanitizer import clean_requirement_text
+
+
+REQUIREMENTS_ROOT = Path("requirements")
 
 
 def _safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name or "attachment")
+
+
+def _safe_requirement_id(value: str) -> str:
+    value = (value or "").strip().upper()
+    value = re.sub(r"[^A-Z0-9._-]+", "-", value)
+    value = value.strip("-")
+
+    if not value:
+        raise ValueError("Requirement ID is empty.")
+
+    return value
+
+
+def _utc_now() -> str:
+    return datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
 
 def _verify_ssl() -> bool:
@@ -35,7 +53,9 @@ def _include_subtasks() -> bool:
     ]
 
 
-def _get_jira_client() -> Jira:
+def _get_jira_client(
+    jira_pat: str = "",
+) -> Jira:
     jira_url = os.getenv("JIRA_SERVER_URL") or os.getenv("JIRA_URL")
     auth_mode = os.getenv("JIRA_AUTH_MODE", "PAT").upper()
     verify_ssl = _verify_ssl()
@@ -44,12 +64,23 @@ def _get_jira_client() -> Jira:
         raise ValueError("JIRA_SERVER_URL or JIRA_URL is missing in .env")
 
     jira_url = jira_url.rstrip("/")
+    jira_pat = (jira_pat or "").strip()
+
+    if jira_pat:
+        return Jira(
+            url=jira_url,
+            token=jira_pat,
+            verify_ssl=verify_ssl,
+        )
 
     if auth_mode == "PAT":
         token = os.getenv("JIRA_PAT") or os.getenv("JIRA_API_TOKEN")
 
         if not token:
-            raise ValueError("JIRA_PAT or JIRA_API_TOKEN is missing in .env")
+            raise ValueError(
+                "Jira PAT is missing. Please enter PAT in Web Portal "
+                "or set JIRA_PAT/JIRA_API_TOKEN in .env."
+            )
 
         return Jira(
             url=jira_url,
@@ -61,7 +92,9 @@ def _get_jira_client() -> Jira:
     password = os.getenv("JIRA_PASSWORD") or os.getenv("JIRA_API_TOKEN")
 
     if not username or not password:
-        raise ValueError("JIRA_USERNAME and JIRA_PASSWORD/JIRA_API_TOKEN are missing in .env")
+        raise ValueError(
+            "JIRA_USERNAME and JIRA_PASSWORD/JIRA_API_TOKEN are missing in .env"
+        )
 
     return Jira(
         url=jira_url,
@@ -71,10 +104,68 @@ def _get_jira_client() -> Jira:
     )
 
 
-def _to_text(value) -> str:
-    return clean_requirement_text(
-        value,
+def _to_text(value: Any) -> str:
+    return clean_requirement_text(value)
+
+
+def _read_json(path: Path, default: Any = None) -> Any:
+    if not path.exists():
+        return default
+
+    try:
+        return json.loads(
+            path.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+        )
+    except Exception:
+        return default
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
     )
+
+    path.write_text(
+        json.dumps(
+            data,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_refresh_metadata(
+    ticket_id: str,
+    issue_key: str,
+    refresh_existing: bool,
+) -> None:
+    requirement_dir = REQUIREMENTS_ROOT / ticket_id
+    metadata_file = requirement_dir / "metadata.json"
+
+    metadata = _read_json(metadata_file, {}) or {}
+
+    metadata["ticket_id"] = ticket_id
+    metadata["source"] = f"jira:{issue_key}"
+
+    if refresh_existing:
+        metadata["source_refreshed_at"] = _utc_now()
+        metadata["analysis_stale"] = True
+        metadata["structure_stale"] = True
+        metadata["scenarios_stale"] = True
+        metadata["testcases_stale"] = True
+        metadata["stale_reason"] = "Requirement source was refreshed from Jira."
+    else:
+        metadata.setdefault("created_at", _utc_now())
+        metadata["source_loaded_at"] = _utc_now()
+
+    metadata["updated_at"] = _utc_now()
+
+    _write_json(metadata_file, metadata)
 
 
 def _get_issue_comments(jira: Jira, issue_key: str) -> list:
@@ -82,7 +173,7 @@ def _get_issue_comments(jira: Jira, issue_key: str) -> list:
         response = jira.issue_get_comments(issue_key)
 
         if isinstance(response, dict):
-            return response.get("comments", [])
+            return response.get("comments", []) or []
 
         if isinstance(response, list):
             return response
@@ -158,7 +249,7 @@ def _download_and_extract_attachments(
 ) -> list[dict]:
     attachments = _get_issue_attachments(issue)
 
-    source_dir = Path("requirements") / ticket_id / "source"
+    source_dir = REQUIREMENTS_ROOT / ticket_id / "source"
     attachments_dir = source_dir / "attachments" / issue_key
     extracted_dir = source_dir / "extracted" / issue_key
 
@@ -317,21 +408,87 @@ def _build_issue_markdown(
     return content
 
 
-def create_requirement_from_jira(
+def _write_ticket_snapshot(
+    ticket_id: str,
     issue_key: str,
-) -> str:
-    issue_key = issue_key.strip().upper()
+    issue: dict,
+    refresh_existing: bool,
+) -> None:
+    requirement_dir = REQUIREMENTS_ROOT / ticket_id
+    ticket_file = requirement_dir / "ticket.json"
 
-    jira = _get_jira_client()
+    fields = issue.get("fields", {})
 
-    ticket_id = issue_key
+    existing = _read_json(ticket_file, {}) or {}
 
-    source_dir = Path("requirements") / ticket_id / "source"
+    ticket = {
+        **existing,
+        "ticket_id": ticket_id,
+        "source": "jira",
+        "jira_key": issue_key,
+        "summary": fields.get("summary") or issue_key,
+        "status": (
+            fields
+            .get("status", {})
+            .get("name", "")
+        ),
+        "issue_type": (
+            fields
+            .get("issuetype", {})
+            .get("name", "")
+        ),
+        "updated_at": _utc_now(),
+    }
+
+    if not existing:
+        ticket["created_at"] = _utc_now()
+
+    if refresh_existing:
+        ticket["source_refreshed_at"] = _utc_now()
+
+    _write_json(ticket_file, ticket)
+
+
+def _prepare_source_directory(
+    ticket_id: str,
+    refresh_existing: bool,
+) -> tuple[Path, Path]:
+    requirement_dir = REQUIREMENTS_ROOT / ticket_id
+    source_dir = requirement_dir / "source"
     jira_dir = source_dir / "jira"
+
+    if requirement_dir.exists() and refresh_existing:
+        if source_dir.exists():
+            shutil.rmtree(source_dir)
 
     jira_dir.mkdir(
         parents=True,
         exist_ok=True,
+    )
+
+    return source_dir, jira_dir
+
+
+def create_requirement_from_jira(
+    issue_key: str,
+    jira_pat: str = "",
+    refresh_existing: bool = False,
+) -> str:
+    issue_key = issue_key.strip().upper()
+    ticket_id = _safe_requirement_id(issue_key)
+
+    requirement_dir = REQUIREMENTS_ROOT / ticket_id
+
+    if requirement_dir.exists() and not refresh_existing:
+        return ticket_id
+
+    jira = _get_jira_client(
+        jira_pat=jira_pat,
+    )
+
+    _, jira_dir = _prepare_source_directory(
+        ticket_id=ticket_id,
+        refresh_existing=refresh_existing,
     )
 
     main_issue = jira.issue(
@@ -423,24 +580,39 @@ def create_requirement_from_jira(
                     f"## Subtask: {subtask_key}\n\n"
                     f"Failed to fetch subtask: {error}\n\n"
                 )
+    else:
+        markdown += "\n# Subtasks\n\nSubtask loading is disabled.\n\n"
 
-            raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
-            markdown_file = jira_dir / f"{issue_key}.md"
+    raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
+    markdown_file = jira_dir / f"{issue_key}.md"
 
-            raw_markdown_file.write_text(
-                markdown,
-                encoding="utf-8",
-            )
+    raw_markdown_file.write_text(
+        markdown,
+        encoding="utf-8",
+    )
 
-            markdown_file.write_text(
-                markdown,
-                encoding="utf-8",
-            )
+    markdown_file.write_text(
+        markdown,
+        encoding="utf-8",
+    )
 
-            create_workspace_from_text(
-                ticket_id,
-                markdown,
-                source=f"jira:{issue_key}",
-            )
+    create_workspace_from_text(
+        ticket_id,
+        markdown,
+        source=f"jira:{issue_key}",
+    )
 
-            return ticket_id
+    _write_ticket_snapshot(
+        ticket_id=ticket_id,
+        issue_key=issue_key,
+        issue=main_issue,
+        refresh_existing=refresh_existing,
+    )
+
+    _write_refresh_metadata(
+        ticket_id=ticket_id,
+        issue_key=issue_key,
+        refresh_existing=refresh_existing,
+    )
+
+    return ticket_id

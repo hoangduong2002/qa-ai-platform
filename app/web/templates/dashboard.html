@@ -3,36 +3,100 @@
 {% block content %}
 
 <div class="card">
-    <h2>Requirement Management</h2>
+    <div class="section-header">
+        <h2>Requirement Management</h2>
 
-    <a class="button success" href="/portal/requirements/new">
-        Add Requirement
-    </a>
+        <div class="mini-actions">
+            <a
+                class="button success"
+                href="/portal/reports"
+            >
+                View Report
+            </a>
+
+            <a
+                class="button"
+                href="/portal/requirements/new"
+            >
+                Add Requirement
+            </a>
+        </div>
+    </div>
 </div>
 
 <div class="card">
     <h2>Load Requirement from Jira</h2>
 
-    <form method="post" action="/portal/requirements/from-jira">
-        <label>Jira Ticket ID</label>
+    <p>
+        Enter a Jira ticket ID. The first time you load from Jira, you will be asked
+        to enter your Jira Personal Access Token. The token will be saved only in
+        this browser local storage.
+    </p>
+
+    <form
+        id="jiraLoadForm"
+        method="post"
+        action="/portal/requirements/from-jira"
+        data-loading="true"
+        data-loading-title="Loading requirement from Jira..."
+        data-loading-message="Fetching Jira issue, comments, subtasks, and attachments."
+    >
+        <label>
+            <b>Jira Ticket ID</b>
+        </label>
+
         <input
             type="text"
             name="issue_key"
             placeholder="Example: EVNWCL-5221"
             required
-        />
+        >
 
-        <button type="submit">
-            Load from Jira & Save Requirement
-        </button>
+        <input
+            type="hidden"
+            id="refreshExistingField"
+            name="refresh_existing"
+            value="false"
+        >
+
+        <input
+            type="hidden"
+            id="jiraPatField"
+            name="jira_pat"
+            value=""
+        >
+
+        <div class="mini-actions">
+            <button type="submit" class="success">
+                Load from Jira & Save Requirement
+            </button>
+
+            <button
+                type="button"
+                class="secondary"
+                onclick="openJiraPatModal()"
+            >
+                Update Jira PAT
+            </button>
+
+            <button
+                type="button"
+                class="danger"
+                onclick="clearSavedJiraPat()"
+            >
+                Clear Saved PAT
+            </button>
+        </div>
     </form>
+
+    <p id="jiraPatStatus" style="margin-top: 12px;"></p>
 </div>
 
 <div class="card">
     <h2>Requirements</h2>
 
     {% if requirements %}
-        <table>
+        <table class="visual-table">
             <thead>
                 <tr>
                     <th>Requirement ID</th>
@@ -48,9 +112,14 @@
             <tbody>
                 {% for item in requirements %}
                     <tr>
-                        <td>{{ item.ticket_id }}</td>
+                        <td>
+                            <b>{{ item.ticket_id }}</b>
+                        </td>
+
                         <td>{{ item.summary }}</td>
+
                         <td>{{ item.source }}</td>
+
                         <td>
                             {% if item.has_sanitized %}
                                 ✅
@@ -58,6 +127,7 @@
                                 ❌
                             {% endif %}
                         </td>
+
                         <td>
                             {% if item.has_analysis %}
                                 ✅
@@ -65,9 +135,14 @@
                                 ❌
                             {% endif %}
                         </td>
+
                         <td>{{ item.updated_at }}</td>
+
                         <td>
-                            <a class="button secondary" href="/portal/requirements/{{ item.ticket_id }}">
+                            <a
+                                class="button"
+                                href="/portal/requirements/{{ item.ticket_id }}"
+                            >
                                 View
                             </a>
                         </td>
@@ -79,5 +154,432 @@
         <p>No requirements found.</p>
     {% endif %}
 </div>
+
+<div
+    id="jiraPatModal"
+    style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 24, 39, 0.72);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+    "
+>
+    <div
+        style="
+            background: white;
+            width: min(720px, calc(100vw - 32px));
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+        "
+    >
+        <div class="section-header">
+            <h2>Jira Personal Access Token</h2>
+
+            <button
+                type="button"
+                class="secondary"
+                onclick="closeJiraPatModal(true)"
+            >
+                Close
+            </button>
+        </div>
+
+        <div class="section-block">
+            <div class="section-title">
+                How to create a Jira PAT
+            </div>
+
+            <ol>
+                <li>Open Jira in your browser.</li>
+                <li>Click your avatar/profile icon at the top right.</li>
+                <li>Open <b>Profile</b>.</li>
+                <li>Select <b>Personal access tokens</b> in the left menu.</li>
+                <li>Click <b>Create token</b>.</li>
+                <li>Enter a token name, for example <b>QA AI Platform</b>.</li>
+                <li>Optionally set an expiration date.</li>
+                <li>Click <b>Create</b> and copy the token.</li>
+            </ol>
+
+            <p>
+                The token will be stored in this browser local storage only.
+                Do not use this option on a shared machine.
+            </p>
+        </div>
+
+        <label>
+            <b>Personal Access Token</b>
+        </label>
+
+        <input
+            id="jiraPatInput"
+            type="password"
+            placeholder="Paste Jira PAT here"
+            autocomplete="off"
+        >
+
+        <div class="mini-actions">
+            <button
+                type="button"
+                class="success"
+                onclick="saveJiraPat()"
+            >
+                Save PAT
+            </button>
+
+            <button
+                type="button"
+                class="secondary"
+                onclick="closeJiraPatModal(true)"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                class="danger"
+                onclick="clearSavedJiraPat()"
+            >
+                Clear Saved PAT
+            </button>
+        </div>
+    </div>
+</div>
+
+<div
+    id="existingRequirementModal"
+    style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 24, 39, 0.72);
+        z-index: 10001;
+        align-items: center;
+        justify-content: center;
+    "
+>
+    <div
+        style="
+            background: white;
+            width: min(640px, calc(100vw - 32px));
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+        "
+    >
+        <div class="section-header">
+            <h2>Requirement already exists</h2>
+
+            <button
+                type="button"
+                class="secondary"
+                onclick="closeExistingRequirementModal()"
+            >
+                Cancel
+            </button>
+        </div>
+
+        <p>
+            Requirement <b id="existingRequirementId"></b> already exists locally.
+        </p>
+
+        <p>
+            You can open the existing requirement without calling Jira, or refresh
+            the source data from Jira. Refresh will keep existing AI artifacts,
+            versions, reviews, approvals, and exports, but they may become outdated.
+        </p>
+
+        <div class="mini-actions">
+            <button
+                type="button"
+                class="success"
+                onclick="openExistingRequirement()"
+            >
+                Open Existing Requirement
+            </button>
+
+            <button
+                type="button"
+                class="warning"
+                onclick="refreshExistingRequirementFromJira()"
+            >
+                Refresh from Jira
+            </button>
+
+            <button
+                type="button"
+                class="secondary"
+                onclick="closeExistingRequirementModal()"
+            >
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const JIRA_PAT_STORAGE_KEY = "qa_ai_platform_jira_pat";
+
+    let pendingExistingRequirement = null;
+    let bypassExistingCheck = false;
+
+    function getSavedJiraPat() {
+        return localStorage.getItem(JIRA_PAT_STORAGE_KEY) || "";
+    }
+
+    function updateJiraPatStatus() {
+        const status = document.getElementById("jiraPatStatus");
+        const pat = getSavedJiraPat();
+
+        if (!status) {
+            return;
+        }
+
+        if (pat) {
+            status.innerHTML = "<span class='status ok'>Jira PAT saved in this browser</span>";
+        } else {
+            status.innerHTML = "<span class='status missing'>No Jira PAT saved</span>";
+        }
+    }
+
+    function openJiraPatModal() {
+        const modal = document.getElementById("jiraPatModal");
+        const input = document.getElementById("jiraPatInput");
+
+        if (input) {
+            input.value = getSavedJiraPat();
+        }
+
+        if (modal) {
+            modal.style.display = "flex";
+        }
+    }
+
+    function closeJiraPatModal(resetBypass = true) {
+        const modal = document.getElementById("jiraPatModal");
+
+        if (modal) {
+            modal.style.display = "none";
+        }
+
+        if (resetBypass) {
+            bypassExistingCheck = false;
+        }
+    }
+
+    function saveJiraPat() {
+        const input = document.getElementById("jiraPatInput");
+        const pat = input ? input.value.trim() : "";
+
+        if (!pat) {
+            alert("Please enter Jira Personal Access Token.");
+            return;
+        }
+
+        localStorage.setItem(JIRA_PAT_STORAGE_KEY, pat);
+        updateJiraPatStatus();
+        closeJiraPatModal(false);
+
+        const patField = document.getElementById("jiraPatField");
+
+        if (patField) {
+            patField.value = pat;
+        }
+
+        if (bypassExistingCheck) {
+            submitJiraFormDirectly();
+        }
+    }
+
+    function clearSavedJiraPat() {
+        localStorage.removeItem(JIRA_PAT_STORAGE_KEY);
+
+        const input = document.getElementById("jiraPatInput");
+
+        if (input) {
+            input.value = "";
+        }
+
+        updateJiraPatStatus();
+        alert("Saved Jira PAT has been cleared from this browser.");
+    }
+
+    function openExistingRequirementModal(data) {
+        pendingExistingRequirement = data;
+
+        const idElement = document.getElementById("existingRequirementId");
+        const modal = document.getElementById("existingRequirementModal");
+
+        if (idElement) {
+            idElement.textContent = data.ticket_id;
+        }
+
+        if (modal) {
+            modal.style.display = "flex";
+        }
+    }
+
+    function closeExistingRequirementModal() {
+        const modal = document.getElementById("existingRequirementModal");
+
+        if (modal) {
+            modal.style.display = "none";
+        }
+
+        pendingExistingRequirement = null;
+        bypassExistingCheck = false;
+    }
+
+    function openExistingRequirement() {
+        if (!pendingExistingRequirement) {
+            return;
+        }
+
+        window.location.href = pendingExistingRequirement.detail_url;
+    }
+
+    function refreshExistingRequirementFromJira() {
+        if (!pendingExistingRequirement) {
+            return;
+        }
+
+        const confirmed = confirm(
+            "Refresh from Jira will update source Jira data and sanitized requirement. Existing AI artifacts will be kept, but may become outdated. Continue?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        const modal = document.getElementById("existingRequirementModal");
+
+        if (modal) {
+            modal.style.display = "none";
+        }
+
+        const refreshField = document.getElementById("refreshExistingField");
+
+        if (refreshField) {
+            refreshField.value = "true";
+        }
+
+        bypassExistingCheck = true;
+
+        const savedPat = getSavedJiraPat();
+
+        if (!savedPat) {
+            openJiraPatModal();
+            return;
+        }
+
+        const patField = document.getElementById("jiraPatField");
+
+        if (patField) {
+            patField.value = savedPat;
+        }
+
+        submitJiraFormDirectly();
+    }
+
+    function submitJiraFormDirectly() {
+        const form = document.getElementById("jiraLoadForm");
+
+        if (!form) {
+            return;
+        }
+
+        if (typeof showLoading === "function") {
+            showLoading(
+                "Loading requirement from Jira...",
+                "Fetching Jira issue, comments, subtasks, and attachments."
+            );
+        }
+
+        form.submit();
+    }
+
+    async function checkExistingRequirement(issueKey) {
+        const response = await fetch(
+            `/portal/requirements/check-jira?issue_key=${encodeURIComponent(issueKey)}`
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to check local requirement.");
+        }
+
+        return await response.json();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        updateJiraPatStatus();
+
+        const form = document.getElementById("jiraLoadForm");
+
+        if (!form) {
+            return;
+        }
+
+        form.addEventListener("submit", async function (event) {
+            if (bypassExistingCheck) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            const issueInput = form.querySelector("input[name='issue_key']");
+            const issueKey = issueInput ? issueInput.value.trim() : "";
+
+            if (!issueKey) {
+                alert("Please enter Jira Ticket ID.");
+                return;
+            }
+
+            const refreshField = document.getElementById("refreshExistingField");
+
+            if (refreshField) {
+                refreshField.value = "false";
+            }
+
+            let checkResult = null;
+
+            try {
+                checkResult = await checkExistingRequirement(issueKey);
+            } catch (error) {
+                alert(error.message);
+                return;
+            }
+
+            if (checkResult.exists) {
+                openExistingRequirementModal(checkResult);
+                return;
+            }
+
+            const savedPat = getSavedJiraPat();
+
+            if (!savedPat) {
+                bypassExistingCheck = true;
+                openJiraPatModal();
+                return;
+            }
+
+            const patField = document.getElementById("jiraPatField");
+
+            if (patField) {
+                patField.value = savedPat;
+            }
+
+            bypassExistingCheck = true;
+            submitJiraFormDirectly();
+        });
+    });
+</script>
 
 {% endblock %}

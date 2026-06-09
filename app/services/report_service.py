@@ -1,11 +1,10 @@
 import json
 from pathlib import Path
 from datetime import datetime
-
 from openpyxl import Workbook
-
 from app.services.requirement_list_service import list_requirements
 from app.utils.artifact_loader import load_ticket_artifacts
+from app.utils.ai_usage_report import normalize_node_name
 
 
 def load_ai_usage_logs():
@@ -161,7 +160,9 @@ def generate_system_report():
     node_stats = {}
 
     for log in usage_logs:
-        node = log.get("node_name", "unknown")
+        node = normalize_node_name(
+            log.get("node_name", "unknown")
+        )
 
         if node not in node_stats:
             node_stats[node] = {

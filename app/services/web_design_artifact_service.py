@@ -309,3 +309,18 @@ def improve_structure_from_ai_review(ticket_id: str, version: str) -> str:
         version=version,
         comment=_review_to_comment(review),
     )
+
+
+def improve_structure_with_comment_for_web(
+    ticket_id: str,
+    comment: str,
+) -> dict:
+    comment = (comment or "").strip()
+
+    if not comment:
+        raise ValueError("Improve comment is required.")
+
+    return run_structure_comment_improve(
+        ticket_id=ticket_id,
+        comment=comment,
+    )

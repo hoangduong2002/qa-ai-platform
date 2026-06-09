@@ -186,7 +186,9 @@ def _extract_test_areas(sub_function_item: dict) -> list[dict]:
 
     test_areas = (
         sub_function_item.get("test_areas")
+        or sub_function_item.get("test_categories")
         or sub_function_item.get("detailed_test_areas")
+        or sub_function_item.get("categories")
         or sub_function_item.get("areas")
         or []
     )
@@ -218,6 +220,7 @@ def _get_sub_function_id(sub_function_item: dict) -> str:
 def _get_test_area_id(test_area_item: dict) -> str:
     return (
         test_area_item.get("test_area_id")
+        or test_area_item.get("category_id")
         or test_area_item.get("area_id")
         or test_area_item.get("id")
         or ""
@@ -266,6 +269,110 @@ def _build_structure_requirement_index(
                     index[test_area_id] = test_area_requirement_ids
 
     return index
+
+
+def _iter_structure_paths(approved_structure: dict) -> list[dict]:
+    paths = []
+
+    for function_item in _extract_functions(approved_structure):
+        function_id = _get_function_id(function_item)
+        function_requirement_ids = _get_related_requirement_ids(function_item)
+
+        for sub_function_item in _extract_sub_functions(function_item):
+            sub_function_id = _get_sub_function_id(sub_function_item)
+            sub_function_requirement_ids = _unique_ids(
+                function_requirement_ids
+                + _get_related_requirement_ids(sub_function_item)
+            )
+
+            test_areas = _extract_test_areas(sub_function_item)
+
+            if not test_areas:
+                paths.append(
+                    {
+                        "function_id": function_id,
+                        "sub_function_id": sub_function_id,
+                        "test_area_id": "",
+                        "related_requirement_ids": sub_function_requirement_ids,
+                    }
+                )
+                continue
+
+            for test_area_item in test_areas:
+                test_area_id = _get_test_area_id(test_area_item)
+                test_area_requirement_ids = _unique_ids(
+                    sub_function_requirement_ids
+                    + _get_related_requirement_ids(test_area_item)
+                )
+
+                paths.append(
+                    {
+                        "function_id": function_id,
+                        "sub_function_id": sub_function_id,
+                        "test_area_id": test_area_id,
+                        "related_requirement_ids": test_area_requirement_ids,
+                    }
+                )
+
+    return paths
+
+
+def enrich_scenarios_structure_mapping(
+    scenarios: list,
+    approved_structure: dict,
+) -> list:
+    paths = _iter_structure_paths(approved_structure)
+
+    if not paths:
+        return scenarios
+
+    enriched = []
+
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            enriched.append(scenario)
+            continue
+
+        scenario_requirement_ids = set(
+            _get_related_requirement_ids(scenario)
+        )
+
+        best_path = None
+        best_score = 0
+
+        for path in paths:
+            path_requirement_ids = set(
+                path.get("related_requirement_ids") or []
+            )
+
+            score = len(
+                scenario_requirement_ids.intersection(path_requirement_ids)
+            )
+
+            if score > best_score:
+                best_score = score
+                best_path = path
+
+        if best_path:
+            scenario["function_id"] = (
+                scenario.get("function_id")
+                or best_path.get("function_id")
+                or ""
+            )
+            scenario["sub_function_id"] = (
+                scenario.get("sub_function_id")
+                or best_path.get("sub_function_id")
+                or ""
+            )
+            scenario["test_area_id"] = (
+                scenario.get("test_area_id")
+                or best_path.get("test_area_id")
+                or ""
+            )
+
+        enriched.append(scenario)
+
+    return enriched
 
 
 def enrich_scenarios_traceability(
@@ -749,8 +856,11 @@ def generate_scenarios(state):
         scenarios.extend(batch_result["scenarios"])
 
     scenarios = _deduplicate_scenarios(scenarios)
+    scenarios = enrich_scenarios_structure_mapping(
+        scenarios=scenarios,
+        approved_structure=approved_structure,
+    )
     scenarios = _renumber_scenarios(scenarios)
-
     validate_scenarios(scenarios)
 
     save_scenarios(ticket_id, scenarios)

@@ -215,9 +215,19 @@ async def create_manual_requirement(
 
 def create_requirement_from_jira_and_sanitize(
     issue_key: str,
+    jira_pat: str = "",
+    refresh_existing: bool = False,
 ) -> str:
+    issue_key = issue_key.strip()
+    ticket_id = _safe_requirement_id(issue_key)
+
+    if requirement_exists(ticket_id) and not refresh_existing:
+        return ticket_id
+
     ticket_id = create_requirement_from_jira(
-        issue_key.strip()
+        issue_key.strip(),
+        jira_pat=jira_pat.strip(),
+        refresh_existing=refresh_existing,
     )
 
     sanitize_existing_requirement(ticket_id)
@@ -1305,3 +1315,17 @@ def _normalize_clarifications(
                 return value
 
     return []
+
+
+def requirement_exists(
+    ticket_id: str,
+) -> bool:
+    ticket_id = _safe_requirement_id(ticket_id)
+
+    return _requirement_dir(ticket_id).exists()
+
+
+def normalize_requirement_id(
+    value: str,
+) -> str:
+    return _safe_requirement_id(value)

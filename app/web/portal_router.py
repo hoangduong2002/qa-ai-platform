@@ -34,6 +34,8 @@ from app.services.web_requirement_service import (
     sanitize_existing_requirement,
     save_clarification_answers,
     update_requirement,
+    normalize_requirement_id,
+    requirement_exists,
 )
 from app.services.web_test_design_artifact_service import (
     approve_scenarios,
@@ -58,7 +60,12 @@ from app.services.web_test_design_artifact_service import (
     run_final_review,
     run_scenario_coverage_review,
     save_testcases_json_as_new_version,
+    export_scenarios_excel,
 )
+from app.services.report_service import generate_system_report
+from app.services.web_report_preview_service import build_report_preview
+from fastapi.responses import JSONResponse
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -76,6 +83,27 @@ def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
     return RedirectResponse(
         url=f"/portal/requirements/{ticket_id}?{'&'.join(query)}",
         status_code=303,
+    )
+
+
+@router.get("/reports", response_class=HTMLResponse)
+async def report_preview(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "report_preview.html",
+        build_report_preview(),
+    )
+
+
+@router.get("/reports/download")
+async def download_system_report():
+    report_file = generate_system_report()
+    report_path = Path(report_file)
+
+    return FileResponse(
+        path=str(report_path),
+        filename=report_path.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 
@@ -109,9 +137,34 @@ async def create_requirement(
 
 
 @router.post("/requirements/from-jira")
-async def create_requirement_from_jira(issue_key: str = Form(...)):
-    ticket_id = create_requirement_from_jira_and_sanitize(issue_key=issue_key)
-    return RedirectResponse(url=f"/portal/requirements/{ticket_id}", status_code=303)
+async def create_requirement_from_jira(
+    issue_key: str = Form(...),
+    jira_pat: str = Form(""),
+    refresh_existing: str = Form("false"),
+):
+    ticket_id = create_requirement_from_jira_and_sanitize(
+        issue_key=issue_key,
+        jira_pat=jira_pat,
+        refresh_existing=refresh_existing.lower() == "true",
+    )
+
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}",
+        status_code=303,
+    )
+
+
+@router.get("/requirements/check-jira")
+async def check_jira_requirement(issue_key: str):
+    ticket_id = normalize_requirement_id(issue_key)
+
+    return JSONResponse(
+        {
+            "ticket_id": ticket_id,
+            "exists": requirement_exists(ticket_id),
+            "detail_url": f"/portal/requirements/{ticket_id}",
+        }
+    )
 
 
 @router.get("/requirements/{ticket_id}", response_class=HTMLResponse)
@@ -473,6 +526,23 @@ async def download_testcases_excel(
     testcase_version: str = "latest",
 ):
     excel_file = export_testcases_excel(ticket_id, testcase_version)
+    return FileResponse(
+        path=str(excel_file),
+        filename=excel_file.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get("/requirements/{ticket_id}/scenarios/excel")
+async def download_scenarios_excel(
+    ticket_id: str,
+    scenario_version: str = "latest",
+):
+    excel_file = export_scenarios_excel(
+        ticket_id=ticket_id,
+        version=scenario_version,
+    )
+
     return FileResponse(
         path=str(excel_file),
         filename=excel_file.name,

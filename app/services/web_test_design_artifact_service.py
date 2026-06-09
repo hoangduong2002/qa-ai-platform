@@ -15,7 +15,8 @@ from graph.nodes.generate_scenarios import generate_scenarios
 from graph.nodes.generate_test_scope import generate_test_scope
 from graph.nodes.generate_testcases import generate_testcases
 from graph.nodes.improve_testcases import improve_testcases
-
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
 def _read_json(file_path: Path, default: Any):
     if not file_path.exists():
@@ -646,3 +647,209 @@ def export_testcases_excel(ticket_id: str, version: str) -> Path:
     )
 
     return Path(excel_file)
+
+
+def _autosize_columns(ws):
+    for column_cells in ws.columns:
+        max_length = 0
+        column_letter = column_cells[0].column_letter
+
+        for cell in column_cells:
+            value = cell.value
+            if value is None:
+                continue
+
+            max_length = max(max_length, len(str(value)))
+
+        ws.column_dimensions[column_letter].width = min(max_length + 2, 60)
+
+
+def _style_header(ws):
+    header_fill = PatternFill(
+        start_color="1F2937",
+        end_color="1F2937",
+        fill_type="solid",
+    )
+
+    header_font = Font(
+        color="FFFFFF",
+        bold=True,
+    )
+
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            vertical="center",
+            wrap_text=True,
+        )
+
+
+def _json_text(value: Any) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, (dict, list)):
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return str(value)
+
+
+def export_scenarios_excel(
+    ticket_id: str,
+    version: str,
+) -> Path:
+    scenarios = get_scenarios(
+        ticket_id=ticket_id,
+        version=version,
+    )
+
+    if not scenarios:
+        raise ValueError("No scenarios found.")
+
+    test_scope = get_test_scope(
+        ticket_id=ticket_id,
+        version=version,
+    )
+
+    coverage_review = get_coverage_review(
+        ticket_id=ticket_id,
+        version=version,
+    )
+
+    export_dir = _root(ticket_id) / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_version = version.replace("/", "_")
+    excel_file = export_dir / f"scenarios_{safe_version}.xlsx"
+
+    wb = Workbook()
+
+    ws = wb.active
+    ws.title = "Scenarios"
+
+    ws.append(
+        [
+            "Scenario ID",
+            "Title",
+            "Description",
+            "Function ID",
+            "Sub Function ID",
+            "Test Area ID",
+            "Scenario Type",
+            "Priority",
+            "Related Requirement IDs",
+            "Preconditions",
+            "Test Data",
+            "Expected Result",
+            "Raw JSON",
+        ]
+    )
+
+    for index, scenario in enumerate(scenarios, start=1):
+        if not isinstance(scenario, dict):
+            ws.append(
+                [
+                    f"SC{index:03d}",
+                    "",
+                    str(scenario),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    _json_text(scenario),
+                ]
+            )
+            continue
+
+        ws.append(
+            [
+                scenario.get("scenario_id")
+                or scenario.get("id")
+                or f"SC{index:03d}",
+                scenario.get("title") or scenario.get("name") or "",
+                scenario.get("description") or scenario.get("summary") or "",
+                scenario.get("function_id") or "",
+                scenario.get("sub_function_id") or "",
+                scenario.get("test_area_id") or scenario.get("category_id") or "",
+                scenario.get("scenario_type")
+                or scenario.get("type")
+                or scenario.get("test_type")
+                or "",
+                scenario.get("priority") or "",
+                ", ".join(
+                    scenario.get("related_requirement_ids")
+                    or scenario.get("related_requirements")
+                    or []
+                ),
+                _json_text(scenario.get("preconditions") or ""),
+                _json_text(scenario.get("test_data") or ""),
+                _json_text(
+                    scenario.get("expected_result")
+                    or scenario.get("expected_results")
+                    or ""
+                ),
+                _json_text(scenario),
+            ]
+        )
+
+    _style_header(ws)
+    _autosize_columns(ws)
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    ws_scope = wb.create_sheet("Test Scope")
+    ws_scope.append(["Field", "Value"])
+
+    if isinstance(test_scope, dict):
+        for key, value in test_scope.items():
+            ws_scope.append([key, _json_text(value)])
+    else:
+        ws_scope.append(["test_scope", _json_text(test_scope)])
+
+    _style_header(ws_scope)
+    _autosize_columns(ws_scope)
+
+    for row in ws_scope.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    ws_review = wb.create_sheet("Coverage Review")
+    ws_review.append(["Field", "Value"])
+
+    if isinstance(coverage_review, dict) and coverage_review:
+        for key, value in coverage_review.items():
+            ws_review.append([key, _json_text(value)])
+    else:
+        ws_review.append(["coverage_review", "No coverage review found."])
+
+    _style_header(ws_review)
+    _autosize_columns(ws_review)
+
+    for row in ws_review.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    wb.save(excel_file)
+
+    return excel_file
