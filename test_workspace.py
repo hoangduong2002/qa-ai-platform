@@ -1,9 +1,11 @@
-from app.utils.workspace_loader import (
-    load_workspace
+from app.services.figma_requirement_service import (
+    load_figma_node,
+    extract_figma_elements,
+    build_requirement_context,
 )
 
-result = load_workspace(
-    "DEMO-001"
-)
+node = load_figma_node("figma_node_7_228516.json")
+elements = extract_figma_elements(node)
+requirement_context = build_requirement_context(elements)
 
-print(result)
+print(requirement_context)

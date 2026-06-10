@@ -635,6 +635,7 @@ def save_testcases_json_as_new_version(ticket_id: str, testcases_json: str) -> s
 
 def export_testcases_excel(ticket_id: str, version: str) -> Path:
     testcases = get_testcases(ticket_id, version)
+
     if not testcases:
         raise ValueError("No test cases found.")
 
@@ -644,9 +645,275 @@ def export_testcases_excel(ticket_id: str, version: str) -> Path:
         coverage_review=get_coverage_review(ticket_id, "latest"),
         final_coverage_review=get_final_review(ticket_id, version),
         approved_structure=load_approved_test_case_structure(ticket_id),
+        analysis=_load_requirement_analysis_for_export(ticket_id),
+        clarifications=_load_clarifications_for_export(ticket_id),
+        clarification_answers=_load_clarification_answers_for_export(ticket_id),
+        requirement_summary=_load_requirement_summary_for_export(ticket_id),
     )
 
     return Path(excel_file)
+
+
+def _read_text_file(path: Path) -> str:
+    if not path.exists():
+        return ""
+
+    return path.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+
+
+def _read_json_file(path: Path, default=None):
+    if not path.exists():
+        return default
+
+    try:
+        return json.loads(
+            path.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+        )
+    except Exception:
+        return default
+    
+    
+def _load_requirement_analysis_for_export(ticket_id: str) -> dict:
+    root = _root(ticket_id)
+    analysis_dir = root / "analysis"
+
+    candidates = [
+        analysis_dir / "requirement_analysis.json",
+        analysis_dir / "analysis.json",
+    ]
+
+    for file_path in candidates:
+        data = _read_json_file(file_path, default={})
+
+        if isinstance(data, dict) and data:
+            return data
+
+    return {}
+
+
+def _load_clarifications_for_export(ticket_id: str) -> dict:
+    root = _root(ticket_id)
+    analysis_dir = root / "analysis"
+
+    candidates = [
+        analysis_dir / "clarifications.json",
+        analysis_dir / "requirement_clarifications.json",
+    ]
+
+    for file_path in candidates:
+        data = _read_json_file(file_path, default={})
+
+        if isinstance(data, dict) and data:
+            return data
+
+        if isinstance(data, list) and data:
+            return {
+                "questions": data,
+            }
+
+    return {}
+
+
+def _load_clarification_answers_for_export(ticket_id: str) -> dict:
+    root = _root(ticket_id)
+
+    candidates = [
+        root / "clarification_answers.json",
+        root / "analysis" / "clarification_answers.json",
+    ]
+
+    for file_path in candidates:
+        data = _read_json_file(file_path, default={})
+
+        if isinstance(data, dict) and data:
+            return data
+
+        if isinstance(data, list) and data:
+            return {
+                "answers": data,
+            }
+
+    return {}
+
+
+def _load_requirement_summary_for_export(ticket_id: str) -> dict:
+    root = _root(ticket_id)
+    analysis_dir = root / "analysis"
+
+    candidates = [
+        analysis_dir / "requirement_summary.json",
+        analysis_dir / "summary.json",
+    ]
+
+    for file_path in candidates:
+        data = _read_json_file(file_path, default={})
+
+        if isinstance(data, dict) and data:
+            return data
+
+    return {}
+
+
+def _load_requirement_rows_for_excel(ticket_id: str) -> list[dict]:
+    root = _root(ticket_id)
+    analysis_dir = root / "analysis"
+    source_dir = root / "source"
+
+    rows = []
+
+    analysis = _read_json_file(
+        analysis_dir / "requirement_analysis.json",
+        default={},
+    ) or {}
+
+    requirement_items = (
+        analysis.get("requirements")
+        or analysis.get("requirement_items")
+        or analysis.get("items")
+        or []
+    )
+
+    if isinstance(requirement_items, list) and requirement_items:
+        for index, item in enumerate(requirement_items, start=1):
+            if not isinstance(item, dict):
+                rows.append(
+                    {
+                        "requirement_id": f"REQ-{index:03d}",
+                        "title": "",
+                        "description": str(item),
+                        "priority": "",
+                        "source": "requirement_analysis",
+                    }
+                )
+                continue
+
+            rows.append(
+                {
+                    "requirement_id": (
+                        item.get("requirement_id")
+                        or item.get("id")
+                        or item.get("req_id")
+                        or f"REQ-{index:03d}"
+                    ),
+                    "title": (
+                        item.get("title")
+                        or item.get("name")
+                        or item.get("summary")
+                        or ""
+                    ),
+                    "description": (
+                        item.get("description")
+                        or item.get("detail")
+                        or item.get("content")
+                        or item.get("requirement")
+                        or ""
+                    ),
+                    "priority": item.get("priority") or "",
+                    "source": "requirement_analysis",
+                }
+            )
+
+        return rows
+
+    summary = _read_json_file(
+        analysis_dir / "requirement_summary.json",
+        default={},
+    ) or {}
+
+    if isinstance(summary, dict) and summary:
+        summary_text = (
+            summary.get("summary")
+            or summary.get("requirement_summary")
+            or summary.get("overview")
+            or summary.get("business_summary")
+            or ""
+        )
+
+        if summary_text:
+            rows.append(
+                {
+                    "requirement_id": "REQ-SUMMARY",
+                    "title": "Requirement Summary",
+                    "description": summary_text,
+                    "priority": "",
+                    "source": "requirement_summary",
+                }
+            )
+
+        key_points = (
+            summary.get("key_points")
+            or summary.get("main_points")
+            or summary.get("requirements")
+            or []
+        )
+
+        if isinstance(key_points, list):
+            for index, item in enumerate(key_points, start=1):
+                rows.append(
+                    {
+                        "requirement_id": f"REQ-SUM-{index:03d}",
+                        "title": f"Summary Point {index}",
+                        "description": _json_text(item),
+                        "priority": "",
+                        "source": "requirement_summary",
+                    }
+                )
+
+        if rows:
+            return rows
+
+    sanitized_text = _read_text_file(
+        analysis_dir / "sanitized_requirement.md",
+    )
+
+    if sanitized_text.strip():
+        return [
+            {
+                "requirement_id": "REQ-RAW",
+                "title": "Sanitized Requirement",
+                "description": sanitized_text.strip(),
+                "priority": "",
+                "source": "sanitized_requirement",
+            }
+        ]
+
+    source_candidates = []
+
+    source_candidates.extend(
+        sorted((source_dir / "jira").glob("*.md"))
+        if (source_dir / "jira").exists()
+        else []
+    )
+
+    source_candidates.extend(
+        [
+            source_dir / "requirement.md",
+            source_dir / "raw_requirement.md",
+            source_dir / "input.md",
+        ]
+    )
+
+    for source_file in source_candidates:
+        source_text = _read_text_file(source_file)
+
+        if source_text.strip():
+            return [
+                {
+                    "requirement_id": "REQ-SOURCE",
+                    "title": source_file.name,
+                    "description": source_text.strip(),
+                    "priority": "",
+                    "source": str(source_file),
+                }
+            ]
+
+    return []
 
 
 def _autosize_columns(ws):

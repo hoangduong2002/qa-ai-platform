@@ -280,14 +280,21 @@ async def sanitize_requirement(ticket_id: str):
 @router.post("/requirements/{ticket_id}/analyze")
 async def analyze_requirement(ticket_id: str):
     await run_requirement_questions(ticket_id=ticket_id)
-    export_requirement_analysis_to_excel(ticket_id=ticket_id)
+
     return _redirect_detail(ticket_id)
+
+
+@router.get("/requirements")
+async def requirements_index():
+    return RedirectResponse(
+        url="/portal",
+        status_code=303,
+    )
 
 
 @router.post("/requirements/{ticket_id}/summary")
 async def generate_summary(ticket_id: str):
     await run_requirement_summary(ticket_id=ticket_id)
-    export_requirement_analysis_to_excel(ticket_id=ticket_id)
     return _redirect_detail(ticket_id)
 
 
@@ -462,8 +469,20 @@ async def approve_scenarios_for_web(
 
 @router.post("/requirements/{ticket_id}/testcases/generate")
 async def generate_testcases_for_web(ticket_id: str):
-    version = generate_testcases_from_approved_scenarios(ticket_id)
-    return _redirect_detail(ticket_id, tab="design", testcase_version=version)
+    try:
+        version = generate_testcases_from_approved_scenarios(ticket_id)
+    except ValueError as error:
+        return _redirect_detail(
+            ticket_id,
+            tab="design",
+            error=str(error),
+        )
+
+    return _redirect_detail(
+        ticket_id,
+        tab="design",
+        testcase_version=version,
+    )
 
 
 @router.post("/requirements/{ticket_id}/testcases/final-review")

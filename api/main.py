@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-
 from graph.testcase_graph import graph
 from app.web.portal_router import router as portal_router
+from fastapi import Response
 
 
 app = FastAPI(
@@ -19,6 +19,11 @@ async def root():
         url="/portal",
         status_code=302,
     )
+    
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 
 class GenerateTestcaseRequest(BaseModel):
