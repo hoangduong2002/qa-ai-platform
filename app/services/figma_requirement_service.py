@@ -501,76 +501,47 @@ def _is_reasonable_size(width: float, height: float) -> bool:
 def _is_layer_candidate(node: dict[str, Any]) -> bool:
     node_type = node.get("type", "")
     node_id = node.get("id", "")
-    name = node.get("name", "")
-    width, height = _extract_size(node)
 
-    if not node_id:
-        return False
-
-    if node_type not in {
-        "FRAME",
-        "SECTION",
-        "GROUP",
-        "COMPONENT",
-        "COMPONENT_SET",
-        "INSTANCE",
-    }:
-        return False
-
-    # Layer/container can be very large, so do not use screen-size filter here.
-    # Only skip obviously tiny/invalid nodes when bounding box is available.
-    if width > 0 and height > 0:
-        if not _is_reasonable_layer_size(width, height):
-            return False
-
-    # Do not apply aggressive blacklist to layer level.
-    # Some real layers may include words like background/state/container.
-    if _should_skip_layer_by_name(name):
-        return False
-
-    return True
+    return bool(node_id) and node_type == "SECTION"
 
 
 def _is_screen_candidate(node: dict[str, Any]) -> bool:
     node_type = node.get("type", "")
     node_id = node.get("id", "")
-    name = node.get("name", "")
-    width, height = _extract_size(node)
 
-    return (
-        bool(node_id)
-        and node_type in {"FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE"}
-        and _is_reasonable_size(width, height)
-        and not _should_skip_node_by_name(name)
-    )
+    return bool(node_id) and node_type == "FRAME"
+
+
+def _explain_screen_candidate(node: dict[str, Any]) -> str:
+    node_type = node.get("type", "")
+    node_id = node.get("id", "")
+
+    if not node_id:
+        return "missing node id"
+
+    if node_type in {"VECTOR", "LINE"}:
+        return "flow connector debug only"
+
+    if node_type != "FRAME":
+        return f"unsupported screen type: {node_type}"
+
+    return "accepted frame screen"
     
     
 def _explain_layer_candidate(node: dict[str, Any]) -> str:
     node_type = node.get("type", "")
     node_id = node.get("id", "")
-    name = node.get("name", "")
-    width, height = _extract_size(node)
 
     if not node_id:
         return "missing node id"
 
-    if node_type not in {
-        "FRAME",
-        "SECTION",
-        "GROUP",
-        "COMPONENT",
-        "COMPONENT_SET",
-        "INSTANCE",
-    }:
-        return f"unsupported type: {node_type}"
+    if node_type == "SECTION":
+        return "accepted section container"
 
-    if width > 0 and height > 0 and not _is_reasonable_layer_size(width, height):
-        return f"layer size filtered: {width}x{height}"
+    if node_type in {"VECTOR", "LINE"}:
+        return "flow connector debug only"
 
-    if _should_skip_layer_by_name(name):
-        return f"layer name blacklisted: {name}"
-
-    return "accepted"
+    return f"unsupported layer type: {node_type}"
 
 
 def collect_layers_from_page(
@@ -599,9 +570,6 @@ def collect_layers_from_page(
                 )
             )
 
-            # Do not return here. Continue walking because visual "layers"
-            # may be nested under a wrapper frame/group.
-        
         for child in node.get("children") or []:
             walk(child, depth + 1)
 
@@ -617,9 +585,7 @@ def collect_layers_from_page(
         seen.add(layer.node_id)
         deduped.append(layer)
 
-    max_layers = _env_int("FIGMA_MAX_LAYERS_PER_PAGE", 30)
-
-    return deduped[:max_layers]
+    return deduped
 
 
 def collect_screens_from_layer_document(
@@ -662,37 +628,110 @@ def collect_screens_from_layer_document(
 
     walk(layer_document, depth=0)
 
-    if not screens and _env_bool("FIGMA_EXPORT_CONTAINER_LAYERS", False):
-        if _is_screen_candidate(layer_document):
-            width, height = _extract_size(layer_document)
-            text_count = _count_text_descendants(layer_document)
+    return screens
 
-            screens.append(
-                FigmaScreenRef(
-                    node_id=layer_ref.node_id,
-                    name=layer_ref.name,
-                    type=layer_ref.type,
-                    page_id=page_scope.page_id,
-                    page_name=page_scope.page_name,
-                    layer_id=layer_ref.node_id,
-                    layer_name=layer_ref.name,
-                    width=width,
-                    height=height,
-                    text_count=text_count,
-                )
+
+def _collect_flow_connectors_debug(
+    node: dict[str, Any],
+    scope_id: str,
+    scope_name: str,
+    scope_type: str,
+    stop_at_section: bool = False,
+) -> list[dict[str, Any]]:
+    connectors: list[dict[str, Any]] = []
+
+    def walk(item: dict[str, Any], depth: int, path: list[str]) -> None:
+        if not item:
+            return
+
+        node_type = item.get("type", "")
+        node_id = item.get("id", "")
+        name = item.get("name", "")
+        next_path = [*path, name or node_id or node_type or "unknown"]
+
+        if node_type in {"VECTOR", "LINE"}:
+            width, height = _extract_size(item)
+            connectors.append(
+                {
+                    "id": node_id,
+                    "name": name,
+                    "type": node_type,
+                    "scope_id": scope_id,
+                    "scope_name": scope_name,
+                    "scope_type": scope_type,
+                    "depth": depth,
+                    "path": next_path,
+                    "size": {
+                        "width": width,
+                        "height": height,
+                        "area": width * height,
+                    },
+                    "decision": "debug_only",
+                    "reason": "VECTOR/LINE flow connector handling is not implemented",
+                }
             )
 
-    max_screens_per_layer = _env_int("FIGMA_MAX_SCREENS_PER_LAYER", 50)
+        if depth > 0 and node_type == "FRAME":
+            return
 
-    screens.sort(
-        key=lambda item: (
-            item.text_count,
-            item.width * item.height,
-        ),
-        reverse=True,
-    )
+        if depth > 0 and stop_at_section and node_type == "SECTION":
+            return
 
-    return screens[:max_screens_per_layer]
+        for child in item.get("children") or []:
+            walk(child, depth + 1, next_path)
+
+    walk(node, depth=0, path=[])
+
+    return connectors
+
+
+def _build_layer_screen_debug(
+    layer_ref: FigmaLayerRef,
+    layer_document: dict[str, Any],
+    included_screen_ids: set[str],
+) -> dict[str, Any]:
+    nodes: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any], depth: int = 0) -> None:
+        if not node:
+            return
+
+        node_id = node.get("id", "")
+        width, height = _extract_size(node)
+        reason = _explain_screen_candidate(node)
+        included = node_id in included_screen_ids
+
+        nodes.append(
+            {
+                "id": node_id,
+                "name": node.get("name"),
+                "type": node.get("type"),
+                "depth": depth,
+                "size": {
+                    "width": width,
+                    "height": height,
+                    "area": width * height,
+                },
+                "text_count": _count_text_descendants(node),
+                "included_as_screen": included,
+                "decision": "included" if included else "skipped",
+                "reason": "included in extracted screens" if included else reason,
+            }
+        )
+
+        if depth > 0 and node.get("type") == "FRAME":
+            return
+
+        for child in node.get("children") or []:
+            walk(child, depth + 1)
+
+    walk(layer_document, depth=0)
+
+    return {
+        "layer": asdict(layer_ref),
+        "included_screen_ids": sorted(included_screen_ids),
+        "nodes": nodes,
+    }
 
 
 def collect_screens_for_page(
@@ -714,13 +753,20 @@ def collect_screens_for_page(
     page_children_debug = []
 
     for child in page_document.get("children") or []:
+        candidate_reason = _explain_layer_candidate(child)
         page_children_debug.append(
             {
                 "id": child.get("id"),
                 "name": child.get("name"),
                 "type": child.get("type"),
                 "size": _extract_size(child),
-                "candidate_reason": _explain_layer_candidate(child),
+                "included_as_layer": candidate_reason.startswith("accepted"),
+                "decision": (
+                    "included"
+                    if candidate_reason.startswith("accepted")
+                    else "skipped"
+                ),
+                "reason": candidate_reason,
             }
         )
 
@@ -734,28 +780,22 @@ def collect_screens_for_page(
         page_payload,
     )
 
+    flow_connectors_debug = _collect_flow_connectors_debug(
+        node=page_document,
+        scope_id=page_scope.page_id,
+        scope_name=page_scope.page_name,
+        scope_type=page_document.get("type", "CANVAS"),
+        stop_at_section=True,
+    )
+
     layers = collect_layers_from_page(
         page_scope=page_scope,
         page_document=page_document,
     )
-    
-    if not layers:
-        page_width, page_height = _extract_size(page_document)
-
-        layers = [
-            FigmaLayerRef(
-                node_id=page_scope.page_id,
-                name=page_scope.page_name or "Target Page",
-                type=page_document.get("type", "CANVAS"),
-                page_id=page_scope.page_id,
-                page_name=page_scope.page_name,
-                width=page_width,
-                height=page_height,
-            )
-        ]
 
     all_screens: list[FigmaScreenRef] = []
     screen_documents: dict[str, dict[str, Any]] = {}
+    layer_screen_debug: list[dict[str, Any]] = []
 
     for layer in layers:
         try:
@@ -782,9 +822,25 @@ def collect_screens_for_page(
                 ),
                 encoding="utf-8",
             )
+            layer_screen_debug.append(
+                {
+                    "layer": asdict(layer),
+                    "included_screen_ids": [],
+                    "fetch_error": repr(error),
+                    "nodes": [],
+                }
+            )
             continue
 
         layer_document = layer_payload.get("document") or {}
+        flow_connectors_debug.extend(
+            _collect_flow_connectors_debug(
+                node=layer_document,
+                scope_id=layer.node_id,
+                scope_name=layer.name,
+                scope_type=layer.type,
+            )
+        )
 
         layer_dir = output_root / "layers" / _safe_name(layer.node_id)
         layer_dir.mkdir(parents=True, exist_ok=True)
@@ -800,6 +856,14 @@ def collect_screens_for_page(
             layer_document=layer_document,
         )
 
+        layer_screen_debug.append(
+            _build_layer_screen_debug(
+                layer_ref=layer,
+                layer_document=layer_document,
+                included_screen_ids={screen.node_id for screen in screens},
+            )
+        )
+
         for screen in screens:
             if screen.node_id not in screen_documents:
                 all_screens.append(screen)
@@ -811,9 +875,15 @@ def collect_screens_for_page(
 
         time.sleep(0.1)
 
-    max_screens_per_page = _env_int("FIGMA_MAX_SCREENS_PER_PAGE", 100)
+    _write_json_pretty(
+        output_root / "flow_connectors_debug.json",
+        flow_connectors_debug,
+    )
 
-    all_screens = all_screens[:max_screens_per_page]
+    _write_json_pretty(
+        output_root / "layer_screen_debug.json",
+        layer_screen_debug,
+    )
 
     return layers, all_screens, screen_documents
 
@@ -879,6 +949,34 @@ def _get_figma_image_urls_once(
     return data.get("images") or {}
 
 
+def _is_figma_rate_limit_error(error: Exception) -> bool:
+    return "status=429" in str(error) or "Rate limit exceeded" in str(error)
+
+
+def _get_figma_image_urls_with_retry(
+    file_key: str,
+    node_ids: list[str],
+    scale: str,
+) -> dict[str, str]:
+    max_attempts = _env_int("FIGMA_RATE_LIMIT_MAX_ATTEMPTS", 3)
+    sleep_seconds = _env_int("FIGMA_RATE_LIMIT_SLEEP_SECONDS", 10)
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return _get_figma_image_urls_once(
+                file_key=file_key,
+                node_ids=node_ids,
+                scale=scale,
+            )
+        except RuntimeError as error:
+            if not _is_figma_rate_limit_error(error) or attempt >= max_attempts:
+                raise
+
+            time.sleep(sleep_seconds)
+
+    return {}
+
+
 def get_figma_image_urls(
     file_key: str,
     node_ids: list[str],
@@ -893,7 +991,7 @@ def get_figma_image_urls(
 
     for batch in _chunk_list(node_ids, batch_size):
         try:
-            images = _get_figma_image_urls_once(
+            images = _get_figma_image_urls_with_retry(
                 file_key=file_key,
                 node_ids=batch,
                 scale=export_scale,
@@ -903,6 +1001,13 @@ def get_figma_image_urls(
         except RuntimeError as error:
             error_text = str(error)
 
+            if _is_figma_rate_limit_error(error):
+                print(
+                    f"Skipped Figma image export batch after rate limit retries. "
+                    f"node_count={len(batch)}"
+                )
+                continue
+
             if (
                 "Render timeout" not in error_text
                 and "try requesting fewer" not in error_text
@@ -911,7 +1016,7 @@ def get_figma_image_urls(
 
             for node_id in batch:
                 try:
-                    images = _get_figma_image_urls_once(
+                    images = _get_figma_image_urls_with_retry(
                         file_key=file_key,
                         node_ids=[node_id],
                         scale="1",

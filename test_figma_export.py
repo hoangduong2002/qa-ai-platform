@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,6 +10,11 @@ from app.services.figma_requirement_service import (
 )
 
 load_dotenv()
+
+os.environ["FIGMA_IMAGE_EXPORT_BATCH_SIZE"] = os.getenv(
+    "FIGMA_TEST_IMAGE_EXPORT_BATCH_SIZE",
+    "10",
+)
 
 
 ticket_id = "TEST-FIGMA"
@@ -37,3 +44,35 @@ output_root = Path("requirements") / ticket_id / "source" / "figma"
 print()
 print("Output exists:", output_root.exists())
 print("Output path:", output_root.resolve())
+
+for reference in references:
+    file_root = output_root / reference.file_key
+
+    for page_dir in file_root.iterdir():
+        if not page_dir.is_dir():
+            continue
+
+        layers_file = page_dir / "extracted_layers.json"
+        screens_file = page_dir / "extracted_screens.json"
+
+        if not layers_file.exists() or not screens_file.exists():
+            continue
+
+        layers = json.loads(layers_file.read_text(encoding="utf-8"))
+        screens = json.loads(screens_file.read_text(encoding="utf-8"))
+        non_section_layers = [
+            layer for layer in layers
+            if layer.get("type") != "SECTION"
+        ]
+        non_frame_screens = [
+            screen for screen in screens
+            if screen.get("type") != "FRAME"
+        ]
+
+        print()
+        print("Page output:", page_dir)
+        print("SECTION layers:", len(layers))
+        print("FRAME screens:", len(screens))
+        print("Non-SECTION layers:", len(non_section_layers))
+        print("Non-FRAME screens:", len(non_frame_screens))
+        print("Flow debug:", page_dir / "flow_connectors_debug.json")
