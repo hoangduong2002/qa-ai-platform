@@ -16,7 +16,9 @@ from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
 from app.utils.requirement_sanitizer import clean_requirement_text
 from app.services.figma_requirement_service import (
+    extract_figma_link_records_from_sources,
     extract_figma_context_from_jira_texts,
+    extract_figma_references_from_texts,
 )
 from app.services.requirement_compact_context_service import (
     build_compact_requirement_context,
@@ -183,6 +185,37 @@ def _to_text(value: Any) -> str:
     return clean_requirement_text(value)
 
 
+def _raw_jira_text(value: Any) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, str):
+        return value
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+    )
+
+
+def _append_raw_figma_source(
+    sources: list[dict[str, str]],
+    source: str,
+    value: Any,
+) -> None:
+    text = _raw_jira_text(value)
+
+    if not text.strip():
+        return
+
+    sources.append(
+        {
+            "source": source,
+            "text": text,
+        }
+    )
+
+
 def _read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default
@@ -252,11 +285,85 @@ def _build_compact_context_safely(ticket_id: str) -> None:
     )
 
 
-def _extract_figma_sources_safely(ticket_id: str, texts: list[str]) -> None:
+def _extract_figma_sources_safely(
+    ticket_id: str,
+    raw_sources: list[dict[str, str]],
+    sanitized_texts: list[str] | None = None,
+) -> None:
+    figma_enabled = os.getenv("FIGMA_ENABLE_EXTRACTION", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+    sanitized_texts = sanitized_texts or []
+    raw_link_records = extract_figma_link_records_from_sources(
+        raw_sources,
+        detected_before_sanitizer=True,
+    )
+    sanitized_link_records = extract_figma_link_records_from_sources(
+        [
+            {
+                "source": "sanitized",
+                "text": text,
+            }
+            for text in sanitized_texts
+        ],
+        detected_before_sanitizer=False,
+    )
+    source_dir = REQUIREMENTS_ROOT / ticket_id / "source"
+    figma_links_file = source_dir / "figma_links.json"
+    figma_output_path = source_dir / "figma"
+
+    _write_json(
+        figma_links_file,
+        raw_link_records,
+    )
+
+    raw_references = extract_figma_references_from_texts(
+        [item.get("text", "") for item in raw_sources]
+    )
+    detected_summary = [
+        {
+            "file_key": reference.file_key,
+            "node_ids": reference.entry_node_ids,
+            "source_link_count": len(reference.source_urls),
+        }
+        for reference in raw_references
+    ]
+
+    print(
+        "[INFO] Figma extraction config. "
+        f"ticket_id={ticket_id}, "
+        f"enabled={figma_enabled}, "
+        f"raw_figma_links_detected={len(raw_link_records)}, "
+        f"sanitized_figma_links_detected={len(sanitized_link_records)}, "
+        f"output_path={figma_output_path}"
+    )
+    print(
+        "[INFO] Figma detected file/node summary. "
+        f"ticket_id={ticket_id}, "
+        f"items={json.dumps(detected_summary, ensure_ascii=False)}"
+    )
+
+    if not figma_enabled:
+        print(
+            f"[INFO] FIGMA_ENABLE_EXTRACTION=false. "
+            f"Skipping Figma extraction for {ticket_id}."
+        )
+        return
+
+    if not raw_link_records:
+        print(
+            f"[INFO] No raw Figma links detected before sanitizer for {ticket_id}."
+        )
+        return
+
     try:
         context = extract_figma_context_from_jira_texts(
             ticket_id=ticket_id,
-            texts=texts,
+            texts=[item.get("text", "") for item in raw_sources],
         )
     except Exception as error:
         error_text = "".join(
@@ -694,6 +801,19 @@ def create_requirement_from_jira(
         jira,
         issue_key,
     )
+    raw_figma_sources: list[dict[str, str]] = []
+    _append_raw_figma_source(
+        raw_figma_sources,
+        "description",
+        main_issue.get("fields", {}).get("description"),
+    )
+
+    for index, comment in enumerate(main_comments, start=1):
+        _append_raw_figma_source(
+            raw_figma_sources,
+            f"comment:{issue_key}:{index}",
+            comment.get("body"),
+        )
 
     main_extracted_items = _download_and_extract_attachments(
         jira=jira,
@@ -743,6 +863,18 @@ def create_requirement_from_jira(
                     jira,
                     subtask_key,
                 )
+                _append_raw_figma_source(
+                    raw_figma_sources,
+                    f"subtask:{subtask_key}:description",
+                    sub_issue.get("fields", {}).get("description"),
+                )
+
+                for index, comment in enumerate(sub_comments, start=1):
+                    _append_raw_figma_source(
+                        raw_figma_sources,
+                        f"subtask:{subtask_key}:comment:{index}",
+                        comment.get("body"),
+                    )
 
                 sub_extracted_items = _download_and_extract_attachments(
                     jira=jira,
@@ -796,7 +928,8 @@ def create_requirement_from_jira(
 
     _extract_figma_sources_safely(
         ticket_id=ticket_id,
-        texts=[markdown],
+        raw_sources=raw_figma_sources,
+        sanitized_texts=[markdown],
     )
 
     _build_compact_context_safely(ticket_id)

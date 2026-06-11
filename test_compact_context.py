@@ -16,9 +16,13 @@ result = build_compact_requirement_context(ticket_id)
 
 print("Output path:", result["analysis_root"])
 print("Detected mode:", result["detected_mode"])
+print("Source files:", result["source_files_count"])
 print("Screens:", result["screen_count"])
 print("Sections:", result["section_count"])
-print("Compact context length:", result["compact_context_length"])
+print("Chunks:", result["chunk_count"])
+print("Partial summaries:", result["partial_summary_count"])
+print("Final compact context length:", result["compact_context_length"])
+print("Truncated:", result["truncated"])
 
 warnings = result.get("warnings") or []
 

@@ -1015,6 +1015,15 @@ def _get_parallel_workers(function_count: int) -> int:
 
 def generate_testcases(state):
     ticket_id = state["ticket_id"]
+    metadata = state.get("requirement_context_metadata") or {}
+
+    if metadata:
+        print(
+            "generate_testcases context_source="
+            f"{metadata.get('context_source')}, "
+            f"length={metadata.get('context_length')}, "
+            f"path={metadata.get('context_path')}"
+        )
 
     logger.info(
         "Starting function-based test case generation. ticket_id=%s",

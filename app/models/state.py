@@ -5,6 +5,7 @@ class QAState(TypedDict):
     ticket_id: str
 
     requirement_context: NotRequired[str]
+    requirement_context_metadata: NotRequired[dict]
 
     analysis: NotRequired[dict]
     requirement_qa: NotRequired[dict]

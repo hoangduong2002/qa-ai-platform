@@ -764,6 +764,15 @@ def _merge_function_reviews(
 
 def coverage_review(state):
     ticket_id = state["ticket_id"]
+    metadata = state.get("requirement_context_metadata") or {}
+
+    if metadata:
+        print(
+            "coverage_review context_source="
+            f"{metadata.get('context_source')}, "
+            f"length={metadata.get('context_length')}, "
+            f"path={metadata.get('context_path')}"
+        )
 
     logger.info(
         "Starting function-based coverage review. ticket_id=%s",

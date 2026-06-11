@@ -10,6 +10,15 @@ from app.utils.test_structure_store import (
 
 
 def generate_test_case_structure(state):
+    metadata = state.get("requirement_context_metadata") or {}
+
+    if metadata:
+        print(
+            "generate_test_case_structure context_source="
+            f"{metadata.get('context_source')}, "
+            f"length={metadata.get('context_length')}, "
+            f"path={metadata.get('context_path')}"
+        )
 
     llm = get_llm()
 

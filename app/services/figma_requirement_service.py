@@ -1,4 +1,5 @@
 import json
+import html
 import os
 import re
 import time
@@ -17,6 +18,12 @@ from app.services.local_ai_config_service import (
 
 REQUIREMENTS_ROOT = Path("requirements")
 FIGMA_API_BASE_URL = "https://api.figma.com/v1"
+FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE = (
+    "Figma image export skipped or unavailable for this screen."
+)
+VISION_ANALYSIS_SKIPPED_MESSAGE = (
+    "Vision analysis skipped because local vision analysis is disabled."
+)
 
 
 FIGMA_IMAGE_ANALYSIS_PROMPT = """
@@ -112,6 +119,14 @@ def _env_str(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
+def _remove_file_if_exists(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except TypeError:
+        if path.exists():
+            path.unlink()
+
+
 def _get_figma_token() -> str:
     token = os.getenv("FIGMA_ACCESS_TOKEN", "").strip()
 
@@ -182,15 +197,17 @@ def extract_figma_urls(text: str) -> list[str]:
     if not text:
         return []
 
+    text = html.unescape(text)
+
     pattern = re.compile(
-        r"https://(?:www\.)?figma\.com/(?:design|file|proto)/[^\s\]\)\}<>\"']+",
+        r"https://(?:www\.)?figma\.com/(?:design|file|proto)/[^\s\]\)\}<>\"'\\]+",
         flags=re.IGNORECASE,
     )
 
     urls: list[str] = []
 
     for match in pattern.findall(text):
-        url = match.rstrip(".,;")
+        url = match.rstrip(".,;\\")
         if url not in urls:
             urls.append(url)
 
@@ -224,6 +241,38 @@ def extract_figma_references_from_texts(
                     grouped[file_key].entry_node_ids.append(node_id)
 
     return list(grouped.values())
+
+
+def extract_figma_link_records_from_sources(
+    sources: list[dict[str, str]],
+    detected_before_sanitizer: bool = True,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    seen = set()
+
+    for source in sources:
+        source_name = source.get("source", "")
+        text = source.get("text", "")
+
+        for url in extract_figma_urls(text):
+            key = (url, source_name)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            records.append(
+                {
+                    "url": url,
+                    "file_key": _extract_file_key_from_url(url) or "",
+                    "node_ids": _extract_node_ids_from_url(url),
+                    "source": source_name,
+                    "detected_before_sanitizer": detected_before_sanitizer,
+                }
+            )
+
+    return records
 
 
 def _write_json_pretty(output_file: Path, payload: Any) -> None:
@@ -1269,23 +1318,35 @@ def export_figma_page_scope(
 
     screen_ids = [screen.node_id for screen in screens]
 
-    try:
-        image_urls = get_figma_image_urls(
-            file_key=reference.file_key,
-            node_ids=screen_ids,
-        )
-    except Exception as error:
-        image_urls = {}
-        (output_root / "image_export_error.txt").write_text(
-            "".join(
-                traceback.format_exception(
-                    type(error),
-                    error,
-                    error.__traceback__,
-                )
-            ),
-            encoding="utf-8",
-        )
+    image_export_enabled = _env_bool("FIGMA_IMAGE_EXPORT_ENABLED", True)
+    image_urls: dict[str, str] = {}
+
+    print(
+        "Figma image export config: "
+        f"ticket_id={ticket_id}, file_key={reference.file_key}, "
+        f"page_id={page_scope.page_id}, image_export_enabled={image_export_enabled}, "
+        f"screen_count={len(screen_ids)}"
+    )
+
+    if image_export_enabled:
+        try:
+            image_urls = get_figma_image_urls(
+                file_key=reference.file_key,
+                node_ids=screen_ids,
+            )
+            _remove_file_if_exists(output_root / "image_export_error.txt")
+        except Exception as error:
+            image_urls = {}
+            (output_root / "image_export_error.txt").write_text(
+                "".join(
+                    traceback.format_exception(
+                        type(error),
+                        error,
+                        error.__traceback__,
+                    )
+                ),
+                encoding="utf-8",
+            )
 
     context_parts = [
         "## Figma Page Context",
@@ -1344,17 +1405,47 @@ def export_figma_page_scope(
                 )
 
             image_file = None
+            frame_file = screen_dir / "frame.png"
+            image_export_status = "not_attempted"
+            vision_analysis_status = "not_attempted"
+            local_vision_enabled = is_figma_local_vision_enabled()
             image_url = image_urls.get(screen.node_id)
 
-            if image_url:
+            if not image_export_enabled:
+                if frame_file.exists():
+                    image_file = frame_file
+                    image_export_status = "existing_export_disabled"
+                    _remove_file_if_exists(screen_dir / "image_export_skipped.txt")
+                else:
+                    image_export_status = "skipped_disabled"
+                    (screen_dir / "image_export_skipped.txt").write_text(
+                        FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE,
+                        encoding="utf-8",
+                    )
+            elif image_url:
                 try:
-                    image_file = screen_dir / "frame.png"
                     download_image(
                         image_url=image_url,
-                        output_file=image_file,
+                        output_file=frame_file,
                     )
+                    image_file = frame_file
+                    image_export_status = "exported"
+                    _remove_file_if_exists(screen_dir / "image_export_skipped.txt")
+                    _remove_file_if_exists(screen_dir / "image_download_error.txt")
                 except Exception as error:
-                    image_file = None
+                    if frame_file.exists():
+                        image_file = frame_file
+                        image_export_status = "existing_download_error"
+                        _remove_file_if_exists(
+                            screen_dir / "image_export_skipped.txt"
+                        )
+                    else:
+                        image_export_status = "download_error"
+                        (screen_dir / "image_export_skipped.txt").write_text(
+                            FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE,
+                            encoding="utf-8",
+                        )
+
                     (screen_dir / "image_download_error.txt").write_text(
                         "".join(
                             traceback.format_exception(
@@ -1366,17 +1457,31 @@ def export_figma_page_scope(
                         encoding="utf-8",
                     )
             else:
-                (screen_dir / "image_export_skipped.txt").write_text(
-                    "Figma image export skipped or unavailable for this screen.",
-                    encoding="utf-8",
-                )
+                if frame_file.exists():
+                    image_file = frame_file
+                    image_export_status = "existing_no_url"
+                    _remove_file_if_exists(screen_dir / "image_export_skipped.txt")
+                else:
+                    image_export_status = "skipped_no_url"
+                    (screen_dir / "image_export_skipped.txt").write_text(
+                        FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE,
+                        encoding="utf-8",
+                    )
 
             vision_analysis = None
 
-            if image_file and is_figma_local_vision_enabled():
+            if image_file and local_vision_enabled:
                 try:
+                    _remove_file_if_exists(screen_dir / "vision_analysis_skipped.txt")
+                    _remove_file_if_exists(screen_dir / "vision_analysis.md")
                     vision_analysis = _analyze_with_local_vision(image_file)
+                    vision_analysis_status = (
+                        "analyzed" if vision_analysis else "empty"
+                    )
+                    _remove_file_if_exists(screen_dir / "vision_analysis_error.txt")
                 except Exception as error:
+                    vision_analysis_status = "error"
+                    _remove_file_if_exists(screen_dir / "vision_analysis.md")
                     (screen_dir / "vision_analysis_error.txt").write_text(
                         "".join(
                             traceback.format_exception(
@@ -1388,16 +1493,34 @@ def export_figma_page_scope(
                         encoding="utf-8",
                     )
             elif image_file:
+                vision_analysis_status = "skipped_disabled"
+                _remove_file_if_exists(screen_dir / "vision_analysis.md")
+                _remove_file_if_exists(screen_dir / "vision_analysis_error.txt")
                 (screen_dir / "vision_analysis_skipped.txt").write_text(
-                    "Figma local vision analysis skipped because local AI vision is disabled.",
+                    VISION_ANALYSIS_SKIPPED_MESSAGE,
                     encoding="utf-8",
                 )
+            else:
+                vision_analysis_status = "skipped_no_image"
+                _remove_file_if_exists(screen_dir / "vision_analysis.md")
+                _remove_file_if_exists(screen_dir / "vision_analysis_error.txt")
+                _remove_file_if_exists(screen_dir / "vision_analysis_skipped.txt")
 
             if vision_analysis:
                 (screen_dir / "vision_analysis.md").write_text(
                     vision_analysis,
                     encoding="utf-8",
                 )
+
+            print(
+                "Figma screen export status: "
+                f"ticket_id={ticket_id}, page_id={page_scope.page_id}, "
+                f"screen_id={screen.node_id}, "
+                f"image_export_enabled={image_export_enabled}, "
+                f"image_export_status={image_export_status}, "
+                f"local_vision_enabled={local_vision_enabled}, "
+                f"vision_analysis_status={vision_analysis_status}"
+            )
 
             screen_context = _build_screen_context(
                 screen=screen,

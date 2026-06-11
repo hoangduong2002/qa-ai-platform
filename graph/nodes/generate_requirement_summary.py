@@ -2,6 +2,9 @@ import json
 from pathlib import Path
 
 from app.services.llm_service import get_llm
+from app.utils.requirement_context_loader import (
+    load_requirement_context_for_llm,
+)
 
 
 def _read_text(
@@ -140,12 +143,6 @@ def generate_requirement_summary(
 
     base_dir = Path("requirements") / ticket_id
     analysis_dir = base_dir / "analysis"
-    source_dir = base_dir / "source"
-
-    sanitized_requirement_file = (
-        analysis_dir / "sanitized_requirement.md"
-    )
-
     requirement_analysis_file = (
         analysis_dir / "requirement_analysis.json"
     )
@@ -162,14 +159,7 @@ def generate_requirement_summary(
         analysis_dir / "requirement_summary.json"
     )
 
-    requirement_context = _read_text(
-        sanitized_requirement_file
-    )
-
-    if not requirement_context:
-        requirement_context = _read_text(
-            source_dir / "description.md"
-        )
+    requirement_context, context_metadata = load_requirement_context_for_llm(ticket_id)
 
     requirement_analysis = _read_json(
         requirement_analysis_file
@@ -320,4 +310,5 @@ Clarification Answers:
 
     return {
         "requirement_summary": summary,
+        "requirement_context_metadata": context_metadata,
     }

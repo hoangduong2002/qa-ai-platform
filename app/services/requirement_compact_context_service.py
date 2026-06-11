@@ -7,6 +7,9 @@ from typing import Any
 
 REQUIREMENTS_ROOT = Path("requirements")
 DEFAULT_MAX_CONTEXT_CHARS = 60_000
+DEFAULT_CHUNK_MAX_CHARS = 20_000
+DEFAULT_MAX_TEXT_ITEMS_PER_SCREEN = 10
+DEFAULT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN = 50
 TRUNCATION_NOTE = "[TRUNCATED BY REQUIREMENT_COMPACT_CONTEXT_MAX_CHARS]"
 FIGMA_ONLY_WARNING = (
     "Jira/source markdown not found. "
@@ -235,6 +238,477 @@ def _extract_explicit_rules(source_texts: list[tuple[Path, str]]) -> list[str]:
     return rules
 
 
+def _safe_name(value: str, fallback: str = "chunk") -> str:
+    value = (value or fallback).strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "_", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value[:80] or fallback
+
+
+def _limit_items(items: list[str], max_items: int) -> list[str]:
+    limited: list[str] = []
+
+    for item in items:
+        _unique_append(limited, str(item), max_items=max_items)
+
+    return limited
+
+
+def _append_limited_list(
+    lines: list[str],
+    items: list[str],
+    empty_message: str,
+    max_items: int,
+) -> None:
+    limited = _limit_items(items, max_items)
+
+    if limited:
+        lines.extend(f"- {item}" for item in limited)
+    else:
+        lines.append(f"- {empty_message}")
+
+
+def _classify_source_file(path: Path) -> str:
+    lowered_parts = [part.lower() for part in path.parts]
+    lowered_name = path.name.lower()
+    lowered_path = str(path).lower()
+
+    if "attachment" in lowered_path or "attachments" in lowered_parts:
+        return "attachments"
+
+    if "comment" in lowered_name or "comments" in lowered_parts:
+        return "jira_comments"
+
+    if lowered_name in {
+        "jira_requirement.md",
+        "sanitized_requirement.md",
+        "description.md",
+    }:
+        return "jira_core"
+
+    if "jira" in lowered_parts:
+        return "jira_core"
+
+    return "generic_source"
+
+
+def _split_text_into_parts(text: str, max_chars: int) -> list[str]:
+    text = text.strip()
+
+    if not text:
+        return []
+
+    if len(text) <= max_chars:
+        return [text]
+
+    parts: list[str] = []
+    paragraphs = re.split(r"\n\s*\n", text)
+    current: list[str] = []
+    current_len = 0
+
+    for paragraph in paragraphs:
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+
+        extra_len = len(paragraph) + 2
+
+        if current and current_len + extra_len > max_chars:
+            parts.append("\n\n".join(current).strip())
+            current = []
+            current_len = 0
+
+        if len(paragraph) > max_chars:
+            for index in range(0, len(paragraph), max_chars):
+                part = paragraph[index:index + max_chars].strip()
+                if part:
+                    parts.append(part)
+            continue
+
+        current.append(paragraph)
+        current_len += extra_len
+
+    if current:
+        parts.append("\n\n".join(current).strip())
+
+    return parts
+
+
+def _group_screens_by_section(
+    screens: list[dict[str, Any]],
+) -> dict[tuple[str, str, str, str], list[dict[str, Any]]]:
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+
+    for screen in screens:
+        key = (
+            screen.get("page_id", ""),
+            screen.get("page_name", ""),
+            screen.get("section_id", ""),
+            screen.get("section_name", ""),
+        )
+        grouped.setdefault(key, []).append(screen)
+
+    return grouped
+
+
+def _render_source_chunk(
+    ticket_id: str,
+    chunk_type: str,
+    source_items: list[tuple[Path, str]],
+) -> str:
+    title = chunk_type.replace("_", " ").title()
+    lines = [
+        f"# Requirement Chunk: {title}",
+        "",
+        f"- Ticket: {ticket_id}",
+        f"- Chunk type: {chunk_type}",
+        f"- Source files: {len(source_items)}",
+    ]
+
+    for path, text in source_items:
+        lines.extend(
+            [
+                "",
+                f"## Source: {_relative(path)}",
+                text.strip() or "[EMPTY SOURCE]",
+            ]
+        )
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_figma_section_chunk(
+    ticket_id: str,
+    section_key: tuple[str, str, str, str],
+    screens: list[dict[str, Any]],
+) -> str:
+    page_id, page_name, section_id, section_name = section_key
+    max_items = _env_int(
+        "REQUIREMENT_COMPACT_MAX_TEXT_ITEMS_PER_SCREEN",
+        DEFAULT_MAX_TEXT_ITEMS_PER_SCREEN,
+    )
+    lines = [
+        f"# Requirement Chunk: Figma Section - {section_name or '[UNNAMED SECTION]'}",
+        "",
+        f"- Ticket: {ticket_id}",
+        "- Chunk type: figma_section",
+        f"- Page: {page_name or '[UNKNOWN PAGE]'} ({page_id or '[NO PAGE ID]'})",
+        f"- Section: {section_name or '[UNNAMED SECTION]'} ({section_id or '[NO SECTION ID]'})",
+        f"- Screens in chunk: {len(screens)}",
+    ]
+
+    for screen in screens:
+        lines.extend(
+            [
+                "",
+                f"## Screen: {screen.get('screen_name') or '[UNNAMED SCREEN]'}",
+                f"- Screen ID: {screen.get('screen_id')}",
+                f"- Image: {screen.get('image_path') or '[NOT AVAILABLE]'}",
+                "",
+                "### Visible UI Text",
+            ]
+        )
+        _append_limited_list(
+            lines,
+            screen.get("visible_text") or [],
+            "[NO VISIBLE TEXT EXTRACTED]",
+            max_items,
+        )
+
+        lines.append("")
+        lines.append("### UI Elements")
+        _append_limited_list(
+            lines,
+            screen.get("ui_elements") or [],
+            "[NO UI ELEMENTS EXTRACTED]",
+            max_items,
+        )
+
+        lines.append("")
+        lines.append("### Possible Actions")
+        _append_limited_list(
+            lines,
+            screen.get("possible_actions") or [],
+            "[NO ACTIONS EXTRACTED]",
+            max_items,
+        )
+
+        qa_notes = screen.get("qa_notes") or []
+        if qa_notes:
+            lines.append("")
+            lines.append("### QA Notes")
+            _append_limited_list(lines, qa_notes, "[NO QA NOTES]", max_items)
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _summarize_source_chunk(
+    chunk_type: str,
+    source_items: list[tuple[Path, str]],
+) -> str:
+    title = chunk_type.replace("_", " ").title()
+    source_texts = source_items
+    summary = _extract_ticket_summary(source_texts)
+    rules = _extract_explicit_rules(source_texts)
+    questions = _extract_open_questions(source_texts)
+
+    lines = [
+        f"# Partial Summary: {title}",
+        "",
+        f"- Chunk type: {chunk_type}",
+        f"- Source files: {len(source_items)}",
+        "",
+        "## Summary",
+        summary,
+        "",
+        "## Functional / Explicit Requirement Signals",
+    ]
+    _append_limited_list(lines, rules, "[NO EXPLICIT REQUIREMENT SIGNALS FOUND]", 25)
+
+    lines.extend(["", "## Open Questions"])
+    _append_limited_list(lines, questions, "[NO OPEN QUESTIONS DETECTED]", 15)
+
+    lines.extend(["", "## Source Traceability"])
+    lines.extend(f"- {_relative(path)}" for path, _ in source_items)
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _summarize_figma_section_chunk(
+    section_key: tuple[str, str, str, str],
+    screens: list[dict[str, Any]],
+) -> str:
+    page_id, page_name, section_id, section_name = section_key
+    visible_text: list[str] = []
+    ui_elements: list[str] = []
+    actions: list[str] = []
+    qa_notes: list[str] = []
+
+    for screen in screens:
+        for item in screen.get("visible_text") or []:
+            _unique_append(visible_text, item, max_items=80)
+        for item in screen.get("ui_elements") or []:
+            _unique_append(ui_elements, item, max_items=80)
+        for item in screen.get("possible_actions") or []:
+            _unique_append(actions, item, max_items=60)
+        for item in screen.get("qa_notes") or []:
+            _unique_append(qa_notes, item, max_items=40)
+
+    max_screens = _env_int(
+        "REQUIREMENT_COMPACT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN",
+        DEFAULT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN,
+    )
+    listed_screens = screens[:max_screens]
+
+    lines = [
+        f"# Partial Summary: Figma Section - {section_name or '[UNNAMED SECTION]'}",
+        "",
+        "- Chunk type: figma_section",
+        f"- Page: {page_name or '[UNKNOWN PAGE]'} ({page_id or '[NO PAGE ID]'})",
+        f"- Section: {section_name or '[UNNAMED SECTION]'} ({section_id or '[NO SECTION ID]'})",
+        f"- Screens summarized: {len(screens)}",
+        "",
+        "## Screens",
+    ]
+
+    for screen in listed_screens:
+        lines.append(
+            "- "
+            f"{screen.get('screen_name') or '[UNNAMED SCREEN]'} "
+            f"({screen.get('screen_id')})"
+        )
+
+    if len(screens) > len(listed_screens):
+        lines.append(f"- [... {len(screens) - len(listed_screens)} more screens omitted]")
+
+    lines.extend(["", "## Key Visible Texts / States"])
+    _append_limited_list(lines, visible_text, "[NO VISIBLE TEXT EXTRACTED]", 40)
+
+    lines.extend(["", "## UI Elements"])
+    _append_limited_list(lines, ui_elements, "[NO UI ELEMENTS EXTRACTED]", 35)
+
+    lines.extend(["", "## Possible Actions"])
+    _append_limited_list(lines, actions, "[NO ACTIONS EXTRACTED]", 25)
+
+    if qa_notes:
+        lines.extend(["", "## QA Notes"])
+        _append_limited_list(lines, qa_notes, "[NO QA NOTES]", 25)
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _cleanup_chunk_folder(chunks_root: Path) -> None:
+    chunks_root.mkdir(parents=True, exist_ok=True)
+
+    for path in chunks_root.iterdir():
+        if path.is_file() and (
+            path.name.startswith("chunk_")
+            or path.name.startswith("partial_")
+            or path.name == "chunks_index.json"
+        ):
+            path.unlink()
+
+
+def _write_chunk_and_partial(
+    chunks_root: Path,
+    index: int,
+    chunk_type: str,
+    safe_suffix: str,
+    chunk_text: str,
+    partial_text: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    name_part = chunk_type if safe_suffix == chunk_type else f"{chunk_type}_{safe_suffix}"
+    chunk_file = chunks_root / f"chunk_{index:03d}_{name_part}.md"
+    partial_file = chunks_root / f"partial_{index:03d}_{name_part}.md"
+
+    _write_text(chunk_file, chunk_text)
+    _write_text(partial_file, partial_text)
+
+    return {
+        "index": index,
+        "type": chunk_type,
+        "chunk_path": _relative(chunk_file),
+        "partial_summary_path": _relative(partial_file),
+        "chunk_char_count": len(chunk_text),
+        "partial_summary_char_count": len(partial_text),
+        **metadata,
+    }
+
+
+def build_requirement_chunks(ticket_id: str) -> list[dict]:
+    source_root = REQUIREMENTS_ROOT / ticket_id / "source"
+    analysis_root = REQUIREMENTS_ROOT / ticket_id / "analysis"
+    chunks_root = analysis_root / "compact_chunks"
+    warnings: list[str] = []
+    chunks: list[dict[str, Any]] = []
+    chunk_max_chars = _env_int("REQUIREMENT_CHUNK_MAX_CHARS", DEFAULT_CHUNK_MAX_CHARS)
+
+    _cleanup_chunk_folder(chunks_root)
+
+    if not source_root.exists():
+        _write_json_pretty(chunks_root / "chunks_index.json", [])
+        return []
+
+    source_files = _collect_source_text_files(source_root)
+    source_texts = [
+        (path, _safe_read_text(path, warnings))
+        for path in source_files
+    ]
+
+    source_groups: dict[str, list[tuple[Path, str]]] = {
+        "jira_core": [],
+        "jira_comments": [],
+        "attachments": [],
+        "generic_source": [],
+    }
+
+    for path, text in source_texts:
+        source_groups.setdefault(_classify_source_file(path), []).append((path, text))
+
+    next_index = 1
+
+    for chunk_type in ["jira_core", "jira_comments", "attachments", "generic_source"]:
+        items = source_groups.get(chunk_type) or []
+        if not items:
+            continue
+
+        combined_text = "\n\n".join(
+            f"## Source: {_relative(path)}\n\n{text.strip()}"
+            for path, text in items
+            if text.strip()
+        ).strip()
+        parts = _split_text_into_parts(combined_text, chunk_max_chars)
+
+        for part_index, part in enumerate(parts, start=1):
+            part_items = [(Path(f"{chunk_type}_part_{part_index}.md"), part)]
+            chunk_text = _render_source_chunk(
+                ticket_id=ticket_id,
+                chunk_type=chunk_type,
+                source_items=part_items,
+            )
+            partial_text = _summarize_source_chunk(
+                chunk_type=chunk_type,
+                source_items=items if len(parts) == 1 else part_items,
+            )
+            suffix = _safe_name(
+                chunk_type if len(parts) == 1 else f"{chunk_type}_{part_index}"
+            )
+            chunks.append(
+                _write_chunk_and_partial(
+                    chunks_root=chunks_root,
+                    index=next_index,
+                    chunk_type=chunk_type,
+                    safe_suffix=suffix,
+                    chunk_text=chunk_text,
+                    partial_text=partial_text,
+                    metadata={
+                        "source_files": [_relative(path) for path, _ in items],
+                    },
+                )
+            )
+            next_index += 1
+
+    screens, _ = _load_figma_screens(source_root, warnings)
+    grouped_screens = _group_screens_by_section(screens)
+
+    for section_key, section_screens in sorted(
+        grouped_screens.items(),
+        key=lambda item: (item[0][1], item[0][3], item[0][2]),
+    ):
+        page_id, page_name, section_id, section_name = section_key
+        chunk_text = _render_figma_section_chunk(
+            ticket_id=ticket_id,
+            section_key=section_key,
+            screens=section_screens,
+        )
+
+        screen_batches = [section_screens]
+        if len(chunk_text) > chunk_max_chars:
+            screen_batches = [
+                section_screens[index:index + 20]
+                for index in range(0, len(section_screens), 20)
+            ]
+
+        for batch_index, screen_batch in enumerate(screen_batches, start=1):
+            batch_section_name = section_name
+            suffix_source = section_name or section_id or f"section_{next_index}"
+
+            if len(screen_batches) > 1:
+                suffix_source = f"{suffix_source}_{batch_index}"
+
+            chunk_text = _render_figma_section_chunk(
+                ticket_id=ticket_id,
+                section_key=section_key,
+                screens=screen_batch,
+            )
+            partial_text = _summarize_figma_section_chunk(
+                section_key=section_key,
+                screens=screen_batch,
+            )
+            chunks.append(
+                _write_chunk_and_partial(
+                    chunks_root=chunks_root,
+                    index=next_index,
+                    chunk_type="figma_section",
+                    safe_suffix=_safe_name(suffix_source, "figma_section"),
+                    chunk_text=chunk_text,
+                    partial_text=partial_text,
+                    metadata={
+                        "page_id": page_id,
+                        "page_name": page_name,
+                        "section_id": section_id,
+                        "section_name": batch_section_name,
+                        "screen_count": len(screen_batch),
+                    },
+                )
+            )
+            next_index += 1
+
+    _write_json_pretty(chunks_root / "chunks_index.json", chunks)
+    return chunks
+
+
 def _find_first_existing(paths: list[Path]) -> Path | None:
     for path in paths:
         if path.exists():
@@ -363,6 +837,9 @@ def _load_figma_screens(
                 ]
             )
             image_path = _find_first_existing([screen_dir / "frame.png"])
+            vision_skipped_path = _find_first_existing(
+                [screen_dir / "vision_analysis_skipped.txt"]
+            )
 
             screen_context = (
                 _safe_read_text(screen_context_path, warnings)
@@ -378,6 +855,10 @@ def _load_figma_screens(
                 screen_context=screen_context,
                 vision_analysis=vision_analysis,
             )
+            if image_path and vision_skipped_path and not vision_analysis_path:
+                skipped_note = _safe_read_text(vision_skipped_path, warnings).strip()
+                if skipped_note and skipped_note not in extracted["qa_notes"]:
+                    extracted["qa_notes"].append(skipped_note)
 
             screens.append(
                 {
@@ -527,6 +1008,171 @@ def _build_compact_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+def _read_partial_summaries(chunks: list[dict[str, Any]], warnings: list[str]) -> list[tuple[dict[str, Any], str]]:
+    partials: list[tuple[dict[str, Any], str]] = []
+
+    for chunk in chunks:
+        path = Path(chunk.get("partial_summary_path") or "")
+        if not path.exists():
+            warnings.append(f"Missing partial summary file: {path}")
+            continue
+
+        partials.append((chunk, _safe_read_text(path, warnings)))
+
+    return partials
+
+
+def _build_merged_compact_markdown(
+    ticket_id: str,
+    source_texts: list[tuple[Path, str]],
+    layers: list[dict[str, Any]],
+    screens: list[dict[str, Any]],
+    evidence_index: dict[str, Any],
+    chunks: list[dict[str, Any]],
+    warnings: list[str],
+) -> str:
+    ticket_summary = _extract_ticket_summary(source_texts)
+    explicit_rules = _extract_explicit_rules(source_texts)
+    open_questions = _extract_open_questions(source_texts)
+    partials = _read_partial_summaries(chunks, warnings)
+    source_partials = [
+        (chunk, text)
+        for chunk, text in partials
+        if chunk.get("type") in {"jira_core", "jira_comments", "attachments", "generic_source"}
+    ]
+    figma_partials = [
+        (chunk, text)
+        for chunk, text in partials
+        if chunk.get("type") == "figma_section"
+    ]
+    grouped_screens = _group_screens_by_section(screens)
+
+    lines: list[str] = [
+        f"# Compact Requirement Context: {ticket_id}",
+        "",
+        "## Ticket Summary",
+        ticket_summary,
+        "",
+        "## Functional Requirements",
+    ]
+
+    if source_partials:
+        for chunk, text in source_partials:
+            summary_lines = _extract_markdown_list_after_headings(
+                text,
+                {"functional / explicit requirement signals"},
+                max_items=25,
+            )
+            if summary_lines:
+                lines.append("")
+                lines.append(f"### {str(chunk.get('type', '')).replace('_', ' ').title()}")
+                lines.extend(f"- {item}" for item in summary_lines)
+    elif source_texts:
+        lines.append(_compact_source_excerpt("\n\n".join(text for _, text in source_texts), 4_000))
+    else:
+        lines.append("- [NO SOURCE MARKDOWN/TEXT FOUND]")
+
+    lines.extend(["", "## Figma Sections Summary"])
+
+    if layers:
+        section_counts = {
+            section_id: len(items)
+            for (_, _, section_id, _), items in grouped_screens.items()
+        }
+        for layer in layers:
+            section_id = layer.get("node_id", "")
+            lines.append(
+                "- "
+                f"{layer.get('name') or '[UNNAMED SECTION]'} "
+                f"({section_id or '[NO SECTION ID]'}) / "
+                f"Page: {layer.get('page_name') or '[UNKNOWN PAGE]'} "
+                f"/ Screens: {section_counts.get(section_id, 0)}"
+            )
+    else:
+        lines.append("- [NO FIGMA SECTIONS FOUND]")
+
+    lines.extend(["", "## Screens Grouped By Section"])
+
+    if grouped_screens:
+        max_screens = _env_int(
+            "REQUIREMENT_COMPACT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN",
+            DEFAULT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN,
+        )
+        for (_, page_name, section_id, section_name), section_screens in sorted(
+            grouped_screens.items(),
+            key=lambda item: (item[0][1], item[0][3], item[0][2]),
+        ):
+            lines.extend(
+                [
+                    "",
+                    f"### {section_name or '[UNNAMED SECTION]'} ({section_id or '[NO SECTION ID]'})",
+                    f"- Page: {page_name or '[UNKNOWN PAGE]'}",
+                    f"- Screen count: {len(section_screens)}",
+                ]
+            )
+            for screen in section_screens[:max_screens]:
+                lines.append(
+                    "- "
+                    f"{screen.get('screen_name') or '[UNNAMED SCREEN]'} "
+                    f"({screen.get('screen_id')})"
+                )
+            if len(section_screens) > max_screens:
+                lines.append(f"- [... {len(section_screens) - max_screens} more screens omitted]")
+    else:
+        lines.append("- [NO FIGMA SCREENS FOUND]")
+
+    lines.extend(["", "## Key Visible Texts / States"])
+    visible_text: list[str] = []
+    for screen in screens:
+        for item in screen.get("visible_text") or []:
+            _unique_append(visible_text, item, max_items=120)
+    _append_limited_list(lines, visible_text, "[NO VISIBLE TEXT EXTRACTED]", 80)
+
+    lines.extend(["", "## Possible Actions Summary"])
+    actions: list[str] = []
+    for screen in screens:
+        for item in screen.get("possible_actions") or []:
+            _unique_append(actions, item, max_items=80)
+    _append_limited_list(lines, actions, "[NO ACTIONS EXTRACTED]", 50)
+
+    lines.extend(["", "## Validation / Business Rules Explicit"])
+    _append_limited_list(lines, explicit_rules, "[NO EXPLICIT VALIDATION OR BUSINESS RULES FOUND]", 60)
+
+    figma_notes: list[str] = []
+    for screen in screens:
+        for item in screen.get("qa_notes") or []:
+            _unique_append(figma_notes, item, max_items=40)
+
+    if figma_notes:
+        lines.extend(["", "## Figma QA Notes"])
+        _append_limited_list(lines, figma_notes, "[NO FIGMA QA NOTES]", 40)
+
+    lines.extend(["", "## Open Questions"])
+    _append_limited_list(lines, open_questions, "[NO OPEN QUESTIONS DETECTED]", 30)
+
+    lines.extend(["", "## Source Traceability Summary"])
+    lines.append(f"- Source files indexed: {len(evidence_index.get('source_files') or [])}")
+    lines.append(f"- Figma files indexed: {len(evidence_index.get('figma_files') or [])}")
+    lines.append(f"- Chunk count: {len(chunks)}")
+    lines.append(f"- Partial summaries: {len(partials)}")
+    lines.append(f"- Section count: {evidence_index.get('section_count', 0)}")
+    lines.append(f"- Screen count: {evidence_index.get('screen_count', 0)}")
+
+    if chunks:
+        lines.append("- Chunk index: analysis/compact_chunks/chunks_index.json")
+
+    if figma_partials:
+        lines.extend(["", "## Figma Partial Summary Sources"])
+        for chunk, _ in figma_partials:
+            lines.append(
+                "- "
+                f"{chunk.get('section_name') or '[UNNAMED SECTION]'}: "
+                f"{chunk.get('partial_summary_path')}"
+            )
+
+    return "\n".join(lines).strip() + "\n"
+
+
 def _truncate_context_if_needed(context: str, max_chars: int) -> tuple[str, bool]:
     if len(context) <= max_chars:
         return context, False
@@ -597,13 +1243,26 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         "detected_mode": detected_mode,
         "warnings": warnings,
     }
+    chunks = build_requirement_chunks(ticket_id)
+    partial_summary_count = len(
+        [
+            chunk
+            for chunk in chunks
+            if chunk.get("partial_summary_path")
+            and Path(chunk.get("partial_summary_path", "")).exists()
+        ]
+    )
+    evidence_index["chunk_count"] = len(chunks)
+    evidence_index["partial_summary_count"] = partial_summary_count
 
-    compact_context = _build_compact_markdown(
+    compact_context = _build_merged_compact_markdown(
         ticket_id=ticket_id,
         source_texts=source_texts,
         layers=layers,
         screens=screens,
         evidence_index=evidence_index,
+        chunks=chunks,
+        warnings=warnings,
     )
     max_chars = _env_int(
         "REQUIREMENT_COMPACT_CONTEXT_MAX_CHARS",
@@ -646,6 +1305,9 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         "section_count": evidence_index["section_count"],
         "source_files_count": evidence_index["source_files_count"],
         "detected_mode": evidence_index["detected_mode"],
+        "chunk_count": evidence_index["chunk_count"],
+        "partial_summary_count": evidence_index["partial_summary_count"],
         "compact_context_length": len(compact_context),
+        "truncated": truncated,
         "warnings": evidence_index["warnings"],
     }

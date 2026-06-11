@@ -867,6 +867,15 @@ def _generate_scenarios_for_structure_batch(
 
 def generate_scenarios(state):
     ticket_id = state["ticket_id"]
+    metadata = state.get("requirement_context_metadata") or {}
+
+    if metadata:
+        print(
+            "generate_scenarios context_source="
+            f"{metadata.get('context_source')}, "
+            f"length={metadata.get('context_length')}, "
+            f"path={metadata.get('context_path')}"
+        )
 
     logger.info(
         "Starting batch-based scenario generation. ticket_id=%s",
