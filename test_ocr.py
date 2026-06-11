@@ -1,16 +1,7 @@
-from pathlib import Path
+from app.services.gemma_image_extractor_service import extract_image_with_gemma
 
-from app.services.ocr_service import (
-    extract_text_from_image
-)
+image_path = r"F:\AI\qa-ai-platform\sample_requirement.png"
 
-
-image_path = Path(
-    "sample_requirement.png"
-)
-
-text = extract_text_from_image(
-    image_path
-)
+text = extract_image_with_gemma(image_path)
 
 print(text)
