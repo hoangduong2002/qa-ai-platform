@@ -12,6 +12,9 @@ import os
 from pathlib import Path
 
 from app.services.gemma_image_extractor_service import extract_image_with_gemma
+from app.services.local_ai_config_service import (
+    is_attachment_local_vision_enabled,
+)
 
 IMAGE_EXTENSIONS = {
     ".png",
@@ -68,7 +71,10 @@ def _extract_image_text_with_tesseract(
 def _extract_image_text(file_path: str | Path) -> str:
     extractor = os.getenv("IMAGE_EXTRACTOR", "GEMMA").strip().upper()
 
-    if extractor == "GEMMA":
+    if extractor in {"GEMMA", "OLLAMA", "QWEN"}:
+        if not is_attachment_local_vision_enabled():
+            return ""
+
         return extract_image_with_gemma(file_path)
 
     if extractor == "TESSERACT":

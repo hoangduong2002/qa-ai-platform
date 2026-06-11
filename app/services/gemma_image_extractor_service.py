@@ -7,6 +7,11 @@ import urllib.request
 from pathlib import Path
 from PIL import Image
 
+from app.services.local_ai_config_service import (
+    get_ollama_base_url,
+    get_ollama_vision_model,
+)
+
 
 DEFAULT_IMAGE_EXTRACTION_PROMPT = """
 You are a QA requirement extraction assistant.
@@ -62,23 +67,23 @@ Rules:
 
 
 def _get_gemma_base_url() -> str:
-    base_url = os.getenv("GEMMA_VISION_BASE_URL", "").strip()
+    base_url = get_ollama_base_url()
 
     if not base_url:
         raise ValueError(
-            "GEMMA_VISION_BASE_URL is missing. "
-            "Example: GEMMA_VISION_BASE_URL=http://192.168.1.50:11434"
+            "OLLAMA_BASE_URL is missing. "
+            "Example: OLLAMA_BASE_URL=http://localhost:11434"
         )
 
     return base_url.rstrip("/")
 
 
 def _get_gemma_model() -> str:
-    model = os.getenv("GEMMA_VISION_MODEL", "").strip()
+    model = get_ollama_vision_model()
 
     if not model:
         raise ValueError(
-            "GEMMA_VISION_MODEL is missing. "
+            "OLLAMA_VISION_MODEL is missing. "
             "Set it to the model name shown by `ollama list`."
         )
 

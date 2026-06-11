@@ -4,11 +4,15 @@ import re
 import time
 import traceback
 import urllib.parse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import requests
+
+from app.services.local_ai_config_service import (
+    is_figma_local_vision_enabled,
+)
 
 
 REQUIREMENTS_ROOT = Path("requirements")
@@ -62,6 +66,9 @@ class FigmaPageScope:
     page_id: str
     page_name: str
     entry_node_ids: list[str]
+    source_links: list[str] = field(default_factory=list)
+    duplicate_link_count: int = 0
+    skipped_duplicate_pages: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -405,6 +412,94 @@ def resolve_target_pages(
         )
 
     return list(resolved_pages.values())
+
+
+def _source_links_for_page_scope(
+    reference: FigmaFileReference,
+    page_scope: FigmaPageScope,
+) -> list[str]:
+    matched_links: list[str] = []
+    page_entry_node_ids = set(page_scope.entry_node_ids)
+
+    for url in reference.source_urls:
+        url_node_ids = set(_extract_node_ids_from_url(url))
+
+        if url_node_ids and page_entry_node_ids.intersection(url_node_ids):
+            matched_links.append(url)
+
+    if not matched_links and len(reference.source_urls) == 1:
+        matched_links.append(reference.source_urls[0])
+
+    return matched_links
+
+
+def _dedupe_page_scopes(
+    reference: FigmaFileReference,
+    page_scopes: list[FigmaPageScope],
+) -> list[FigmaPageScope]:
+    deduped: dict[tuple[str, str], FigmaPageScope] = {}
+
+    for page_scope in page_scopes:
+        key = (page_scope.file_key, page_scope.page_id)
+        source_links = _source_links_for_page_scope(
+            reference=reference,
+            page_scope=page_scope,
+        )
+
+        if key not in deduped:
+            page_scope.source_links = []
+            page_scope.skipped_duplicate_pages = []
+
+            for source_link in source_links:
+                if source_link not in page_scope.source_links:
+                    page_scope.source_links.append(source_link)
+
+            page_scope.duplicate_link_count = max(
+                len(page_scope.source_links) - 1,
+                0,
+            )
+            deduped[key] = page_scope
+            continue
+
+        existing = deduped[key]
+
+        for entry_node_id in page_scope.entry_node_ids:
+            if entry_node_id not in existing.entry_node_ids:
+                existing.entry_node_ids.append(entry_node_id)
+
+        for source_link in source_links:
+            if source_link not in existing.source_links:
+                existing.source_links.append(source_link)
+
+        existing.duplicate_link_count = max(
+            len(existing.source_links) - 1,
+            0,
+        )
+
+    for page_scope in deduped.values():
+        if not page_scope.source_links:
+            page_scope.source_links = list(reference.source_urls)
+
+        page_scope.duplicate_link_count = max(
+            len(page_scope.source_links) - 1,
+            0,
+        )
+
+        page_scope.skipped_duplicate_pages = []
+
+        if page_scope.duplicate_link_count:
+            for source_link in page_scope.source_links[1:]:
+                page_scope.skipped_duplicate_pages.append(
+                    {
+                        "file_key": page_scope.file_key,
+                        "page_id": page_scope.page_id,
+                        "page_name": page_scope.page_name,
+                        "source_link": source_link,
+                        "reason": "duplicate link resolved to already exported page",
+                    }
+                )
+
+    return list(deduped.values())
 
 
 def _extract_size(node: dict[str, Any]) -> tuple[float, float]:
@@ -1108,30 +1203,18 @@ def _build_screen_context(
     return "\n".join(lines).strip()
 
 
-def _analyze_with_qwen_if_enabled(
+def _analyze_with_local_vision(
     image_file: Path | None,
 ) -> str | None:
     if not image_file:
         return None
 
-    if not _env_bool("FIGMA_ANALYZE_WITH_QWEN", False):
-        return None
+    from app.services.gemma_image_extractor_service import extract_image_with_gemma
 
-    try:
-        from app.services.gemma_image_extractor_service import extract_image_with_gemma
-
-        return extract_image_with_gemma(
-            image_path=image_file,
-            prompt=FIGMA_IMAGE_ANALYSIS_PROMPT,
-        )
-
-    except Exception as error:
-        return (
-            "Vision analysis failed.\n\n"
-            f"```text\n"
-            f"{''.join(traceback.format_exception(type(error), error, error.__traceback__))}"
-            f"\n```"
-        )
+    return extract_image_with_gemma(
+        image_path=image_file,
+        prompt=FIGMA_IMAGE_ANALYSIS_PROMPT,
+    )
 
 
 def export_figma_page_scope(
@@ -1152,10 +1235,14 @@ def export_figma_page_scope(
 
     page_metadata = {
         "file_key": reference.file_key,
-        "source_urls": reference.source_urls,
+        "source_links": page_scope.source_links or reference.source_urls,
+        "source_urls": page_scope.source_links or reference.source_urls,
+        "all_file_source_links": reference.source_urls,
         "page_id": page_scope.page_id,
         "page_name": page_scope.page_name,
         "entry_node_ids": page_scope.entry_node_ids,
+        "duplicate_link_count": page_scope.duplicate_link_count,
+        "skipped_duplicate_pages": page_scope.skipped_duplicate_pages,
         "extract_scope": _env_str("FIGMA_EXTRACT_SCOPE", "linked_page"),
     }
 
@@ -1207,10 +1294,12 @@ def export_figma_page_scope(
         f"- Page: {page_scope.page_name}",
         f"- Page ID: {page_scope.page_id}",
         "- Source URLs:",
-        *[f"  - {url}" for url in reference.source_urls],
+        *[f"  - {url}" for url in (page_scope.source_links or reference.source_urls)],
         "",
         "- Entry node IDs:",
         *[f"  - {node_id}" for node_id in page_scope.entry_node_ids],
+        "",
+        f"- Duplicate links merged into this page: {page_scope.duplicate_link_count}",
         "",
         f"- Extracted layers: {len(layers)}",
         f"- Extracted screens: {len(screens)}",
@@ -1282,7 +1371,27 @@ def export_figma_page_scope(
                     encoding="utf-8",
                 )
 
-            vision_analysis = _analyze_with_qwen_if_enabled(image_file)
+            vision_analysis = None
+
+            if image_file and is_figma_local_vision_enabled():
+                try:
+                    vision_analysis = _analyze_with_local_vision(image_file)
+                except Exception as error:
+                    (screen_dir / "vision_analysis_error.txt").write_text(
+                        "".join(
+                            traceback.format_exception(
+                                type(error),
+                                error,
+                                error.__traceback__,
+                            )
+                        ),
+                        encoding="utf-8",
+                    )
+            elif image_file:
+                (screen_dir / "vision_analysis_skipped.txt").write_text(
+                    "Figma local vision analysis skipped because local AI vision is disabled.",
+                    encoding="utf-8",
+                )
 
             if vision_analysis:
                 (screen_dir / "vision_analysis.md").write_text(
@@ -1336,6 +1445,10 @@ def export_figma_file_from_reference(
         file_key=reference.file_key,
         entry_node_ids=reference.entry_node_ids,
     )
+    page_scopes = _dedupe_page_scopes(
+        reference=reference,
+        page_scopes=page_scopes,
+    )
 
     context_parts = [
         "# Figma File Context",
@@ -1359,7 +1472,22 @@ def export_figma_file_from_reference(
 
     _write_json_pretty(
         file_root / "file_reference.json",
-        asdict(reference),
+        {
+            **asdict(reference),
+            "resolved_pages": [
+                {
+                    "file_key": page_scope.file_key,
+                    "page_id": page_scope.page_id,
+                    "page_name": page_scope.page_name,
+                    "source_links": page_scope.source_links,
+                    "entry_node_ids": page_scope.entry_node_ids,
+                    "duplicate_link_count": page_scope.duplicate_link_count,
+                    "skipped_duplicate_pages": page_scope.skipped_duplicate_pages,
+                }
+                for page_scope in page_scopes
+            ],
+            "dedupe_key": ["file_key", "page_id"],
+        },
     )
 
     for page_scope in page_scopes:

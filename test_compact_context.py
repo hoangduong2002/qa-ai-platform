@@ -1,0 +1,31 @@
+import sys
+
+from dotenv import load_dotenv
+
+from app.services.requirement_compact_context_service import (
+    build_compact_requirement_context,
+)
+
+
+load_dotenv()
+
+
+ticket_id = sys.argv[1] if len(sys.argv) > 1 else "TEST-FIGMA"
+
+result = build_compact_requirement_context(ticket_id)
+
+print("Output path:", result["analysis_root"])
+print("Detected mode:", result["detected_mode"])
+print("Screens:", result["screen_count"])
+print("Sections:", result["section_count"])
+print("Compact context length:", result["compact_context_length"])
+
+warnings = result.get("warnings") or []
+
+if warnings:
+    print()
+    print("Warnings:")
+    for warning in warnings:
+        print(f"- {warning}")
+else:
+    print("Warnings: none")

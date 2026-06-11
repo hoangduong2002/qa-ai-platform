@@ -1,0 +1,125 @@
+import os
+
+
+TRUE_VALUES = {"1", "true", "yes", "y", "on"}
+FALSE_VALUES = {"0", "false", "no", "n", "off"}
+
+
+def _env_str(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = _env_str(name)
+
+    if not value:
+        return default
+
+    normalized = value.lower()
+
+    if normalized in TRUE_VALUES:
+        return True
+
+    if normalized in FALSE_VALUES:
+        return False
+
+    return default
+
+
+def _env_bool_optional(name: str) -> bool | None:
+    value = _env_str(name)
+
+    if not value:
+        return None
+
+    normalized = value.lower()
+
+    if normalized in TRUE_VALUES:
+        return True
+
+    if normalized in FALSE_VALUES:
+        return False
+
+    return None
+
+
+def is_local_ai_enabled() -> bool:
+    return _env_bool("LOCAL_AI_ENABLED", False)
+
+
+def get_local_ai_provider() -> str:
+    return _env_str("LOCAL_AI_PROVIDER", "OLLAMA").upper() or "OLLAMA"
+
+
+def is_local_vision_enabled() -> bool:
+    if not is_local_ai_enabled():
+        return False
+
+    return _env_bool("LOCAL_VISION_ENABLED", False)
+
+
+def is_figma_local_vision_enabled() -> bool:
+    if not is_local_ai_enabled():
+        return False
+
+    explicit = _env_bool_optional("FIGMA_LOCAL_VISION_ENABLED")
+
+    if explicit is not None:
+        return explicit
+
+    legacy = _env_bool_optional("FIGMA_ANALYZE_WITH_QWEN")
+
+    if legacy is not None:
+        return legacy
+
+    return is_local_vision_enabled()
+
+
+def is_attachment_local_vision_enabled() -> bool:
+    if not is_local_ai_enabled():
+        return False
+
+    explicit = _env_bool_optional("ATTACHMENT_LOCAL_VISION_ENABLED")
+
+    if explicit is not None:
+        return explicit
+
+    return is_local_vision_enabled()
+
+
+def is_local_compact_enabled() -> bool:
+    if not is_local_ai_enabled():
+        return False
+
+    return _env_bool("LOCAL_COMPACT_ENABLED", False)
+
+
+def is_local_text_fallback_enabled() -> bool:
+    if not is_local_ai_enabled():
+        return False
+
+    return _env_bool("LOCAL_TEXT_FALLBACK_ENABLED", False)
+
+
+def get_ollama_base_url() -> str:
+    return (
+        _env_str("OLLAMA_BASE_URL")
+        or _env_str("GEMMA_VISION_BASE_URL")
+        or "http://localhost:11434"
+    ).rstrip("/")
+
+
+def get_ollama_vision_model() -> str:
+    return (
+        _env_str("OLLAMA_VISION_MODEL")
+        or _env_str("GEMMA_VISION_MODEL")
+        or "qwen2.5vl:7b"
+    )
+
+
+def get_ollama_compact_model() -> str:
+    return _env_str("OLLAMA_COMPACT_MODEL", "qwen2.5:14b")
+
+
+def get_ollama_text_model() -> str:
+    return _env_str("OLLAMA_TEXT_MODEL", "qwen2.5:14b")

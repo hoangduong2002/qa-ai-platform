@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import ssl
+import traceback
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -14,9 +15,19 @@ from atlassian import Jira
 from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
 from app.utils.requirement_sanitizer import clean_requirement_text
+from app.services.figma_requirement_service import (
+    extract_figma_context_from_jira_texts,
+)
+from app.services.requirement_compact_context_service import (
+    build_compact_requirement_context,
+)
+from app.services.local_ai_config_service import (
+    is_attachment_local_vision_enabled,
+)
 
 
 REQUIREMENTS_ROOT = Path("requirements")
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 
 def _get_jira_token(jira_pat: str = "") -> str:
@@ -89,6 +100,10 @@ def _safe_requirement_id(value: str) -> str:
         raise ValueError("Requirement ID is empty.")
 
     return value
+
+
+def _is_image_file(path: str | Path) -> bool:
+    return Path(path).suffix.lower() in IMAGE_EXTENSIONS
 
 
 def _utc_now() -> str:
@@ -197,6 +212,75 @@ def _write_json(path: Path, data: Any) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _write_log_file(ticket_id: str, filename: str, content: str) -> None:
+    log_file = REQUIREMENTS_ROOT / ticket_id / "logs" / filename
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text(content, encoding="utf-8")
+
+
+def _build_compact_context_safely(ticket_id: str) -> None:
+    try:
+        result = build_compact_requirement_context(ticket_id)
+    except Exception as error:
+        error_text = "".join(
+            traceback.format_exception(
+                type(error),
+                error,
+                error.__traceback__,
+            )
+        )
+        _write_log_file(
+            ticket_id=ticket_id,
+            filename="compact_context_error.txt",
+            content=error_text,
+        )
+        print(
+            f"[WARN] Compact requirement context build failed for {ticket_id}. "
+            f"See requirements/{ticket_id}/logs/compact_context_error.txt"
+        )
+        return
+
+    print(
+        "[INFO] Compact requirement context built. "
+        f"ticket_id={ticket_id}, "
+        f"path={result.get('compact_context_path', '')}, "
+        f"screens={result.get('screen_count', 0)}, "
+        f"sections={result.get('section_count', 0)}, "
+        f"length={result.get('compact_context_length', 0)}"
+    )
+
+
+def _extract_figma_sources_safely(ticket_id: str, texts: list[str]) -> None:
+    try:
+        context = extract_figma_context_from_jira_texts(
+            ticket_id=ticket_id,
+            texts=texts,
+        )
+    except Exception as error:
+        error_text = "".join(
+            traceback.format_exception(
+                type(error),
+                error,
+                error.__traceback__,
+            )
+        )
+        _write_log_file(
+            ticket_id=ticket_id,
+            filename="figma_extraction_error.txt",
+            content=error_text,
+        )
+        print(
+            f"[WARN] Figma extraction failed for {ticket_id}. "
+            f"See requirements/{ticket_id}/logs/figma_extraction_error.txt"
+        )
+        return
+
+    if context:
+        print(f"[INFO] Figma source extraction completed for {ticket_id}.")
+    else:
+        print(f"[INFO] No Figma source extracted for {ticket_id}.")
 
 
 def _write_refresh_metadata(
@@ -380,6 +464,28 @@ def _download_and_extract_attachments(
             item["content"] = extracted_text
 
         except Exception as error:
+            if (
+                _is_image_file(attachment_file)
+                and attachment_file.exists()
+                and is_attachment_local_vision_enabled()
+            ):
+                error_file = extracted_dir / f"{attachment_file.stem}_vision_analysis_error.txt"
+                error_file.write_text(
+                    "".join(
+                        traceback.format_exception(
+                            type(error),
+                            error,
+                            error.__traceback__,
+                        )
+                    ),
+                    encoding="utf-8",
+                )
+                item["error"] = str(error)
+                item["content"] = ""
+                item["extracted_path"] = str(error_file)
+                extracted_items.append(item)
+                continue
+
             item["error"] = str(error)
             item["content"] = (
                 f"Failed to download/extract attachment: {error}"
@@ -680,6 +786,20 @@ def create_requirement_from_jira(
         markdown,
         source=f"jira:{issue_key}",
     )
+
+    source_dir = REQUIREMENTS_ROOT / ticket_id / "source"
+    jira_requirement_file = source_dir / "jira_requirement.md"
+    jira_requirement_file.write_text(
+        markdown,
+        encoding="utf-8",
+    )
+
+    _extract_figma_sources_safely(
+        ticket_id=ticket_id,
+        texts=[markdown],
+    )
+
+    _build_compact_context_safely(ticket_id)
 
     _write_ticket_snapshot(
         ticket_id=ticket_id,
