@@ -8,11 +8,18 @@ from app.services.ocr_service import (
 )
 from app.utils.ocr_normalizer import normalize_ocr_requirement
 
+import os
+from pathlib import Path
+
+from app.services.gemma_image_extractor_service import extract_image_with_gemma
+
 IMAGE_EXTENSIONS = {
     ".png",
     ".jpg",
     ".jpeg",
-    ".webp"
+    ".webp",
+    ".bmp",
+    ".gif",
 }
 
 
@@ -36,9 +43,14 @@ def extract_docx_text(
         for paragraph in doc.paragraphs
         if paragraph.text.strip()
     )
+    
+
+def _is_image_file(file_path: str | Path) -> bool:
+    return Path(file_path).suffix.lower() in IMAGE_EXTENSIONS
 
 
-def extract_image_text(
+
+def _extract_image_text_with_tesseract(
     file_path: Path
 ) -> str:
 
@@ -51,6 +63,21 @@ def extract_image_text(
     )
 
     return normalized_text
+
+
+def _extract_image_text(file_path: str | Path) -> str:
+    extractor = os.getenv("IMAGE_EXTRACTOR", "GEMMA").strip().upper()
+
+    if extractor == "GEMMA":
+        return extract_image_with_gemma(file_path)
+
+    if extractor == "TESSERACT":
+        return _extract_image_text_with_tesseract(file_path)
+
+    raise ValueError(
+        f"Unsupported IMAGE_EXTRACTOR={extractor}. "
+        "Use GEMMA or TESSERACT."
+    )
 
 
 def extract_pptx_text(
@@ -105,7 +132,7 @@ def extract_pptx_text(
                     image.blob
                 )
 
-                image_text = extract_image_text(
+                image_text = _extract_image_text(
                     image_path
                 )
 
@@ -148,7 +175,7 @@ def extract_file_text(
         )
 
     if suffix in IMAGE_EXTENSIONS:
-        return extract_image_text(
+        return _extract_image_text(
             file_path
         )
 

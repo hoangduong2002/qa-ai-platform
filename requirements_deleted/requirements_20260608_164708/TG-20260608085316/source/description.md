@@ -1,1 +1,0 @@
-User can create account using email and password. Email must be unique. Password min length is 8 max length is 12. User must verify email before first login

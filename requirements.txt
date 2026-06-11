@@ -53,6 +53,7 @@ python-pptx==1.0.2
 pytesseract==0.3.13
 opencv-python==4.12.0.88
 Pillow==11.3.0
+requests==2.34.2
 
 # =========================
 # Data & Utilities

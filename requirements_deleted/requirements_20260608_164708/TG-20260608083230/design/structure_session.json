@@ -1,8 +1,0 @@
-{
-  "current_version": "v3",
-  "review_iterations": 3,
-  "max_review_iterations": 3,
-  "approved": true,
-  "waiting_human_review": false,
-  "pending_generation_after_approval": false
-}

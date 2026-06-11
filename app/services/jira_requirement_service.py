@@ -2,6 +2,9 @@ import json
 import os
 import re
 import shutil
+import ssl
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +17,63 @@ from app.utils.requirement_sanitizer import clean_requirement_text
 
 
 REQUIREMENTS_ROOT = Path("requirements")
+
+
+def _get_jira_token(jira_pat: str = "") -> str:
+    return (
+        (jira_pat or "").strip()
+        or os.getenv("JIRA_PAT", "").strip()
+        or os.getenv("JIRA_API_TOKEN", "").strip()
+    )
+
+
+def _is_probably_html(content: bytes) -> bool:
+    preview = content[:300].decode("utf-8", errors="ignore").lower()
+
+    return (
+        "<html" in preview
+        or "<!doctype html" in preview
+        or "login.microsoftonline.com" in preview
+        or "oauth2" in preview
+    )
+
+
+def _download_binary_with_pat(
+    url: str,
+    token: str,
+    verify_ssl: bool = True,
+) -> bytes:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/octet-stream,*/*",
+        "User-Agent": "qa-ai-platform/1.0",
+    }
+
+    request = urllib.request.Request(
+        url=url,
+        headers=headers,
+        method="GET",
+    )
+
+    context = None
+
+    if not verify_ssl:
+        context = ssl._create_unverified_context()
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=120,
+            context=context,
+        ) as response:
+            return response.read()
+
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(
+            f"Failed to download Jira attachment. "
+            f"HTTP {error.code}. URL={url}. Body={body[:500]}"
+        ) from error
 
 
 def _safe_filename(name: str) -> str:
@@ -216,29 +276,44 @@ def _download_attachment(
     jira: Jira,
     attachment: dict,
     output_file: Path,
+    jira_pat: str = "",
 ) -> None:
     content_url = attachment.get("content")
 
     if not content_url:
         raise ValueError("Attachment content URL is missing.")
 
-    response = jira.get(
-        content_url,
-        not_json_response=True,
-    )
-
     output_file.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    with output_file.open("wb") as file:
-        if isinstance(response, bytes):
-            file.write(response)
-        elif hasattr(response, "content"):
-            file.write(response.content)
-        else:
-            file.write(bytes(response))
+    token = _get_jira_token(jira_pat)
+
+    if not token:
+        raise ValueError(
+            "Jira PAT is missing when downloading attachment. "
+            "Please enter PAT in Web Portal or set JIRA_PAT/JIRA_API_TOKEN."
+        )
+
+    content = _download_binary_with_pat(
+        url=content_url,
+        token=token,
+        verify_ssl=_verify_ssl(),
+    )
+
+    if _is_probably_html(content):
+        preview = content[:800].decode("utf-8", errors="ignore")
+
+        raise ValueError(
+            "Downloaded Jira attachment is an HTML login/SSO page, not an image/file. "
+            "This means the attachment request was not authenticated correctly. "
+            f"filename={attachment.get('filename')} "
+            f"url={content_url} "
+            f"preview={preview}"
+        )
+
+    output_file.write_bytes(content)
 
 
 def _download_and_extract_attachments(
@@ -246,6 +321,7 @@ def _download_and_extract_attachments(
     ticket_id: str,
     issue_key: str,
     issue: dict,
+    jira_pat: str = "",
 ) -> list[dict]:
     attachments = _get_issue_attachments(issue)
 
@@ -286,6 +362,7 @@ def _download_and_extract_attachments(
                 jira=jira,
                 attachment=attachment,
                 output_file=attachment_file,
+                jira_pat=jira_pat,
             )
 
             extracted_text = extract_file_text(
@@ -517,6 +594,7 @@ def create_requirement_from_jira(
         ticket_id=ticket_id,
         issue_key=issue_key,
         issue=main_issue,
+        jira_pat=jira_pat,
     )
 
     markdown = f"# Jira Requirement: {issue_key}\n\n"
@@ -564,7 +642,8 @@ def create_requirement_from_jira(
                     jira=jira,
                     ticket_id=ticket_id,
                     issue_key=subtask_key,
-                    issue=sub_issue,
+                    issue=sub_issue,                    
+                    jira_pat=jira_pat,
                 )
 
                 markdown += _build_issue_markdown(
