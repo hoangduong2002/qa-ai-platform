@@ -18,6 +18,73 @@ PRIORITY_ORDER = {
     "Low": 2,
 }
 
+VALID_IMPACTS = set(PRIORITY_ORDER.keys())
+
+
+def _normalize_suggested_options(value: Any) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+
+    options = []
+
+    for index, option in enumerate(value, start=1):
+        if not isinstance(option, dict):
+            continue
+
+        key = str(option.get("key") or "").strip().upper()
+        label = str(option.get("label") or "").strip()
+        assumption = str(option.get("assumption") or "").strip()
+
+        if not label:
+            continue
+
+        if not key:
+            key = chr(ord("A") + len(options))
+
+        options.append(
+            {
+                "key": key,
+                "label": label,
+                "assumption": assumption,
+            }
+        )
+
+    if not options:
+        return []
+
+    non_other_options = [
+        option
+        for option in options
+        if "other" not in option["label"].lower()
+    ]
+
+    limited = [
+        {
+            **option,
+            "key": chr(ord("A") + index),
+        }
+        for index, option in enumerate(non_other_options[:3])
+    ]
+
+    while len(limited) < 1:
+        limited.append(
+            {
+                "key": chr(ord("A") + len(limited)),
+                "label": "Needs clarification",
+                "assumption": "",
+            }
+        )
+
+    limited.append(
+        {
+            "key": chr(ord("A") + len(limited)),
+            "label": "Other / custom answer",
+            "assumption": "",
+        }
+    )
+
+    return limited[:4]
+
 
 def _get_max_clarifications_per_round() -> int:
     value = os.getenv("MAX_CLARIFICATIONS_PER_ROUND", "5")
@@ -77,10 +144,21 @@ def _normalize_question(
 ) -> dict:
     item = dict(question)
 
-    item["question_id"] = (
+    question_id = (
         item.get("question_id")
         or item.get("id")
         or f"Q{index:03d}"
+    )
+
+    item["id"] = question_id
+    item["question_id"] = question_id
+
+    item["question"] = (
+        item.get("question")
+        or item.get("question_text")
+        or item.get("text")
+        or item.get("description")
+        or ""
     )
 
     priority = (
@@ -89,11 +167,24 @@ def _normalize_question(
         or "Medium"
     )
 
-    if priority not in PRIORITY_ORDER:
+    if priority not in VALID_IMPACTS:
         priority = "Medium"
 
     item["priority"] = priority
-    item["impact"] = item.get("impact") or priority
+    impact = item.get("impact") or priority
+
+    if impact not in VALID_IMPACTS:
+        impact = "Medium"
+
+    item["impact"] = impact
+    item["category"] = item.get("category") or "Other"
+    item["reason"] = item.get("reason") or ""
+    item["free_text_allowed"] = bool(
+        item.get("free_text_allowed", True)
+    )
+    item["suggested_options"] = _normalize_suggested_options(
+        item.get("suggested_options")
+    )
     item["blocking"] = bool(
         item.get("blocking", priority == "High")
     )
@@ -196,6 +287,7 @@ def _filter_and_limit_questions(
 
     for index, question in enumerate(limited_questions, start=1):
         question["question_id"] = f"Q{index:03d}"
+        question["id"] = question["question_id"]
 
     return limited_questions
 

@@ -11,7 +11,7 @@ from app.utils.ocr_normalizer import normalize_ocr_requirement
 import os
 from pathlib import Path
 
-from app.services.LOCAL_image_extractor_service import extract_image_with_LOCAL
+from app.services.local_image_extractor_service import extract_image_with_LOCAL
 from app.services.local_ai_config_service import (
     is_attachment_local_vision_enabled,
 )

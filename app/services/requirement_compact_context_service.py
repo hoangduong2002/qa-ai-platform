@@ -4,11 +4,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.services.compact_llm_service import (
-    compact_chunk_with_llm,
-    merge_compact_context_with_llm,
-)
-
 
 REQUIREMENTS_ROOT = Path("requirements")
 DEFAULT_MAX_CONTEXT_CHARS = 60_000
@@ -20,6 +15,7 @@ FIGMA_ONLY_WARNING = (
     "Jira/source markdown not found. "
     "This appears to be a Figma-only compact context."
 )
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
 
 SKIP_NAME_PARTS = {
@@ -86,6 +82,13 @@ def _is_skipped_source_file(path: Path) -> bool:
     lowered_name = path.name.lower()
 
     if lowered_name in {"screen_context.md", "vision_analysis.md"}:
+        return True
+
+    if (
+        "attachment_context" in lowered_name
+        or "vision_analysis" in lowered_name
+        or "vision_analysis" in lowered_parts
+    ):
         return True
 
     if "figma" in lowered_parts:
@@ -185,6 +188,37 @@ def _extract_markdown_list_after_headings(
             _unique_append(items, line, max_items=max_items)
 
     return items
+
+
+def _extract_markdown_section_text(
+    text: str,
+    headings: set[str],
+    max_chars: int = 800,
+) -> str:
+    collected: list[str] = []
+    active = False
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        heading_match = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+
+        if heading_match:
+            heading = heading_match.group(1).strip().lower()
+            if active and heading not in headings:
+                break
+
+            active = heading in headings
+            continue
+
+        if active and line:
+            collected.append(line)
+
+    value = " ".join(collected).strip()
+
+    if len(value) <= max_chars:
+        return value
+
+    return value[:max_chars].rstrip() + "..."
 
 
 def _extract_ticket_summary(source_texts: list[tuple[Path, str]]) -> str:
@@ -542,55 +576,6 @@ def _summarize_figma_section_chunk(
     return "\n".join(lines).strip() + "\n"
 
 
-def _compact_chunk_with_llm_or_rule_based(
-    chunk_type: str,
-    chunk_text: str,
-    rule_based_partial: str,
-    warnings: list[str],
-) -> str:
-    try:
-        result = compact_chunk_with_llm(
-            chunk_type=chunk_type,
-            chunk_text=chunk_text,
-        )
-        warnings.append(
-            "Compact chunk summarized with LLM "
-            f"provider={result.provider}, model={result.model}, "
-            f"fallback_used={result.fallback_used}."
-        )
-        return result.content.strip() + "\n"
-    except Exception as error:
-        warnings.append(
-            "Compact chunk LLM summary failed; using rule-based summary. "
-            f"chunk_type={chunk_type}, error={error}"
-        )
-        return rule_based_partial
-
-
-def _merge_compact_with_llm_or_rule_based(
-    ticket_id: str,
-    compact_context: str,
-    warnings: list[str],
-) -> str:
-    try:
-        result = merge_compact_context_with_llm(
-            ticket_id=ticket_id,
-            compact_context=compact_context,
-        )
-        warnings.append(
-            "Final compact context merged with LLM "
-            f"provider={result.provider}, model={result.model}, "
-            f"fallback_used={result.fallback_used}."
-        )
-        return result.content.strip() + "\n"
-    except Exception as error:
-        warnings.append(
-            "Final compact context LLM merge failed; using rule-based merge. "
-            f"error={error}"
-        )
-        return compact_context
-
-
 def _cleanup_chunk_folder(chunks_root: Path) -> None:
     chunks_root.mkdir(parents=True, exist_ok=True)
 
@@ -688,12 +673,6 @@ def build_requirement_chunks(
                 chunk_type=chunk_type,
                 source_items=items if len(parts) == 1 else part_items,
             )
-            partial_text = _compact_chunk_with_llm_or_rule_based(
-                chunk_type=chunk_type,
-                chunk_text=chunk_text,
-                rule_based_partial=partial_text,
-                warnings=warnings,
-            )
             suffix = _safe_name(
                 chunk_type if len(parts) == 1 else f"{chunk_type}_{part_index}"
             )
@@ -749,12 +728,6 @@ def build_requirement_chunks(
                 section_key=section_key,
                 screens=screen_batch,
             )
-            partial_text = _compact_chunk_with_llm_or_rule_based(
-                chunk_type="figma_section",
-                chunk_text=chunk_text,
-                rule_based_partial=partial_text,
-                warnings=warnings,
-            )
             chunks.append(
                 _write_chunk_and_partial(
                     chunks_root=chunks_root,
@@ -804,11 +777,11 @@ def _parse_screen_context(
     screen_context: str,
     vision_analysis: str,
 ) -> dict[str, list[str]]:
-    combined = "\n\n".join(part for part in [screen_context, vision_analysis] if part)
+    combined = vision_analysis if vision_analysis.strip() else screen_context
 
     visible_text = _extract_markdown_list_after_headings(
         combined,
-        {"figma text layers", "visible ui text"},
+        {"figma text layers", "visible ui text", "visible text"},
         max_items=100,
     )
     ui_elements = _extract_markdown_list_after_headings(
@@ -823,15 +796,32 @@ def _parse_screen_context(
     )
     qa_notes = _extract_markdown_list_after_headings(
         combined,
-        {"potential qa notes", "validation/business rules", "validation and business rules"},
+        {
+            "potential qa notes",
+            "qa notes",
+            "validation/business rules",
+            "validation and business rules",
+            "validation / error / success messages",
+        },
         max_items=60,
+    )
+    ambiguities = _extract_markdown_list_after_headings(
+        combined,
+        {"ambiguities"},
+        max_items=40,
+    )
+    summary = _extract_markdown_section_text(
+        combined,
+        {"screen summary", "screen/image summary", "image summary"},
+        max_chars=500,
     )
 
     return {
+        "summary": [summary] if summary else [],
         "visible_text": visible_text,
         "ui_elements": ui_elements,
         "possible_actions": possible_actions,
-        "qa_notes": qa_notes,
+        "qa_notes": qa_notes + ambiguities,
     }
 
 
@@ -924,10 +914,6 @@ def _load_figma_screens(
                 screen_context=screen_context,
                 vision_analysis=vision_analysis,
             )
-            if image_path and vision_skipped_path and not vision_analysis_path:
-                skipped_note = _safe_read_text(vision_skipped_path, warnings).strip()
-                if skipped_note and skipped_note not in extracted["qa_notes"]:
-                    extracted["qa_notes"].append(skipped_note)
 
             screens.append(
                 {
@@ -948,6 +934,12 @@ def _load_figma_screens(
                         if vision_analysis_path
                         else ""
                     ),
+                    "has_vision_analysis": bool(vision_analysis_path),
+                    "vision_summary": (
+                        extracted["summary"][0]
+                        if extracted.get("summary")
+                        else ""
+                    ),
                     "visible_text": extracted["visible_text"],
                     "ui_elements": extracted["ui_elements"],
                     "possible_actions": extracted["possible_actions"],
@@ -956,6 +948,120 @@ def _load_figma_screens(
             )
 
     return screens, figma_files
+
+
+def _summarize_context_source(text: str, max_chars: int = 500) -> str:
+    lines: list[str] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("- Source location:") or line.startswith("- Ticket:"):
+            lines.append(line.lstrip("- ").strip())
+            continue
+
+        if line.startswith("- Related Jira context:"):
+            continue
+
+        if not line.startswith("-"):
+            lines.append(line)
+
+        if len(" ".join(lines)) >= max_chars:
+            break
+
+    summary = " ".join(lines).strip()
+
+    if len(summary) <= max_chars:
+        return summary
+
+    return summary[:max_chars].rstrip() + "..."
+
+
+def _load_attachment_inventory(
+    source_root: Path,
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    attachments_root = source_root / "attachments"
+    inventory: list[dict[str, Any]] = []
+
+    if not attachments_root.exists():
+        return inventory
+
+    for attachment_path in sorted(attachments_root.rglob("*")):
+        if not attachment_path.is_file():
+            continue
+
+        if attachment_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+
+        if attachment_path.name.endswith("_attachment_context.md"):
+            continue
+
+        if attachment_path.name.endswith("_vision_analysis.md"):
+            continue
+
+        if attachment_path.name.endswith("_vision_analysis.json"):
+            continue
+
+        context_path = attachment_path.with_name(
+            f"{attachment_path.stem}_attachment_context.md"
+        )
+        vision_path = attachment_path.with_name(
+            f"{attachment_path.stem}_vision_analysis.md"
+        )
+        vision_json_path = attachment_path.with_name(
+            f"{attachment_path.stem}_vision_analysis.json"
+        )
+        context_text = (
+            _safe_read_text(context_path, warnings)
+            if context_path.exists()
+            else ""
+        )
+        vision_text = (
+            _safe_read_text(vision_path, warnings)
+            if vision_path.exists()
+            else ""
+        )
+
+        inventory.append(
+            {
+                "filename": attachment_path.name,
+                "path": _relative(attachment_path),
+                "context_path": _relative(context_path) if context_path.exists() else "",
+                "vision_analysis_path": (
+                    _relative(vision_path) if vision_path.exists() else ""
+                ),
+                "vision_analysis_json_path": (
+                    _relative(vision_json_path) if vision_json_path.exists() else ""
+                ),
+                "has_vision_analysis": bool(vision_path.exists()),
+                "source_summary": _summarize_context_source(context_text),
+                "vision_summary": _extract_markdown_section_text(
+                    vision_text,
+                    {"screen/image summary", "screen summary", "image summary"},
+                    max_chars=500,
+                ),
+                "visible_text": _extract_markdown_list_after_headings(
+                    vision_text,
+                    {"visible ui text", "visible text"},
+                    max_items=30,
+                ),
+                "qa_notes": _extract_markdown_list_after_headings(
+                    vision_text,
+                    {
+                        "qa notes",
+                        "validation / error / success messages",
+                        "ambiguities",
+                    },
+                    max_items=30,
+                ),
+            }
+        )
+
+    return inventory
 
 
 def _build_compact_markdown(
@@ -1096,6 +1202,7 @@ def _build_merged_compact_markdown(
     source_texts: list[tuple[Path, str]],
     layers: list[dict[str, Any]],
     screens: list[dict[str, Any]],
+    attachments: list[dict[str, Any]],
     evidence_index: dict[str, Any],
     chunks: list[dict[str, Any]],
     warnings: list[str],
@@ -1107,7 +1214,7 @@ def _build_merged_compact_markdown(
     source_partials = [
         (chunk, text)
         for chunk, text in partials
-        if chunk.get("type") in {"jira_core", "jira_comments", "attachments", "generic_source"}
+        if chunk.get("type") in {"jira_core", "jira_comments", "generic_source"}
     ]
     figma_partials = [
         (chunk, text)
@@ -1180,11 +1287,17 @@ def _build_merged_compact_markdown(
                 ]
             )
             for screen in section_screens[:max_screens]:
-                lines.append(
+                screen_line = (
                     "- "
                     f"{screen.get('screen_name') or '[UNNAMED SCREEN]'} "
                     f"({screen.get('screen_id')})"
                 )
+                summary = screen.get("vision_summary") or ""
+
+                if summary:
+                    screen_line += f": {summary}"
+
+                lines.append(screen_line)
             if len(section_screens) > max_screens:
                 lines.append(f"- [... {len(section_screens) - max_screens} more screens omitted]")
     else:
@@ -1204,6 +1317,38 @@ def _build_merged_compact_markdown(
             _unique_append(actions, item, max_items=80)
     _append_limited_list(lines, actions, "[NO ACTIONS EXTRACTED]", 50)
 
+    lines.extend(["", "## Image Attachments Summary"])
+
+    if attachments:
+        for attachment in attachments[:50]:
+            lines.append(
+                "- "
+                f"{attachment.get('filename') or '[UNNAMED ATTACHMENT]'}"
+                + (
+                    f": {attachment.get('vision_summary')}"
+                    if attachment.get("vision_summary")
+                    else ""
+                )
+            )
+
+            source_summary = attachment.get("source_summary") or ""
+
+            if source_summary:
+                lines.append(f"  Source context: {source_summary}")
+
+            visible_text_items = attachment.get("visible_text") or []
+
+            if visible_text_items:
+                lines.append(
+                    "  Visible text: "
+                    + "; ".join(str(item) for item in visible_text_items[:10])
+                )
+
+        if len(attachments) > 50:
+            lines.append(f"- [... {len(attachments) - 50} more attachments omitted]")
+    else:
+        lines.append("- [NO IMAGE ATTACHMENTS FOUND]")
+
     lines.extend(["", "## Validation / Business Rules Explicit"])
     _append_limited_list(lines, explicit_rules, "[NO EXPLICIT VALIDATION OR BUSINESS RULES FOUND]", 60)
 
@@ -1222,6 +1367,7 @@ def _build_merged_compact_markdown(
     lines.extend(["", "## Source Traceability Summary"])
     lines.append(f"- Source files indexed: {len(evidence_index.get('source_files') or [])}")
     lines.append(f"- Figma files indexed: {len(evidence_index.get('figma_files') or [])}")
+    lines.append(f"- Image attachments indexed: {len(attachments)}")
     lines.append(f"- Chunk count: {len(chunks)}")
     lines.append(f"- Partial summaries: {len(partials)}")
     lines.append(f"- Section count: {evidence_index.get('section_count', 0)}")
@@ -1288,8 +1434,24 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         if source_root.exists()
         else ([], [])
     )
+    attachments = (
+        _load_attachment_inventory(source_root, warnings)
+        if source_root.exists()
+        else []
+    )
     source_files_count = len(source_files)
     screen_count = len(screens)
+    screens_with_vision_analysis_count = len(
+        [screen for screen in screens if screen.get("has_vision_analysis")]
+    )
+    attachment_count = len(attachments)
+    attachments_with_vision_analysis_count = len(
+        [
+            attachment
+            for attachment in attachments
+            if attachment.get("has_vision_analysis")
+        ]
+    )
     detected_mode = _detect_compact_context_mode(
         source_files_count=source_files_count,
         screen_count=screen_count,
@@ -1308,6 +1470,11 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         "source_files_count": source_files_count,
         "figma_files": sorted(set(layer_figma_files + screen_figma_files)),
         "screen_count": screen_count,
+        "screens_with_vision_analysis_count": screens_with_vision_analysis_count,
+        "attachment_count": attachment_count,
+        "attachments_with_vision_analysis_count": (
+            attachments_with_vision_analysis_count
+        ),
         "section_count": len({layer.get("node_id") for layer in layers if layer.get("node_id")}),
         "detected_mode": detected_mode,
         "warnings": warnings,
@@ -1329,13 +1496,9 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         source_texts=source_texts,
         layers=layers,
         screens=screens,
+        attachments=attachments,
         evidence_index=evidence_index,
         chunks=chunks,
-        warnings=warnings,
-    )
-    compact_context = _merge_compact_with_llm_or_rule_based(
-        ticket_id=ticket_id,
-        compact_context=compact_context,
         warnings=warnings,
     )
     max_chars = _env_int(
@@ -1360,6 +1523,13 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         analysis_root / "screen_inventory.json",
         screen_inventory,
     )
+    _write_json_pretty(
+        analysis_root / "attachment_inventory.json",
+        {
+            "ticket_id": ticket_id,
+            "attachments": attachments,
+        },
+    )
     _write_text(
         analysis_root / "requirement_context_compact.md",
         compact_context,
@@ -1372,10 +1542,20 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
             analysis_root / "requirement_evidence_index.json"
         ),
         "screen_inventory_path": _relative(analysis_root / "screen_inventory.json"),
+        "attachment_inventory_path": _relative(
+            analysis_root / "attachment_inventory.json"
+        ),
         "compact_context_path": _relative(
             analysis_root / "requirement_context_compact.md"
         ),
         "screen_count": evidence_index["screen_count"],
+        "screens_with_vision_analysis_count": (
+            evidence_index["screens_with_vision_analysis_count"]
+        ),
+        "attachment_count": evidence_index["attachment_count"],
+        "attachments_with_vision_analysis_count": (
+            evidence_index["attachments_with_vision_analysis_count"]
+        ),
         "section_count": evidence_index["section_count"],
         "source_files_count": evidence_index["source_files_count"],
         "detected_mode": evidence_index["detected_mode"],

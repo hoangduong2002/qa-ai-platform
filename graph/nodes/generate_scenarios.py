@@ -5,13 +5,29 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_SCENARIO_GENERATION,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import save_scenarios, save_raw_response
 
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_ai_mode(state: dict | None = None) -> str | None:
+    state = state or {}
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
 
 
 def normalize_scenarios(data):
@@ -34,6 +50,7 @@ def repair_json_with_llm(
     ticket_id: str,
     malformed_json_text: str,
     original_error: Exception,
+    ai_mode: str | None = None,
 ):
     """
     Ask LLM to repair malformed scenario JSON once.
@@ -79,18 +96,16 @@ Malformed JSON:
 {malformed_json_text}
 """
 
-    llm = get_llm()
-
-    response = llm.invoke(
+    response_content = call_text_llm(
+        TASK_SCENARIO_GENERATION,
         repair_prompt,
-        ticket_id=ticket_id,
-        node_name="generate_scenarios_json_repair",
+        ai_mode=ai_mode,
     )
 
     repaired_raw_file = save_raw_response(
         ticket_id,
         "generate_scenarios_repaired_raw",
-        response.content,
+        response_content,
     )
 
     logger.info(
@@ -99,7 +114,7 @@ Malformed JSON:
         repaired_raw_file,
     )
 
-    return parse_json(response.content)
+    return parse_json(response_content)
 
 
 def _as_list(value: Any) -> list:
@@ -742,6 +757,7 @@ def _generate_scenarios_for_structure_batch(
     requirement_items: list,
     approved_structure: dict,
     structure_batch: dict,
+    ai_mode: str | None = None,
 ) -> dict:
     batch_id = structure_batch["batch_id"]
 
@@ -751,7 +767,6 @@ def _generate_scenarios_for_structure_batch(
         batch_id,
     )
 
-    llm = get_llm()
     prompt = load_prompt("prompts/generate_structure_batch_scenarios.md")
 
     final_prompt = (
@@ -790,26 +805,27 @@ def _generate_scenarios_for_structure_batch(
         )
     )
 
-    response = llm.invoke(
+    response_content = call_text_llm(
+        TASK_SCENARIO_GENERATION,
         final_prompt,
-        ticket_id=ticket_id,
-        node_name=f"generate_scenarios_{batch_id}",
+        ai_mode=ai_mode,
     )
 
     raw_file = save_raw_response(
         ticket_id,
         f"generate_scenarios_{batch_id}_raw",
-        response.content,
+        response_content,
     )
 
     try:
         try:
-            parsed = parse_json(response.content)
+            parsed = parse_json(response_content)
         except Exception as parse_error:
             parsed = repair_json_with_llm(
                 ticket_id=ticket_id,
-                malformed_json_text=response.content,
+                malformed_json_text=response_content,
                 original_error=parse_error,
+                ai_mode=ai_mode,
             )
 
         scenarios = normalize_scenarios(parsed)
@@ -868,6 +884,7 @@ def _generate_scenarios_for_structure_batch(
 def generate_scenarios(state):
     ticket_id = state["ticket_id"]
     metadata = state.get("requirement_context_metadata") or {}
+    ai_mode = _resolve_ai_mode(state)
 
     if metadata:
         print(
@@ -878,8 +895,10 @@ def generate_scenarios(state):
         )
 
     logger.info(
-        "Starting batch-based scenario generation. ticket_id=%s",
+        "Starting batch-based scenario generation. ticket_id=%s, task_type=%s, ai_mode=%s",
         ticket_id,
+        TASK_SCENARIO_GENERATION,
+        ai_mode,
     )
 
     approved_structure = state.get("approved_test_case_structure", {})
@@ -924,6 +943,7 @@ def generate_scenarios(state):
                 state.get("analysis", {}).get("requirement_items", []),
                 approved_structure,
                 structure_batch,
+                ai_mode,
             )
 
             future_map[future] = structure_batch["batch_id"]

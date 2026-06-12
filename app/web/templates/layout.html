@@ -53,6 +53,10 @@
         .version-toolbar form{display:flex;gap:8px;align-items:center;margin:0}.version-toolbar select{min-width:180px}
         .editor-textarea{min-height:360px;font-family:Consolas,monospace;font-size:12px;white-space:pre}
         .mini-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+        .ai-mode-panel{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px}
+        .toggle-row{display:inline-flex;align-items:center;gap:8px;font-weight:bold}
+        .toggle-row input{width:auto;margin:0}
+        .ai-mode-status{margin-top:10px;padding:8px 10px;border-radius:8px;background:#eef2ff;color:#3730a3;font-size:13px}
         .loading-overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,.72);z-index:9999;align-items:center;justify-content:center;color:white}
         .loading-box{background:#111827;padding:24px 32px;border-radius:12px;text-align:center;min-width:300px}
         .spinner{width:38px;height:38px;border:4px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;margin:0 auto 14px;animation:spin .9s linear infinite}
@@ -71,13 +75,170 @@
     </div>
 </div>
 <script>
+const PORTAL_PRODUCTION_MODE_KEY = "portal_production_mode";
+const PORTAL_LOCAL_AI_ENABLED_KEY = "portal_local_ai_enabled";
+
 function showLoading(title,message){
     document.getElementById("loadingTitle").innerHTML="<b>"+(title||"Processing...")+"</b>";
     document.getElementById("loadingMessage").textContent=message||"Please wait. This may take a few minutes.";
     document.getElementById("loadingOverlay").style.display="flex";
     document.querySelectorAll("button").forEach(b=>b.disabled=true);
 }
+
+function readStoredBoolean(key, defaultValue) {
+    const value = localStorage.getItem(key);
+    if (value === null) {
+        return defaultValue;
+    }
+    return value === "true";
+}
+
+function getPortalAiState() {
+    let productionMode = readStoredBoolean(PORTAL_PRODUCTION_MODE_KEY, false);
+    let localAiEnabled = readStoredBoolean(PORTAL_LOCAL_AI_ENABLED_KEY, true);
+
+    if (!productionMode && !localAiEnabled) {
+        localAiEnabled = true;
+    }
+
+    let aiMode = "TEST_LOCAL_ONLY";
+
+    if (productionMode && localAiEnabled) {
+        aiMode = "PRODUCTION_HYBRID";
+    } else if (productionMode && !localAiEnabled) {
+        aiMode = "PRODUCTION_REMOTE_ONLY";
+    }
+
+    return { productionMode, localAiEnabled, aiMode };
+}
+
+function getPortalAiStatusText(aiMode) {
+    if (aiMode === "TEST_LOCAL_ONLY") {
+        return "Test mode: all AI tasks use LOCAL. DeepSeek is OFF.";
+    }
+    if (aiMode === "PRODUCTION_HYBRID") {
+        return "Production hybrid: reasoning uses DeepSeek, local AI is used for vision/compact/helper tasks.";
+    }
+    return "Production remote-only: Local AI is OFF. DeepSeek is used where required.";
+}
+
+function savePortalAiState(productionMode, localAiEnabled) {
+    if (!productionMode && !localAiEnabled) {
+        localAiEnabled = true;
+    }
+
+    localStorage.setItem(PORTAL_PRODUCTION_MODE_KEY, String(productionMode));
+    localStorage.setItem(PORTAL_LOCAL_AI_ENABLED_KEY, String(localAiEnabled));
+    renderPortalAiModeControls();
+}
+
+function renderPortalAiModeControls() {
+    const productionToggle = document.getElementById("portalProductionModeToggle");
+    const localToggle = document.getElementById("portalLocalAiToggle");
+    const status = document.getElementById("portalAiModeStatus");
+    const state = getPortalAiState();
+
+    if (productionToggle) {
+        productionToggle.checked = state.productionMode;
+        productionToggle.disabled = !state.localAiEnabled;
+    }
+
+    if (localToggle) {
+        localToggle.checked = state.localAiEnabled;
+    }
+
+    if (status) {
+        status.textContent = getPortalAiStatusText(state.aiMode);
+    }
+}
+
+function portalAiHeaders() {
+    const state = getPortalAiState();
+    return {
+        "X-Production-Mode": String(state.productionMode),
+        "X-Local-AI-Enabled": String(state.localAiEnabled),
+        "X-AI-Mode": state.aiMode
+    };
+}
+
+function portalFetch(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    const aiHeaders = portalAiHeaders();
+
+    Object.keys(aiHeaders).forEach(key => headers.set(key, aiHeaders[key]));
+
+    return fetch(url, {
+        ...options,
+        headers
+    });
+}
+
+async function submitPortalFormWithAiHeaders(form) {
+    const method = (form.getAttribute("method") || "get").toUpperCase();
+    const action = form.getAttribute("action") || window.location.href;
+    const formData = new FormData(form);
+
+    showLoading(
+        form.getAttribute("data-loading-title"),
+        form.getAttribute("data-loading-message")
+    );
+
+    const response = await portalFetch(action, {
+        method,
+        body: method === "GET" ? undefined : formData,
+        redirect: "follow"
+    });
+
+    if (!response.ok) {
+        let message = "Portal AI request failed.";
+        try {
+            const data = await response.json();
+            message = data.detail || message;
+        } catch (error) {
+            message = await response.text() || message;
+        }
+        throw new Error(message);
+    }
+
+    window.location.href = response.url || window.location.href;
+}
+
+window.portalFetch = portalFetch;
+window.submitPortalFormWithAiHeaders = submitPortalFormWithAiHeaders;
+
 document.addEventListener("DOMContentLoaded",()=>{
+    renderPortalAiModeControls();
+
+    const productionToggle = document.getElementById("portalProductionModeToggle");
+    const localToggle = document.getElementById("portalLocalAiToggle");
+
+    if (productionToggle) {
+        productionToggle.addEventListener("change", () => {
+            const state = getPortalAiState();
+            savePortalAiState(productionToggle.checked, productionToggle.checked ? state.localAiEnabled : true);
+        });
+    }
+
+    if (localToggle) {
+        localToggle.addEventListener("change", () => {
+            const state = getPortalAiState();
+            savePortalAiState(localToggle.checked ? state.productionMode : true, localToggle.checked);
+        });
+    }
+
+    document.querySelectorAll("form[data-ai-action='true']").forEach(form=>{
+        form.addEventListener("submit",async event=>{
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            try {
+                await submitPortalFormWithAiHeaders(form);
+            } catch (error) {
+                alert(error.message);
+                window.location.reload();
+            }
+        });
+    });
+
     document.querySelectorAll("form[data-loading='true']").forEach(form=>{
         form.addEventListener("submit",()=>{
             showLoading(form.getAttribute("data-loading-title"),form.getAttribute("data-loading-message"));

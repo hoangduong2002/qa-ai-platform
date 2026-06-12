@@ -26,10 +26,22 @@ from app.services.requirement_compact_context_service import (
 from app.services.local_ai_config_service import (
     is_attachment_local_vision_enabled,
 )
+from app.services.local_image_extractor_service import extract_image_with_LOCAL
 
 
 REQUIREMENTS_ROOT = Path("requirements")
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+VISION_ANALYSIS_SKIPPED_MESSAGE = (
+    "Vision analysis skipped because local vision analysis is disabled."
+)
+
+
+def _remove_file_if_exists(file_path: Path) -> None:
+    try:
+        if file_path.exists():
+            file_path.unlink()
+    except OSError:
+        pass
 
 
 def _get_jira_token(jira_pat: str = "") -> str:
@@ -106,6 +118,129 @@ def _safe_requirement_id(value: str) -> str:
 
 def _is_image_file(path: str | Path) -> bool:
     return Path(path).suffix.lower() in IMAGE_EXTENSIONS
+
+
+JIRA_IMAGE_ANALYSIS_PROMPT = """
+You are analyzing a Jira image attachment for QA requirement extraction.
+
+Use only visible image content and provided context.
+Do not invent hidden business rules.
+Use provided Jira context only to disambiguate the image.
+
+Return concise Markdown with:
+
+# Screen/Image Summary
+
+# Visible UI Text
+
+# UI Elements
+
+# Possible User Actions
+
+# Validation / Error / Success Messages
+
+# QA Notes
+
+# Ambiguities
+""".strip()
+
+
+def _markdown_sections_to_json(markdown: str) -> dict[str, Any]:
+    sections: dict[str, list[str]] = {}
+    current = ""
+
+    for raw_line in (markdown or "").splitlines():
+        line = raw_line.strip()
+        heading_match = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+
+        if heading_match:
+            current = heading_match.group(1).strip()
+            sections.setdefault(current, [])
+            continue
+
+        if current and line:
+            sections[current].append(line)
+
+    return {
+        "sections": {
+            heading: "\n".join(lines).strip()
+            for heading, lines in sections.items()
+        }
+    }
+
+
+def _truncate_text(text: str, max_chars: int = 4000) -> str:
+    text = (text or "").strip()
+
+    if len(text) <= max_chars:
+        return text
+
+    return text[:max_chars].rstrip() + "\n\n[TRUNCATED]"
+
+
+def _build_attachment_context(
+    ticket_id: str,
+    issue_key: str,
+    issue: dict,
+    comments: list,
+    attachment: dict,
+    source_location: str,
+) -> str:
+    fields = issue.get("fields", {}) or {}
+    filename = attachment.get("filename", "")
+    description = _to_text(fields.get("description"))
+    related_comments: list[str] = []
+
+    for index, comment in enumerate(comments or [], start=1):
+        comment_text = _to_text(comment.get("body"))
+
+        if not comment_text:
+            continue
+
+        author = (
+            comment.get("author", {}).get("displayName")
+            or comment.get("author", {}).get("name")
+            or "Unknown"
+        )
+        created = comment.get("created", "")
+        related_comments.append(
+            f"Comment {index} by {author} at {created}:\n{comment_text}"
+        )
+
+    lines = [
+        "# Jira Attachment Prompt Context",
+        "",
+        f"- Ticket: {ticket_id}",
+        f"- Issue key: {issue_key}",
+        f"- Attachment filename: {filename}",
+        f"- Attachment mime type: {attachment.get('mimeType', '')}",
+        f"- Source location: {source_location}",
+        "",
+        "## Related Jira Context",
+        "",
+        "### Issue Summary",
+        fields.get("summary") or issue_key,
+        "",
+        "### Description / Surrounding Text",
+        _truncate_text(description, 2000) or "[NO DESCRIPTION]",
+        "",
+        "### Comments / Surrounding Text",
+    ]
+
+    if related_comments:
+        lines.append(_truncate_text("\n\n".join(related_comments), 4000))
+    else:
+        lines.append("[NO COMMENTS]")
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _build_jira_vision_prompt(attachment_context: str) -> str:
+    return (
+        JIRA_IMAGE_ANALYSIS_PROMPT
+        + "\n\n# Provided Jira Context\n\n"
+        + (attachment_context or "[NO JIRA CONTEXT PROVIDED]").strip()
+    )
 
 
 def _utc_now() -> str:
@@ -512,6 +647,8 @@ def _download_and_extract_attachments(
     ticket_id: str,
     issue_key: str,
     issue: dict,
+    comments: list,
+    source_location: str,
     jira_pat: str = "",
 ) -> list[dict]:
     attachments = _get_issue_attachments(issue)
@@ -544,6 +681,9 @@ def _download_and_extract_attachments(
             "filename": filename,
             "path": str(attachment_file),
             "extracted_path": "",
+            "attachment_context_path": "",
+            "vision_analysis_path": "",
+            "vision_analysis_json_path": "",
             "content": "",
             "error": "",
         }
@@ -556,9 +696,69 @@ def _download_and_extract_attachments(
                 jira_pat=jira_pat,
             )
 
-            extracted_text = extract_file_text(
-                attachment_file,
-            )
+            if _is_image_file(attachment_file):
+                attachment_context = _build_attachment_context(
+                    ticket_id=ticket_id,
+                    issue_key=issue_key,
+                    issue=issue,
+                    comments=comments,
+                    attachment=attachment,
+                    source_location=source_location,
+                )
+                context_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_attachment_context.md"
+                )
+                context_file.write_text(
+                    attachment_context,
+                    encoding="utf-8",
+                )
+                item["attachment_context_path"] = str(context_file)
+
+                vision_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_vision_analysis.md"
+                )
+                vision_json_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_vision_analysis.json"
+                )
+                vision_skipped_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_vision_analysis_skipped.txt"
+                )
+                vision_error_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_vision_analysis_error.txt"
+                )
+
+                if is_attachment_local_vision_enabled():
+                    _remove_file_if_exists(vision_skipped_file)
+                    _remove_file_if_exists(vision_file)
+                    _remove_file_if_exists(vision_json_file)
+                    extracted_text = extract_image_with_LOCAL(
+                        image_path=attachment_file,
+                        prompt=_build_jira_vision_prompt(attachment_context),
+                    )
+                    vision_file.write_text(
+                        extracted_text,
+                        encoding="utf-8",
+                    )
+                    _write_json(
+                        vision_json_file,
+                        _markdown_sections_to_json(extracted_text),
+                    )
+                    item["vision_analysis_path"] = str(vision_file)
+                    item["vision_analysis_json_path"] = str(vision_json_file)
+                    _remove_file_if_exists(vision_error_file)
+                else:
+                    _remove_file_if_exists(vision_file)
+                    _remove_file_if_exists(vision_json_file)
+                    _remove_file_if_exists(vision_error_file)
+                    vision_skipped_file.write_text(
+                        VISION_ANALYSIS_SKIPPED_MESSAGE,
+                        encoding="utf-8",
+                    )
+                    extracted_text = ""
+            else:
+                extracted_text = extract_file_text(
+                    attachment_file,
+                )
 
             extracted_file = extracted_dir / f"{attachment_file.stem}.md"
 
@@ -576,7 +776,24 @@ def _download_and_extract_attachments(
                 and attachment_file.exists()
                 and is_attachment_local_vision_enabled()
             ):
-                error_file = extracted_dir / f"{attachment_file.stem}_vision_analysis_error.txt"
+                _remove_file_if_exists(
+                    attachment_file.with_name(
+                        f"{attachment_file.stem}_vision_analysis.md"
+                    )
+                )
+                _remove_file_if_exists(
+                    attachment_file.with_name(
+                        f"{attachment_file.stem}_vision_analysis.json"
+                    )
+                )
+                _remove_file_if_exists(
+                    attachment_file.with_name(
+                        f"{attachment_file.stem}_vision_analysis_skipped.txt"
+                    )
+                )
+                error_file = attachment_file.with_name(
+                    f"{attachment_file.stem}_vision_analysis_error.txt"
+                )
                 error_file.write_text(
                     "".join(
                         traceback.format_exception(
@@ -649,10 +866,24 @@ def _format_attachments(
         for item in extracted_items:
             content += f"#### {item['filename']}\n\n"
 
+            if item.get("attachment_context_path"):
+                content += (
+                    "Attachment context saved: "
+                    f"{item['attachment_context_path']}\n\n"
+                )
+
+            if item.get("vision_analysis_path"):
+                content += (
+                    "Vision analysis saved: "
+                    f"{item['vision_analysis_path']}\n\n"
+                )
+
             if item.get("error"):
                 content += f"Extraction error: {item['error']}\n\n"
-            else:
+            elif item.get("content"):
                 content += f"{item.get('content', '')}\n\n"
+            else:
+                content += "No extracted attachment content.\n\n"
     else:
         content += "No extracted attachment content.\n\n"
 
@@ -820,6 +1051,8 @@ def create_requirement_from_jira(
         ticket_id=ticket_id,
         issue_key=issue_key,
         issue=main_issue,
+        comments=main_comments,
+        source_location="main issue attachment; related description/comments",
         jira_pat=jira_pat,
     )
 
@@ -880,7 +1113,9 @@ def create_requirement_from_jira(
                     jira=jira,
                     ticket_id=ticket_id,
                     issue_key=subtask_key,
-                    issue=sub_issue,                    
+                    issue=sub_issue,
+                    comments=sub_comments,
+                    source_location="subtask attachment; related subtask description/comments",
                     jira_pat=jira_pat,
                 )
 

@@ -109,22 +109,38 @@ def build_answered_clarifications(
         answered.append(
             {
                 "question_id": question_id,
+                "id": question.get(
+                    "id",
+                    question_id
+                ),
                 "question": question.get(
                     "question",
                     ""
                 ),
                 "category": question.get(
                     "category",
-                    ""
+                    "Other"
                 ),
                 "impact": question.get(
                     "impact",
-                    ""
+                    "Medium"
                 ),
                 "reason": question.get(
                     "reason",
                     ""
                 ),
+                "suggested_options": question.get(
+                    "suggested_options",
+                    []
+                ),
+                "free_text_allowed": question.get(
+                    "free_text_allowed",
+                    True
+                ),
+                "selected_option_key": "",
+                "selected_option_label": "",
+                "custom_answer": answer,
+                "final_answer": answer,
                 "answer": answer,
                 "answered_at": now
             }

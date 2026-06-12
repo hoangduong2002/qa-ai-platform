@@ -1,5 +1,7 @@
 import os
 
+from app.services.portal_ai_mode_service import is_local_ai_allowed_for_request
+
 
 TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "no", "n", "off"}
@@ -44,7 +46,7 @@ def _env_bool_optional(name: str) -> bool | None:
 
 
 def is_local_ai_enabled() -> bool:
-    return _env_bool("LOCAL_AI_ENABLED", False)
+    return _env_bool("LOCAL_AI_ENABLED", False) and is_local_ai_allowed_for_request()
 
 
 def get_local_ai_provider() -> str:
@@ -66,11 +68,6 @@ def is_figma_local_vision_enabled() -> bool:
 
     if explicit is not None:
         return explicit
-
-    legacy = _env_bool_optional("FIGMA_ANALYZE_WITH_QWEN")
-
-    if legacy is not None:
-        return legacy
 
     return is_local_vision_enabled()
 
@@ -112,14 +109,20 @@ def get_LOCAL_base_url() -> str:
 def get_LOCAL_vision_model() -> str:
     return (
         _env_str("LOCAL_VISION_MODEL")
-        or _env_str("LOCAL_VISION_MODEL")
         or "qwen2.5vl:7b"
     )
 
 
 def get_LOCAL_compact_model() -> str:
-    return _env_str("LOCAL_COMPACT_MODEL", "qwen2.5:14b")
+    return (
+        _env_str("LOCAL_COMPACT_MODEL")
+        or _env_str("COMPACT_LLM_MODEL")
+        or "qwen2.5:14b"
+    )
 
 
 def get_LOCAL_text_model() -> str:
-    return _env_str("LOCAL_TEXT_MODEL", "qwen2.5:14b")
+    return (
+        _env_str("LOCAL_TEXT_MODEL")
+        or "qwen2.5:14b"
+    )

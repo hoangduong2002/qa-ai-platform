@@ -139,15 +139,46 @@
                         </p>
                     {% endif %}
 
-                    <label>
-                        <b>Your Answer</b>
-                    </label>
+                    {% if item.suggested_options and item.suggested_options | length > 0 %}
+                        <div>
+                            <b>Suggested Options:</b><br>
+                            {% for option in item.suggested_options %}
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="option__{{ question_id }}"
+                                        value="{{ option.key }}"
+                                    >
+                                    {{ option.key }}. {{ option.label }}
+                                </label>
+                                {% if option.assumption %}
+                                    <br><small>Assumption if selected: {{ option.assumption }}</small>
+                                {% endif %}
+                                <br>
+                            {% endfor %}
+                            <small>Options are suggestions only. They become requirement context only after you answer.</small>
+                        </div>
 
-                    <textarea
-                        name="answer__{{ question_id }}"
-                        rows="5"
-                        placeholder="Enter clarification answer..."
-                    ></textarea>
+                        <label>
+                            <b>Custom Answer</b>
+                        </label>
+
+                        <textarea
+                            name="custom_answer__{{ question_id }}"
+                            rows="5"
+                            placeholder="Enter custom answer, or leave blank to use the selected option..."
+                        ></textarea>
+                    {% else %}
+                        <label>
+                            <b>Your Answer</b>
+                        </label>
+
+                        <textarea
+                            name="answer__{{ question_id }}"
+                            rows="5"
+                            placeholder="Enter clarification answer..."
+                        ></textarea>
+                    {% endif %}
                 </div>
 
             {% endfor %}

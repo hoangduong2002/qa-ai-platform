@@ -7,6 +7,11 @@ from app.exporters.function_based_excel_exporter import (
     export_function_based_testcases_to_excel,
 )
 from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_COVERAGE_REVIEW,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.artifact_loader import load_ticket_artifacts
 from app.utils.llm_json import parse_json
 from app.utils.test_structure_store import load_approved_test_case_structure
@@ -17,6 +22,15 @@ from graph.nodes.generate_testcases import generate_testcases
 from graph.nodes.improve_testcases import improve_testcases
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+
+
+def _current_ai_mode() -> str | None:
+    portal_ai_mode = get_current_portal_ai_mode()
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
+
 
 def _read_json(file_path: Path, default: Any):
     if not file_path.exists():
@@ -247,6 +261,7 @@ def generate_scope_and_scenarios(ticket_id: str) -> str:
     state = load_ticket_artifacts(ticket_id)
     state["ticket_id"] = ticket_id
     state["approved_test_case_structure"] = approved_structure
+    state["ai_mode"] = _current_ai_mode()
 
     state.update(generate_test_scope(state))
     state.update(generate_scenarios(state))
@@ -319,15 +334,15 @@ def run_scenario_coverage_review(ticket_id: str, version: str) -> dict:
 
     test_scope = get_test_scope(ticket_id, version)
     state = load_ticket_artifacts(ticket_id)
+    ai_mode = _current_ai_mode()
 
-    llm = get_llm()
-    response = llm.invoke(
+    response_content = call_text_llm(
+        TASK_COVERAGE_REVIEW,
         _coverage_prompt(state, scenarios, test_scope),
-        ticket_id=ticket_id,
-        node_name="scenario_coverage_review",
+        ai_mode=ai_mode,
     )
 
-    review = parse_json(response.content)
+    review = parse_json(response_content)
     if not isinstance(review, dict):
         raise ValueError("Coverage review must be a JSON object.")
 
@@ -468,6 +483,7 @@ def generate_testcases_from_approved_scenarios(ticket_id: str) -> str:
     state["approved_test_case_structure"] = approved_structure
     state["test_scope"] = get_test_scope(ticket_id, "latest")
     state["scenarios"] = approved_scenarios
+    state["ai_mode"] = _current_ai_mode()
 
     result = generate_testcases(state)
     state.update(result)
@@ -507,6 +523,7 @@ def run_final_review(ticket_id: str, version: str) -> dict:
     state["scenarios"] = scenarios
     state["testcases"] = testcases
     state["coverage_review"] = get_coverage_review(ticket_id, "latest")
+    state["ai_mode"] = _current_ai_mode()
 
     result = final_coverage_review(state)
     review = result.get("final_coverage_review", {})

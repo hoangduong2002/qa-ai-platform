@@ -22,6 +22,29 @@
             </a>
         </div>
     </div>
+
+    <div class="ai-mode-panel">
+        <label class="toggle-row">
+            <input
+                id="portalProductionModeToggle"
+                type="checkbox"
+            >
+            Production Mode
+        </label>
+
+        <label class="toggle-row">
+            <input
+                id="portalLocalAiToggle"
+                type="checkbox"
+            >
+            Local AI Mode
+        </label>
+    </div>
+
+    <div
+        id="portalAiModeStatus"
+        class="ai-mode-status"
+    ></div>
 </div>
 
 <div class="card">
@@ -38,6 +61,7 @@
         method="post"
         action="/portal/requirements/from-jira"
         data-loading="true"
+        data-ai-action="true"
         data-loading-title="Loading requirement from Jira..."
         data-loading-message="Fetching Jira issue, comments, subtasks, and attachments."
     >
@@ -502,11 +526,19 @@
             );
         }
 
-        form.submit();
+        if (typeof submitPortalFormWithAiHeaders === "function") {
+            submitPortalFormWithAiHeaders(form).catch(error => {
+                alert(error.message);
+                window.location.reload();
+            });
+        } else {
+            form.submit();
+        }
     }
 
     async function checkExistingRequirement(issueKey) {
-        const response = await fetch(
+        const fetcher = typeof portalFetch === "function" ? portalFetch : fetch;
+        const response = await fetcher(
             `/portal/requirements/check-jira?issue_key=${encodeURIComponent(issueKey)}`
         );
 

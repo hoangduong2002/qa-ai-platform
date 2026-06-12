@@ -1,4 +1,12 @@
-from app.services.llm_service import get_llm
+import logging
+
+from app.services.llm_router_service import (
+    TASK_REQUIREMENT_ANALYSIS,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import (
+    get_current_portal_ai_mode,
+)
 from app.utils.prompt_loader import load_prompt
 from app.utils.file_writer import (
     save_analysis,
@@ -7,8 +15,24 @@ from app.utils.file_writer import (
 from app.utils.llm_json import parse_json
 
 
+logger = logging.getLogger(__name__)
+
+
+def _resolve_ai_mode(state: dict) -> str | None:
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
+
+
 def analyze_requirement(state):
     metadata = state.get("requirement_context_metadata") or {}
+    ai_mode = _resolve_ai_mode(state)
 
     if metadata:
         print(
@@ -17,8 +41,12 @@ def analyze_requirement(state):
             f"length={metadata.get('context_length')}, "
             f"path={metadata.get('context_path')}"
         )
-
-    llm = get_llm()
+        logger.info(
+            "Text reasoning node task_type=%s ai_mode=%s context_source=%s",
+            TASK_REQUIREMENT_ANALYSIS,
+            ai_mode or "default",
+            metadata.get("context_source"),
+        )
 
     prompt = load_prompt(
         "prompts/analyze_requirement.md"
@@ -29,15 +57,15 @@ def analyze_requirement(state):
         state.get("requirement_context", "")
     )
 
-    response = llm.invoke(
-        final_prompt,
-        ticket_id=state.get("ticket_id", ""),
-        node_name="analyze_requirement"
+    content = call_text_llm(
+        task_type=TASK_REQUIREMENT_ANALYSIS,
+        prompt=final_prompt,
+        ai_mode=ai_mode,
     )
 
     try:
         analysis = parse_json(
-            response.content
+            content
         )
 
         save_analysis(
@@ -57,7 +85,7 @@ def analyze_requirement(state):
 
     except Exception:
         analysis = {
-            "raw_response": response.content
+            "raw_response": content
         }
 
     return {

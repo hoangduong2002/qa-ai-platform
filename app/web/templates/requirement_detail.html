@@ -18,7 +18,7 @@
                 <button class="side-action" type="submit">Run Sanitizer</button>
             </form>
 
-            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze" data-loading="true" data-loading-title="Analyzing requirement..." data-loading-message="AI is extracting requirement items and clarification questions.">
+            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze" data-loading="true" data-ai-action="true" data-loading-title="Analyzing requirement..." data-loading-message="AI is extracting requirement items and clarification questions.">
                 <button class="side-action" type="submit">Analyze</button>
             </form>
 
@@ -26,7 +26,7 @@
                 <a class="side-action" href="/portal/requirements/{{ ticket_id }}/clarifications">Answer Clarifications</a>
             {% endif %}
 
-            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/summary" data-loading="true" data-loading-title="Generating requirement summary..." data-loading-message="AI is creating the structured requirement summary.">
+            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/summary" data-loading="true" data-ai-action="true" data-loading-title="Generating requirement summary..." data-loading-message="AI is creating the structured requirement summary.">
                 <button class="side-action" type="submit">Generate Summary</button>
             </form>
 
@@ -54,19 +54,19 @@
             <div class="side-title">Structure</div>
 
             {% if has_summary %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/generate" data-loading="true" data-loading-title="Generating structure..." data-loading-message="Generate only. No auto review.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating structure..." data-loading-message="Generate only. No auto review.">
                     <button class="side-action" type="submit">Generate Structure</button>
                 </form>
             {% endif %}
 
             {% if selected_structure_json %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/self-review" data-loading="true" data-loading-title="Reviewing structure..." data-loading-message="AI is reviewing selected structure.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/self-review" data-loading="true" data-ai-action="true" data-loading-title="Reviewing structure..." data-loading-message="AI is reviewing selected structure.">
                     <input type="hidden" name="structure_version" value="{{ structure_version }}">
                     <button class="side-action" type="submit">AI Review Structure</button>
                 </form>
 
                 {% if selected_structure_review %}
-                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-ai" data-loading="true" data-loading-title="Improving structure..." data-loading-message="Improve from AI review. No auto review.">
+                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving structure..." data-loading-message="Improve from AI review. No auto review.">
                         <input type="hidden" name="structure_version" value="{{ structure_version }}">
                         <button class="side-action" type="submit">Improve Structure from AI Review</button>
                     </form>
@@ -83,19 +83,19 @@
             <div class="side-title">Scenarios</div>
 
             {% if has_approved_structure %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate" data-loading="true" data-loading-title="Generating scope and scenarios..." data-loading-message="Generate only. No auto coverage review.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating scope and scenarios..." data-loading-message="Generate only. No auto coverage review.">
                     <button class="side-action" type="submit">Generate Scope & Scenarios</button>
                 </form>
             {% endif %}
 
             {% if selected_scenarios_json %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/coverage-review" data-loading="true" data-loading-title="Running coverage review..." data-loading-message="AI is reviewing scenario coverage.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/coverage-review" data-loading="true" data-ai-action="true" data-loading-title="Running coverage review..." data-loading-message="AI is reviewing scenario coverage.">
                     <input type="hidden" name="scenario_version" value="{{ scenario_version }}">
                     <button class="side-action" type="submit">Coverage Review</button>
                 </form>
 
                 {% if selected_coverage_review %}
-                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-ai" data-loading="true" data-loading-title="Improving scenarios..." data-loading-message="Improve scenarios from AI review. No auto review.">
+                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving scenarios..." data-loading-message="Improve scenarios from AI review. No auto review.">
                         <input type="hidden" name="scenario_version" value="{{ scenario_version }}">
                         <button class="side-action" type="submit">Improve Scenarios from AI Review</button>
                     </form>
@@ -112,19 +112,19 @@
             <div class="side-title">Test Cases</div>
 
             {% if has_approved_scenarios %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate" data-loading="true" data-loading-title="Generating test cases..." data-loading-message="Generate only. No auto final review.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating test cases..." data-loading-message="Generate only. No auto final review.">
                     <button class="side-action" type="submit">Generate Test Cases</button>
                 </form>
             {% endif %}
 
             {% if selected_testcases_json %}
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/final-review" data-loading="true" data-loading-title="Running final review..." data-loading-message="AI is reviewing test case quality.">
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/final-review" data-loading="true" data-ai-action="true" data-loading-title="Running final review..." data-loading-message="AI is reviewing test case quality.">
                     <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
                     <button class="side-action" type="submit">Final Review</button>
                 </form>
 
                 {% if selected_final_review %}
-                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-ai" data-loading="true" data-loading-title="Improving test cases..." data-loading-message="Improve test cases from AI final review. No auto review.">
+                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving test cases..." data-loading-message="Improve test cases from AI final review. No auto review.">
                         <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
                         <button class="side-action" type="submit">Improve Test Cases from AI Review</button>
                     </form>
@@ -239,6 +239,19 @@
                             {% if item.impact %}<p><b>Impact:</b><br>{{ item.impact }}</p>{% endif %}
                             {% if item.reason %}<p><b>Reason:</b><br>{{ item.reason }}</p>{% endif %}
                             {% if item.priority %}<p><b>Priority:</b> <span class="badge {{ item.priority | lower }}">{{ item.priority }}</span></p>{% endif %}
+                            {% if item.suggested_options and item.suggested_options | length > 0 %}
+                                <p>
+                                    <b>Suggested Options:</b><br>
+                                    {% for option in item.suggested_options %}
+                                        {{ option.key }}. {{ option.label }}
+                                        {% if option.assumption %}
+                                            <br><small>Assumption if selected: {{ option.assumption }}</small>
+                                        {% endif %}
+                                        <br>
+                                    {% endfor %}
+                                    <small>Options are suggestions only until answered.</small>
+                                </p>
+                            {% endif %}
                         </div>
                     {% endfor %}
                 {% else %}
@@ -333,7 +346,7 @@
                 <div class="section-header">
                     <h3>AI Structure Review</h3>
                     {% if selected_structure_review %}
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-ai" data-loading="true" data-loading-title="Improving structure..." data-loading-message="Improve from AI review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving structure..." data-loading-message="Improve from AI review. No auto review.">
                             <input type="hidden" name="structure_version" value="{{ structure_version }}">
                             <button type="submit" class="success">Improve from AI Review</button>
                         </form>
@@ -349,7 +362,7 @@
                 {% if selected_structure_json %}
                     <div id="structure-human-review" class="section-block">
                         <div class="section-title">Human Review</div>
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-human" data-loading="true" data-loading-title="Improving structure..." data-loading-message="Improve from human review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/structure/improve-human" data-loading="true" data-ai-action="true" data-loading-title="Improving structure..." data-loading-message="Improve from human review. No auto review.">
                             <input type="hidden" name="structure_version" value="{{ structure_version }}">
                             <textarea name="human_review_comment" rows="4" required></textarea>
                             <button type="submit" class="success">Improve from Human Review</button>
@@ -398,7 +411,7 @@
                 <div class="section-header">
                     <h3>Coverage Review</h3>
                     {% if selected_coverage_review %}
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-ai" data-loading="true" data-loading-title="Improving scenarios..." data-loading-message="Improve from AI coverage review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving scenarios..." data-loading-message="Improve from AI coverage review. No auto review.">
                             <input type="hidden" name="scenario_version" value="{{ scenario_version }}">
                             <button type="submit" class="success">Improve from AI Review</button>
                         </form>
@@ -414,7 +427,7 @@
                 {% if selected_scenarios_json %}
                     <div id="scenario-human-review" class="section-block">
                         <div class="section-title">Human Review</div>
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-human" data-loading="true" data-loading-title="Improving scenarios..." data-loading-message="Improve scenarios from human review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/improve-human" data-loading="true" data-ai-action="true" data-loading-title="Improving scenarios..." data-loading-message="Improve scenarios from human review. No auto review.">
                             <input type="hidden" name="scenario_version" value="{{ scenario_version }}">
                             <textarea name="human_review_comment" rows="4" required></textarea>
                             <button type="submit" class="success">Improve from Human Review</button>
@@ -470,7 +483,7 @@
                 <div class="section-header">
                     <h3>Final Review</h3>
                     {% if selected_final_review %}
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-ai" data-loading="true" data-loading-title="Improving test cases..." data-loading-message="Improve from AI final review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-ai" data-loading="true" data-ai-action="true" data-loading-title="Improving test cases..." data-loading-message="Improve from AI final review. No auto review.">
                             <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
                             <button type="submit" class="success">Improve from AI Review</button>
                         </form>
@@ -486,7 +499,7 @@
                 {% if selected_testcases_json %}
                     <div id="testcase-human-review" class="section-block">
                         <div class="section-title">Human Review</div>
-                        <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-human" data-loading="true" data-loading-title="Improving test cases..." data-loading-message="Improve test cases from human review. No auto review.">
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/improve-human" data-loading="true" data-ai-action="true" data-loading-title="Improving test cases..." data-loading-message="Improve test cases from human review. No auto review.">
                             <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
                             <textarea name="human_review_comment" rows="4" required></textarea>
                             <button type="submit" class="success">Improve from Human Review</button>

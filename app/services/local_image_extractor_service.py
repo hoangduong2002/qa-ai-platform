@@ -11,19 +11,23 @@ from app.services.local_ai_config_service import (
     get_LOCAL_base_url,
     get_LOCAL_vision_model,
 )
+from app.services.portal_ai_mode_service import assert_local_ai_allowed
+from app.services.portal_job_service import limit_llm_call, limit_ollama_call
 
 
 DEFAULT_IMAGE_EXTRACTION_PROMPT = """
 You are a QA requirement extraction assistant.
 
 Analyze the provided image and extract useful requirement information for software testing.
+Use only visible image content and provided context.
+Do not invent hidden business rules.
+Use provided Figma/Jira context only to disambiguate the image.
 
 Return Markdown with these sections only:
 
-# Screen Summary
-Briefly describe only what is clearly visible. Maximum 3 sentences.
+# Screen/Image Summary
 
-# Visible Text
+# Visible UI Text
 Extract clearly readable text only.
 Do not repeat the same text.
 If text is unclear, write "[UNREADABLE]".
@@ -36,15 +40,18 @@ Do not invent UI elements.
 List actions directly supported by visible UI elements only.
 Do not assume missing steps.
 
-# Potential Validation Rules
+# Validation / Error / Success Messages
 List validation rules only if they are explicitly visible in the image.
 If no validation message, required marker, format hint, or constraint is visible, write "None visible".
 Do not infer generic validation rules.
 
-# QA Test Notes
+# QA Notes
 List only direct test notes based on visible UI elements and readable text.
 Do not create test cases for inferred business flow.
 If there is not enough visible information, write "Not enough visible information".
+
+# Ambiguities
+List unclear or ambiguous visible/context conflicts only. If none, write "None".
 
 Rules:
 - Do not hallucinate.
@@ -92,7 +99,10 @@ def _get_LOCAL_model() -> str:
 
 def _get_timeout() -> int:
     try:
-        return int(os.getenv("LOCAL_VISION_TIMEOUT", "180"))
+        return int(
+            os.getenv("LOCAL_VISION_TIMEOUT")
+            or "180"
+        )
     except Exception:
         return 180
     
@@ -216,6 +226,8 @@ def extract_image_with_LOCAL(
     image_path: str | Path,
     prompt: str | None = None,
 ) -> str:
+    assert_local_ai_allowed()
+
     image_path = Path(image_path)
 
     if not image_path.exists():
@@ -259,8 +271,9 @@ def extract_image_with_LOCAL(
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw_body = response.read().decode("utf-8", errors="ignore")
+        with limit_llm_call("LOCAL_VISION"), limit_ollama_call("LOCAL_VISION"):
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw_body = response.read().decode("utf-8", errors="ignore")
 
     except urllib.error.HTTPError as error:
         error_body = error.read().decode("utf-8", errors="ignore")

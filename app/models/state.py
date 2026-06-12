@@ -15,6 +15,7 @@ class QAState(TypedDict):
     test_scope: NotRequired[dict]
 
     generation_mode: NotRequired[str]
+    ai_mode: NotRequired[str]
     approved_test_case_structure: NotRequired[dict]
 
     scenarios: NotRequired[list]

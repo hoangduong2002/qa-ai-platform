@@ -4,7 +4,11 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_COVERAGE_REVIEW,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import save_raw_response
@@ -19,6 +23,18 @@ from app.services.coverage_score_service import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_ai_mode(state: dict | None = None) -> str | None:
+    state = state or {}
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
 
 
 def _as_list(value: Any) -> list:
@@ -429,6 +445,7 @@ def _generate_coverage_review_for_function(
     function_item: dict,
     function_scenarios: list,
     function_testcases: list,
+    ai_mode: str | None = None,
 ) -> dict:
     logger.info(
         "Starting function coverage review. "
@@ -472,8 +489,6 @@ def _generate_coverage_review_for_function(
             ),
         }
 
-    llm = get_llm()
-
     final_prompt = _build_function_review_prompt(
         requirement_summary=requirement_summary,
         test_scope=test_scope,
@@ -482,20 +497,20 @@ def _generate_coverage_review_for_function(
         function_testcases=function_testcases,
     )
 
-    response = llm.invoke(
+    response_content = call_text_llm(
+        TASK_COVERAGE_REVIEW,
         final_prompt,
-        ticket_id=ticket_id,
-        node_name=f"coverage_review_{function_id}",
+        ai_mode=ai_mode,
     )
 
     raw_file = save_raw_response(
         ticket_id,
         f"coverage_review_{function_id}_raw",
-        response.content,
+        response_content,
     )
 
     try:
-        parsed = parse_json(response.content)
+        parsed = parse_json(response_content)
         review = _normalize_review(parsed)
         _validate_function_review(review, function_id)
 
@@ -765,6 +780,7 @@ def _merge_function_reviews(
 def coverage_review(state):
     ticket_id = state["ticket_id"]
     metadata = state.get("requirement_context_metadata") or {}
+    ai_mode = _resolve_ai_mode(state)
 
     if metadata:
         print(
@@ -775,8 +791,10 @@ def coverage_review(state):
         )
 
     logger.info(
-        "Starting function-based coverage review. ticket_id=%s",
+        "Starting function-based coverage review. ticket_id=%s, task_type=%s, ai_mode=%s",
         ticket_id,
+        TASK_COVERAGE_REVIEW,
+        ai_mode,
     )
 
     approved_structure = state.get("approved_test_case_structure", {})
@@ -885,6 +903,7 @@ def coverage_review(state):
                 group["function"],
                 group["scenarios"],
                 group["testcases"],
+                ai_mode,
             )
 
             future_map[future] = function_id

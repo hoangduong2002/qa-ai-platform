@@ -7,10 +7,66 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
+from app.services.portal_ai_mode_service import (
+    assert_deepseek_allowed,
+    assert_local_ai_allowed,
+    get_current_portal_ai_mode,
+)
+from app.services.portal_job_service import (
+    get_current_job_id,
+    limit_llm_call,
+    limit_ollama_call,
+)
+
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+TASK_REQUIREMENT_ANALYSIS = "requirement_analysis"
+TASK_REQUIREMENT_SUMMARY = "requirement_summary"
+TASK_TEST_STRUCTURE = "test_structure"
+TASK_SCENARIO_GENERATION = "scenario_generation"
+TASK_TESTCASE_GENERATION = "testcase_generation"
+TASK_COVERAGE_REVIEW = "coverage_review"
+TASK_FINAL_REVIEW = "final_review"
+TASK_COMPACT_CONTEXT = "compact_context"
+TASK_VISION_EXTRACT = "vision_extract"
+
+AI_MODE_TEST_LOCAL_ONLY = "TEST_LOCAL_ONLY"
+AI_MODE_PRODUCTION_HYBRID = "PRODUCTION_HYBRID"
+AI_MODE_PRODUCTION_REMOTE_ONLY = "PRODUCTION_REMOTE_ONLY"
+
+PROVIDER_DEEPSEEK = "DEEPSEEK"
+PROVIDER_OLLAMA_TEXT = "OLLAMA_TEXT"
+PROVIDER_OLLAMA_COMPACT = "OLLAMA_COMPACT"
+PROVIDER_OLLAMA_VISION = "OLLAMA_VISION"
+PROVIDER_RULE_BASED = "RULE_BASED"
+PROVIDER_SKIP = "SKIP"
+
+TEXT_REASONING_TASK_TYPES = {
+    TASK_REQUIREMENT_ANALYSIS,
+    TASK_REQUIREMENT_SUMMARY,
+    TASK_TEST_STRUCTURE,
+    TASK_SCENARIO_GENERATION,
+    TASK_TESTCASE_GENERATION,
+    TASK_COVERAGE_REVIEW,
+    TASK_FINAL_REVIEW,
+}
+
+COMPACT_TASK_TYPES = {TASK_COMPACT_CONTEXT}
+VISION_TASK_TYPES = {TASK_VISION_EXTRACT}
+VALID_TASK_TYPES = (
+    TEXT_REASONING_TASK_TYPES
+    | COMPACT_TASK_TYPES
+    | VISION_TASK_TYPES
+)
+VALID_AI_MODES = {
+    AI_MODE_TEST_LOCAL_ONLY,
+    AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_PRODUCTION_REMOTE_ONLY,
+}
 
 
 SUPPORTED_PROVIDERS = {
@@ -51,6 +107,220 @@ def _env_float(name: str, default: float) -> float:
         return float(_env_str(name, str(default)))
     except Exception:
         return default
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(_env_str(name, str(default)))
+    except Exception:
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = _env_str(name)
+
+    if not value:
+        return default
+
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _deepseek_enabled() -> bool:
+    return _env_bool("DEEPSEEK_ENABLED", True)
+
+
+def _local_ai_enabled() -> bool:
+    return _env_bool("LOCAL_AI_ENABLED", False)
+
+
+def _local_compact_enabled() -> bool:
+    if not _local_ai_enabled():
+        return False
+
+    return _env_bool("LOCAL_COMPACT_ENABLED", True)
+
+
+def _local_vision_enabled() -> bool:
+    if not _local_ai_enabled():
+        return False
+
+    return _env_bool("LOCAL_VISION_ENABLED", True)
+
+
+def _provider_model_for_resolution(provider: str) -> str:
+    if provider == PROVIDER_DEEPSEEK:
+        return _env_str("DEEPSEEK_MODEL", "deepseek-chat")
+
+    if provider == PROVIDER_OLLAMA_TEXT:
+        return _env_str("OLLAMA_TEXT_MODEL", "qwen2.5:14b")
+
+    if provider == PROVIDER_OLLAMA_COMPACT:
+        return _env_str("OLLAMA_COMPACT_MODEL", "qwen2.5:14b")
+
+    if provider == PROVIDER_OLLAMA_VISION:
+        return _env_str("OLLAMA_VISION_MODEL", "qwen2.5vl:7b")
+
+    return ""
+
+
+def _resolve_effective_ai_mode(ai_mode: str | None) -> str:
+    if ai_mode:
+        return ai_mode.strip().upper()
+
+    portal_mode = get_current_portal_ai_mode()
+
+    if portal_mode and portal_mode.get("ai_mode"):
+        return str(portal_mode["ai_mode"]).strip().upper()
+
+    return AI_MODE_PRODUCTION_HYBRID
+
+
+def _ollama_base_url() -> str:
+    return _env_str("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+
+
+def _ollama_timeout(provider: str) -> int:
+    if provider == PROVIDER_OLLAMA_COMPACT:
+        return _env_int("OLLAMA_COMPACT_TIMEOUT", _env_int("LOCAL_TEXT_TIMEOUT", 180))
+
+    return _env_int("OLLAMA_TEXT_TIMEOUT", _env_int("LOCAL_TEXT_TIMEOUT", 180))
+
+
+def _provider_result(
+    task_type: str,
+    ai_mode: str,
+    provider: str,
+    reason: str,
+) -> dict[str, str]:
+    result = {
+        "task_type": task_type,
+        "ai_mode": ai_mode,
+        "provider": provider,
+        "model": _provider_model_for_resolution(provider),
+        "reason": reason,
+    }
+    logger.info(
+        "LLM provider resolved task_type=%s ai_mode=%s provider=%s model=%s reason=%s",
+        result["task_type"],
+        result["ai_mode"],
+        result["provider"],
+        result["model"],
+        result["reason"],
+    )
+    return result
+
+
+def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
+    normalized_task_type = (task_type or "").strip().lower()
+    normalized_ai_mode = (ai_mode or "").strip().upper()
+
+    if normalized_task_type not in VALID_TASK_TYPES:
+        raise ValueError(f"Unsupported task_type: {task_type}")
+
+    if normalized_ai_mode not in VALID_AI_MODES:
+        raise ValueError(f"Unsupported ai_mode: {ai_mode}")
+
+    deepseek_enabled = _deepseek_enabled()
+    local_ai_enabled = _local_ai_enabled()
+    local_compact_enabled = _local_compact_enabled()
+    local_vision_enabled = _local_vision_enabled()
+    ollama_base_url = _env_str("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    if normalized_task_type in TEXT_REASONING_TASK_TYPES:
+        if normalized_ai_mode == AI_MODE_TEST_LOCAL_ONLY:
+            if local_ai_enabled:
+                return _provider_result(
+                    normalized_task_type,
+                    normalized_ai_mode,
+                    PROVIDER_OLLAMA_TEXT,
+                    (
+                        "TEST_LOCAL_ONLY routes text/reasoning tasks to local "
+                        f"provider endpoint at {ollama_base_url}."
+                    ),
+                )
+
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_SKIP,
+                "LOCAL_AI_ENABLED=false; DeepSeek is not allowed in TEST_LOCAL_ONLY.",
+            )
+
+        if not deepseek_enabled:
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_SKIP,
+                "DEEPSEEK_ENABLED=false; remote text/reasoning provider is blocked.",
+            )
+
+        return _provider_result(
+            normalized_task_type,
+            normalized_ai_mode,
+            PROVIDER_DEEPSEEK,
+            f"{normalized_ai_mode} routes text/reasoning tasks to DeepSeek.",
+        )
+
+    if normalized_task_type in COMPACT_TASK_TYPES:
+        if normalized_ai_mode in {
+            AI_MODE_TEST_LOCAL_ONLY,
+            AI_MODE_PRODUCTION_HYBRID,
+        }:
+            if local_compact_enabled:
+                return _provider_result(
+                    normalized_task_type,
+                    normalized_ai_mode,
+                    PROVIDER_OLLAMA_COMPACT,
+                    "Local compact is enabled; compact_context uses OLLAMA_COMPACT.",
+                )
+
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_RULE_BASED,
+                "Local compact is disabled; compact_context uses RULE_BASED.",
+            )
+
+        if deepseek_enabled:
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_DEEPSEEK,
+                "PRODUCTION_REMOTE_ONLY allows DeepSeek for compact_context.",
+            )
+
+        return _provider_result(
+            normalized_task_type,
+            normalized_ai_mode,
+            PROVIDER_RULE_BASED,
+            "DEEPSEEK_ENABLED=false; compact_context uses RULE_BASED.",
+        )
+
+    if normalized_task_type in VISION_TASK_TYPES:
+        if normalized_ai_mode == AI_MODE_PRODUCTION_REMOTE_ONLY:
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_SKIP,
+                "PRODUCTION_REMOTE_ONLY does not use local vision.",
+            )
+
+        if local_vision_enabled:
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_OLLAMA_VISION,
+                "Local vision is enabled; vision_extract uses OLLAMA_VISION.",
+            )
+
+        return _provider_result(
+            normalized_task_type,
+            normalized_ai_mode,
+            PROVIDER_SKIP,
+            "Local vision is disabled; vision_extract is skipped.",
+        )
+
+    raise ValueError(f"Unsupported task_type: {task_type}")
 
 
 def _normalize_provider(provider: str) -> str:
@@ -173,11 +443,55 @@ def _messages(prompt: str, system_prompt: str | None) -> list[dict[str, str]]:
     return messages
 
 
+def _call_ollama_text_provider(
+    provider: str,
+    prompt: str,
+    system_prompt: str | None,
+    **kwargs,
+) -> str:
+    assert_local_ai_allowed()
+
+    model = _provider_model_for_resolution(provider)
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": _messages(prompt, system_prompt),
+        "stream": False,
+        "options": {
+            "temperature": kwargs.get("temperature", 0),
+        },
+    }
+
+    if kwargs.get("format") is not None:
+        payload["format"] = kwargs["format"]
+
+    with limit_llm_call(provider), limit_ollama_call(provider):
+        response = requests.post(
+            f"{_ollama_base_url()}/api/chat",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=_ollama_timeout(provider),
+        )
+    response.raise_for_status()
+    data = response.json()
+    content = (
+        data.get("message", {}).get("content")
+        or data.get("response")
+        or ""
+    )
+
+    if not content.strip():
+        raise RuntimeError(f"{provider} returned an empty response.")
+
+    return content
+
+
 def _call_deepseek(
     prompt: str,
     system_prompt: str | None,
     response_format: dict[str, Any] | None,
 ) -> tuple[str, dict[str, Any]]:
+    assert_deepseek_allowed()
+
     api_key = _env_str("DEEPSEEK_API_KEY")
 
     if not api_key:
@@ -193,20 +507,106 @@ def _call_deepseek(
     if response_format:
         payload["response_format"] = response_format
 
-    response = requests.post(
-        _deepseek_chat_completions_url(),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=_provider_timeout("DEEPSEEK"),
-    )
+    with limit_llm_call("DEEPSEEK"):
+        response = requests.post(
+            _deepseek_chat_completions_url(),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=_provider_timeout("DEEPSEEK"),
+        )
     response.raise_for_status()
     data = response.json()
     content = data["choices"][0]["message"]["content"]
 
     return content, data
+
+
+def call_text_llm(
+    task_type: str,
+    prompt: str,
+    system_prompt: str | None = None,
+    ai_mode: str | None = None,
+    **kwargs,
+) -> str:
+    effective_ai_mode = _resolve_effective_ai_mode(ai_mode)
+    resolution = resolve_provider_for_task(task_type, effective_ai_mode)
+    provider = resolution["provider"]
+    model = resolution.get("model", "")
+    input_chars = len(prompt or "") + len(system_prompt or "")
+    started = time.time()
+
+    if (
+        provider == PROVIDER_SKIP
+        and effective_ai_mode == AI_MODE_TEST_LOCAL_ONLY
+        and resolution["task_type"] in TEXT_REASONING_TASK_TYPES
+    ):
+        raise RuntimeError(
+            "Local AI is required in TEST_LOCAL_ONLY mode but is not available."
+        )
+
+    try:
+        if provider == PROVIDER_DEEPSEEK:
+            content, _ = _call_deepseek(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                response_format=kwargs.get("response_format"),
+            )
+        elif provider in {PROVIDER_OLLAMA_TEXT, PROVIDER_OLLAMA_COMPACT}:
+            try:
+                content = _call_ollama_text_provider(
+                    provider=provider,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    **kwargs,
+                )
+            except Exception as error:
+                if effective_ai_mode == AI_MODE_TEST_LOCAL_ONLY:
+                    raise RuntimeError(
+                        "Local AI is required in TEST_LOCAL_ONLY mode but is not available."
+                    ) from error
+
+                raise
+        elif provider == PROVIDER_RULE_BASED:
+            raise RuntimeError(
+                f"Task {resolution['task_type']} resolved to RULE_BASED; "
+                "no text LLM call is required."
+            )
+        elif provider == PROVIDER_SKIP:
+            content = f"[SKIPPED] {resolution['reason']}"
+        else:
+            raise RuntimeError(f"Unsupported text LLM provider: {provider}")
+
+        duration_ms = int((time.time() - started) * 1000)
+        logger.info(
+            "Text LLM call job_id=%s task_type=%s ai_mode=%s provider=%s model=%s "
+            "input_chars=%s output_chars=%s duration_ms=%s",
+            get_current_job_id(),
+            resolution["task_type"],
+            resolution["ai_mode"],
+            provider,
+            model,
+            input_chars,
+            len(content or ""),
+            duration_ms,
+        )
+        return content
+    except Exception:
+        duration_ms = int((time.time() - started) * 1000)
+        logger.warning(
+            "Text LLM call failed job_id=%s task_type=%s ai_mode=%s provider=%s model=%s "
+            "input_chars=%s duration_ms=%s",
+            get_current_job_id(),
+            resolution["task_type"],
+            resolution["ai_mode"],
+            provider,
+            model,
+            input_chars,
+            duration_ms,
+        )
+        raise
 
 
 def _call_LOCAL(
@@ -215,6 +615,8 @@ def _call_LOCAL(
     system_prompt: str | None,
     response_format: dict[str, Any] | None,
 ) -> tuple[str, dict[str, Any]]:
+    assert_local_ai_allowed()
+
     payload: dict[str, Any] = {
         "model": _provider_model(provider),
         "messages": _messages(prompt, system_prompt),
@@ -224,12 +626,13 @@ def _call_LOCAL(
     if response_format:
         payload["format"] = response_format
 
-    response = requests.post(
-        f"{_LOCAL_base_url(provider)}/api/chat",
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=_provider_timeout(provider),
-    )
+    with limit_llm_call(provider), limit_ollama_call(provider):
+        response = requests.post(
+            f"{_LOCAL_base_url(provider)}/api/chat",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=_provider_timeout(provider),
+        )
     response.raise_for_status()
     data = response.json()
     content = (
@@ -289,8 +692,9 @@ def call_llm_with_fallback(
             output_chars = len(content or "")
 
             logger.info(
-                "LLM router success task_type=%s provider=%s model=%s "
+                "LLM router success job_id=%s task_type=%s provider=%s model=%s "
                 "fallback_used=%s duration_seconds=%.2f input_chars=%s output_chars=%s",
+                get_current_job_id(),
                 task_type,
                 provider,
                 model,
@@ -315,8 +719,9 @@ def call_llm_with_fallback(
             message = f"{provider}/{model}: {type(error).__name__}: {error}"
             errors.append(message)
             logger.warning(
-                "LLM router provider failed task_type=%s provider=%s model=%s "
+                "LLM router provider failed job_id=%s task_type=%s provider=%s model=%s "
                 "duration_seconds=%.2f input_chars=%s error=%s",
+                get_current_job_id(),
                 task_type,
                 provider,
                 model,

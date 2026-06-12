@@ -1,10 +1,32 @@
 import json
+import logging
 from pathlib import Path
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_REQUIREMENT_SUMMARY,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import (
+    get_current_portal_ai_mode,
+)
 from app.utils.requirement_context_loader import (
     load_requirement_context_for_llm,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_ai_mode(state: dict) -> str | None:
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
 
 
 def _read_text(
@@ -113,7 +135,8 @@ def _build_clarification_answer_context(
         )
 
         answer = (
-            item.get("answer")
+            item.get("final_answer")
+            or item.get("answer")
             or item.get("response")
             or ""
         )
@@ -140,6 +163,7 @@ def generate_requirement_summary(
     state: dict,
 ) -> dict:
     ticket_id = state["ticket_id"]
+    ai_mode = _resolve_ai_mode(state)
 
     base_dir = Path("requirements") / ticket_id
     analysis_dir = base_dir / "analysis"
@@ -185,7 +209,12 @@ def generate_requirement_summary(
         )
     )
 
-    llm = get_llm()
+    logger.info(
+        "Text reasoning node task_type=%s ai_mode=%s context_source=%s",
+        TASK_REQUIREMENT_SUMMARY,
+        ai_mode or "default",
+        context_metadata.get("context_source"),
+    )
 
     prompt = f"""
 You are a senior QA analyst.
@@ -259,12 +288,10 @@ Clarification Answers:
 {clarification_answer_context}
 """
 
-    response = llm.invoke(prompt)
-
-    content = (
-        response.content
-        if hasattr(response, "content")
-        else str(response)
+    content = call_text_llm(
+        task_type=TASK_REQUIREMENT_SUMMARY,
+        prompt=prompt,
+        ai_mode=ai_mode,
     )
 
     content = content.strip()

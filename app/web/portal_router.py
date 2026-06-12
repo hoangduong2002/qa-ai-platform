@@ -1,6 +1,7 @@
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -64,6 +65,15 @@ from app.services.web_test_design_artifact_service import (
 )
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
+from app.services.portal_ai_mode_service import (
+    get_current_portal_ai_mode,
+    portal_ai_mode_dependency,
+)
+from app.services.portal_job_service import (
+    PortalConcurrencyError,
+    PortalJobBusyError,
+    run_portal_ticket_job,
+)
 from fastapi.responses import JSONResponse
 
 
@@ -75,13 +85,13 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
-    query = [f"tab={tab}"]
+    query_params = {"tab": tab}
     for key, value in params.items():
         if value is not None:
-            query.append(f"{key}={value}")
+            query_params[key] = value
 
     return RedirectResponse(
-        url=f"/portal/requirements/{ticket_id}?{'&'.join(query)}",
+        url=f"/portal/requirements/{ticket_id}?{urlencode(query_params)}",
         status_code=303,
     )
 
@@ -138,14 +148,21 @@ async def create_requirement(
 
 @router.post("/requirements/from-jira")
 async def create_requirement_from_jira(
+    _: None = Depends(portal_ai_mode_dependency),
     issue_key: str = Form(...),
     jira_pat: str = Form(""),
     refresh_existing: str = Form("false"),
 ):
-    ticket_id = create_requirement_from_jira_and_sanitize(
-        issue_key=issue_key,
-        jira_pat=jira_pat,
-        refresh_existing=refresh_existing.lower() == "true",
+    ticket_id = normalize_requirement_id(issue_key)
+
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="create_requirement_from_jira",
+        job_callable=lambda: create_requirement_from_jira_and_sanitize(
+            issue_key=issue_key,
+            jira_pat=jira_pat,
+            refresh_existing=refresh_existing.lower() == "true",
+        ),
     )
 
     return RedirectResponse(
@@ -175,6 +192,7 @@ async def requirement_detail(
     structure_version: str = "latest",
     scenario_version: str = "latest",
     testcase_version: str = "latest",
+    error: str = "",
 ):
     detail = get_requirement_detail(ticket_id)
 
@@ -234,6 +252,7 @@ async def requirement_detail(
             "has_approved_scenarios": bool(scenario_session.get("approved")),
             "has_testcases": bool(selected_testcases_json),
             "has_approved_testcases": bool(testcase_session.get("approved")),
+            "error": error,
         }
     )
 
@@ -278,8 +297,15 @@ async def sanitize_requirement(ticket_id: str):
 
 
 @router.post("/requirements/{ticket_id}/analyze")
-async def analyze_requirement(ticket_id: str):
-    await run_requirement_questions(ticket_id=ticket_id)
+async def analyze_requirement(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="analyze_requirement",
+        job_callable=lambda: run_requirement_questions(ticket_id=ticket_id),
+    )
 
     return _redirect_detail(ticket_id)
 
@@ -293,8 +319,15 @@ async def requirements_index():
 
 
 @router.post("/requirements/{ticket_id}/summary")
-async def generate_summary(ticket_id: str):
-    await run_requirement_summary(ticket_id=ticket_id)
+async def generate_summary(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="generate_requirement_summary",
+        job_callable=lambda: run_requirement_summary(ticket_id=ticket_id),
+    )
     return _redirect_detail(ticket_id)
 
 
@@ -337,15 +370,29 @@ async def submit_clarification_answers(request: Request, ticket_id: str):
 
     for key, value in form.items():
         if key.startswith("answer__"):
-            answers[key.replace("answer__", "", 1)] = str(value)
+            question_id = key.replace("answer__", "", 1)
+            answers.setdefault(question_id, {})["answer"] = str(value)
+        elif key.startswith("option__"):
+            question_id = key.replace("option__", "", 1)
+            answers.setdefault(question_id, {})["selected_option_key"] = str(value)
+        elif key.startswith("custom_answer__"):
+            question_id = key.replace("custom_answer__", "", 1)
+            answers.setdefault(question_id, {})["custom_answer"] = str(value)
 
     save_clarification_answers(ticket_id=ticket_id, answers=answers)
     return _redirect_detail(ticket_id)
 
 
 @router.post("/requirements/{ticket_id}/structure/generate")
-async def generate_structure(ticket_id: str):
-    generate_structure_for_web(ticket_id)
+async def generate_structure(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="generate_structure",
+        job_callable=lambda: generate_structure_for_web(ticket_id),
+    )
     return _redirect_detail(ticket_id, tab="design", structure_version="latest")
 
 
@@ -353,8 +400,13 @@ async def generate_structure(ticket_id: str):
 async def self_review_structure(
     ticket_id: str,
     structure_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    self_review_structure_version(ticket_id, structure_version)
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="self_review_structure",
+        job_callable=lambda: self_review_structure_version(ticket_id, structure_version),
+    )
     return _redirect_detail(
         ticket_id,
         tab="design",
@@ -366,8 +418,13 @@ async def self_review_structure(
 async def improve_structure_ai(
     ticket_id: str,
     structure_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    new_version = improve_structure_from_ai_review(ticket_id, structure_version)
+    new_version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="improve_structure_ai",
+        job_callable=lambda: improve_structure_from_ai_review(ticket_id, structure_version),
+    )
     return _redirect_detail(ticket_id, tab="design", structure_version=new_version)
 
 
@@ -376,11 +433,16 @@ async def improve_structure_human(
     ticket_id: str,
     structure_version: str = Form(...),
     human_review_comment: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    new_version = improve_structure_from_comment(
+    new_version = await _run_ticket_job(
         ticket_id=ticket_id,
-        version=structure_version,
-        comment=human_review_comment,
+        action="improve_structure_human",
+        job_callable=lambda: improve_structure_from_comment(
+            ticket_id=ticket_id,
+            version=structure_version,
+            comment=human_review_comment,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", structure_version=new_version)
 
@@ -417,8 +479,15 @@ async def download_structure_excel(
 
 
 @router.post("/requirements/{ticket_id}/scenarios/generate")
-async def generate_scenarios_for_web(ticket_id: str):
-    version = generate_scope_and_scenarios(ticket_id)
+async def generate_scenarios_for_web(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="generate_scenarios",
+        job_callable=lambda: generate_scope_and_scenarios(ticket_id),
+    )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
 
 
@@ -426,8 +495,13 @@ async def generate_scenarios_for_web(ticket_id: str):
 async def coverage_review_for_web(
     ticket_id: str,
     scenario_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    run_scenario_coverage_review(ticket_id, scenario_version)
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="coverage_review",
+        job_callable=lambda: run_scenario_coverage_review(ticket_id, scenario_version),
+    )
     return _redirect_detail(
         ticket_id,
         tab="design",
@@ -439,8 +513,13 @@ async def coverage_review_for_web(
 async def improve_scenarios_ai(
     ticket_id: str,
     scenario_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    version = improve_scenarios_from_ai_review(ticket_id, scenario_version)
+    version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="improve_scenarios_ai",
+        job_callable=lambda: improve_scenarios_from_ai_review(ticket_id, scenario_version),
+    )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
 
 
@@ -449,11 +528,16 @@ async def improve_scenarios_human(
     ticket_id: str,
     scenario_version: str = Form(...),
     human_review_comment: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    version = improve_scenarios_from_human_review(
-        ticket_id,
-        scenario_version,
-        human_review_comment,
+    version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="improve_scenarios_human",
+        job_callable=lambda: improve_scenarios_from_human_review(
+            ticket_id,
+            scenario_version,
+            human_review_comment,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
 
@@ -468,9 +552,16 @@ async def approve_scenarios_for_web(
 
 
 @router.post("/requirements/{ticket_id}/testcases/generate")
-async def generate_testcases_for_web(ticket_id: str):
+async def generate_testcases_for_web(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
     try:
-        version = generate_testcases_from_approved_scenarios(ticket_id)
+        version = await _run_ticket_job(
+            ticket_id=ticket_id,
+            action="generate_testcases",
+            job_callable=lambda: generate_testcases_from_approved_scenarios(ticket_id),
+        )
     except ValueError as error:
         return _redirect_detail(
             ticket_id,
@@ -489,8 +580,13 @@ async def generate_testcases_for_web(ticket_id: str):
 async def final_review_for_web(
     ticket_id: str,
     testcase_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    run_final_review(ticket_id, testcase_version)
+    await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="final_review",
+        job_callable=lambda: run_final_review(ticket_id, testcase_version),
+    )
     return _redirect_detail(
         ticket_id,
         tab="design",
@@ -502,8 +598,13 @@ async def final_review_for_web(
 async def improve_testcases_ai(
     ticket_id: str,
     testcase_version: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    version = improve_testcases_from_ai_review(ticket_id, testcase_version)
+    version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="improve_testcases_ai",
+        job_callable=lambda: improve_testcases_from_ai_review(ticket_id, testcase_version),
+    )
     return _redirect_detail(ticket_id, tab="design", testcase_version=version)
 
 
@@ -512,11 +613,16 @@ async def improve_testcases_human(
     ticket_id: str,
     testcase_version: str = Form(...),
     human_review_comment: str = Form(...),
+    _: None = Depends(portal_ai_mode_dependency),
 ):
-    version = improve_testcases_from_human_review(
-        ticket_id,
-        testcase_version,
-        human_review_comment,
+    version = await _run_ticket_job(
+        ticket_id=ticket_id,
+        action="improve_testcases_human",
+        job_callable=lambda: improve_testcases_from_human_review(
+            ticket_id,
+            testcase_version,
+            human_review_comment,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", testcase_version=version)
 
@@ -567,3 +673,15 @@ async def download_scenarios_excel(
         filename=excel_file.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+async def _run_ticket_job(ticket_id: str, action: str, job_callable):
+    try:
+        return await run_portal_ticket_job(
+            ticket_id=ticket_id,
+            action=action,
+            ai_mode_context=get_current_portal_ai_mode(),
+            job_callable=job_callable,
+        )
+    except (PortalConcurrencyError, PortalJobBusyError) as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error

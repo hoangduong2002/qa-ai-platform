@@ -29,30 +29,28 @@ VISION_ANALYSIS_SKIPPED_MESSAGE = (
 FIGMA_IMAGE_ANALYSIS_PROMPT = """
 You are analyzing a Figma-exported UI screen for QA requirement extraction.
 
-Use only what is visible in the image.
-Do not invent business rules, hidden requirements, validation rules, navigation items, or user flows.
+Use only visible image content and provided context.
+Do not invent hidden business rules.
+Use provided Figma context only to disambiguate the image.
 
 Return Markdown:
 
-# Screen Summary
-Maximum 3 sentences.
+# Screen/Image Summary
 
 # Visible UI Text
-List only clearly readable text. Do not repeat. Use [UNREADABLE] if unclear.
 
 # UI Elements
-List visible fields, buttons, tabs, tables, dialogs, checkboxes, radio buttons, icons, sections, and messages.
-
-# Layout / Screen Structure
-Describe visible sections and grouping only.
 
 # Possible User Actions
-List only actions directly supported by visible UI controls.
 
-# Potential QA Notes
-List direct QA observations only. Do not create full test cases.
+# Validation / Error / Success Messages
+
+# QA Notes
+
+# Ambiguities
 
 Rules:
+- Visible image content is authoritative.
 - Do not infer domain unless visible text clearly indicates it.
 - Do not create validation rules unless error message, required marker, format hint, or constraint is visible.
 - Prefer [UNCLEAR] over guessing.
@@ -1213,20 +1211,75 @@ def _extract_text_layers(node: dict[str, Any]) -> list[str]:
     return texts
 
 
+def _extract_component_and_frame_names(node: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+
+    def walk(item: dict[str, Any]) -> None:
+        item_type = item.get("type")
+        name = (item.get("name") or "").strip()
+
+        if item_type in {"COMPONENT", "INSTANCE", "FRAME", "GROUP", "SECTION"}:
+            if name and name not in names:
+                names.append(name)
+
+        for child in item.get("children") or []:
+            walk(child)
+
+    walk(node or {})
+    return names
+
+
+def _markdown_sections_to_json(markdown: str) -> dict[str, Any]:
+    sections: dict[str, list[str]] = {}
+    current = ""
+
+    for raw_line in (markdown or "").splitlines():
+        line = raw_line.strip()
+        heading_match = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+
+        if heading_match:
+            current = heading_match.group(1).strip()
+            sections.setdefault(current, [])
+            continue
+
+        if current and line:
+            sections[current].append(line)
+
+    return {
+        "sections": {
+            heading: "\n".join(lines).strip()
+            for heading, lines in sections.items()
+        }
+    }
+
+
+def _build_vision_prompt(prompt_context: str) -> str:
+    return (
+        FIGMA_IMAGE_ANALYSIS_PROMPT
+        + "\n\n# Provided Figma Context\n\n"
+        + (prompt_context or "[NO FIGMA CONTEXT PROVIDED]").strip()
+    )
+
+
 def _build_screen_context(
     screen: FigmaScreenRef,
     screen_document: dict[str, Any],
     image_file: Path | None,
-    vision_analysis: str | None = None,
+    source_links: list[str] | None = None,
 ) -> str:
     texts = _extract_text_layers(screen_document or {})
+    names = _extract_component_and_frame_names(screen_document or {})
 
     lines = [
-        f"### Screen: {screen.name}",
-        f"- Node ID: {screen.node_id}",
+        "# Figma Screen Prompt Context",
+        "",
+        f"- Screen name: {screen.name}",
+        f"- Screen ID: {screen.node_id}",
         f"- Type: {screen.type}",
-        f"- Page: {screen.page_name}",
-        f"- Layer: {screen.layer_name}",
+        f"- Page name: {screen.page_name}",
+        f"- Page ID: {screen.page_id}",
+        f"- Section name: {screen.layer_name}",
+        f"- Section ID: {screen.layer_id}",
         f"- Size: {int(screen.width)}x{int(screen.height)}",
     ]
 
@@ -1236,33 +1289,46 @@ def _build_screen_context(
         lines.append("- Exported image: [NOT AVAILABLE]")
 
     lines.append("")
-    lines.append("#### Figma Text Layers")
+    lines.append("## Source Figma Traceability")
+
+    if source_links:
+        lines.extend(f"- {url}" for url in source_links)
+    else:
+        lines.append("- [NO SOURCE FIGMA LINK RECORDED]")
+
+    lines.append("")
+    lines.append("## Figma Text Layers")
 
     if texts:
-        for text in texts[:100]:
+        for text in texts[:80]:
             lines.append(f"- {text}")
     else:
         lines.append("- [NO TEXT LAYERS OR NOT FETCHED]")
 
-    if vision_analysis:
-        lines.append("")
-        lines.append("#### Vision Analysis")
-        lines.append(vision_analysis)
+    lines.append("")
+    lines.append("## Component / Frame Names")
+
+    if names:
+        for name in names[:80]:
+            lines.append(f"- {name}")
+    else:
+        lines.append("- [NO COMPONENT OR FRAME NAMES FOUND]")
 
     return "\n".join(lines).strip()
 
 
 def _analyze_with_local_vision(
     image_file: Path | None,
+    prompt_context: str,
 ) -> str | None:
     if not image_file:
         return None
 
-    from app.services.LOCAL_image_extractor_service import extract_image_with_LOCAL
+    from app.services.local_image_extractor_service import extract_image_with_LOCAL
 
     return extract_image_with_LOCAL(
         image_path=image_file,
-        prompt=FIGMA_IMAGE_ANALYSIS_PROMPT,
+        prompt=_build_vision_prompt(prompt_context),
     )
 
 
@@ -1468,13 +1534,29 @@ def export_figma_page_scope(
                         encoding="utf-8",
                     )
 
+            screen_context = _build_screen_context(
+                screen=screen,
+                screen_document=screen_document,
+                image_file=image_file,
+                source_links=page_scope.source_links or reference.source_urls,
+            )
+
+            (screen_dir / "screen_context.md").write_text(
+                screen_context,
+                encoding="utf-8",
+            )
+
             vision_analysis = None
 
             if image_file and local_vision_enabled:
                 try:
                     _remove_file_if_exists(screen_dir / "vision_analysis_skipped.txt")
                     _remove_file_if_exists(screen_dir / "vision_analysis.md")
-                    vision_analysis = _analyze_with_local_vision(image_file)
+                    _remove_file_if_exists(screen_dir / "vision_analysis.json")
+                    vision_analysis = _analyze_with_local_vision(
+                        image_file=image_file,
+                        prompt_context=screen_context,
+                    )
                     vision_analysis_status = (
                         "analyzed" if vision_analysis else "empty"
                     )
@@ -1482,6 +1564,7 @@ def export_figma_page_scope(
                 except Exception as error:
                     vision_analysis_status = "error"
                     _remove_file_if_exists(screen_dir / "vision_analysis.md")
+                    _remove_file_if_exists(screen_dir / "vision_analysis.json")
                     (screen_dir / "vision_analysis_error.txt").write_text(
                         "".join(
                             traceback.format_exception(
@@ -1495,6 +1578,7 @@ def export_figma_page_scope(
             elif image_file:
                 vision_analysis_status = "skipped_disabled"
                 _remove_file_if_exists(screen_dir / "vision_analysis.md")
+                _remove_file_if_exists(screen_dir / "vision_analysis.json")
                 _remove_file_if_exists(screen_dir / "vision_analysis_error.txt")
                 (screen_dir / "vision_analysis_skipped.txt").write_text(
                     VISION_ANALYSIS_SKIPPED_MESSAGE,
@@ -1503,6 +1587,7 @@ def export_figma_page_scope(
             else:
                 vision_analysis_status = "skipped_no_image"
                 _remove_file_if_exists(screen_dir / "vision_analysis.md")
+                _remove_file_if_exists(screen_dir / "vision_analysis.json")
                 _remove_file_if_exists(screen_dir / "vision_analysis_error.txt")
                 _remove_file_if_exists(screen_dir / "vision_analysis_skipped.txt")
 
@@ -1510,6 +1595,10 @@ def export_figma_page_scope(
                 (screen_dir / "vision_analysis.md").write_text(
                     vision_analysis,
                     encoding="utf-8",
+                )
+                _write_json_pretty(
+                    screen_dir / "vision_analysis.json",
+                    _markdown_sections_to_json(vision_analysis),
                 )
 
             print(
@@ -1522,19 +1611,14 @@ def export_figma_page_scope(
                 f"vision_analysis_status={vision_analysis_status}"
             )
 
-            screen_context = _build_screen_context(
-                screen=screen,
-                screen_document=screen_document,
-                image_file=image_file,
-                vision_analysis=vision_analysis,
+            context_parts.append(f"### Screen: {screen.name}")
+            context_parts.append(f"- Screen ID: {screen.node_id}")
+            context_parts.append(f"- Section: {screen.layer_name} ({screen.layer_id})")
+            context_parts.append(f"- Frame image: {frame_file if image_file else '[NOT AVAILABLE]'}")
+            context_parts.append(f"- Prompt context: {screen_dir / 'screen_context.md'}")
+            context_parts.append(
+                f"- Vision analysis: {screen_dir / 'vision_analysis.md' if vision_analysis else '[NOT AVAILABLE]'}"
             )
-
-            (screen_dir / "screen_context.md").write_text(
-                screen_context,
-                encoding="utf-8",
-            )
-
-            context_parts.append(screen_context)
             context_parts.append("\n---\n")
 
             time.sleep(0.1)

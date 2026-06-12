@@ -1,15 +1,23 @@
 import os
 import time
+import logging
 
 from dotenv import load_dotenv
 
 from langchain_deepseek import ChatDeepSeek
 
 from app.services.local_llm import LocalLLM
+from app.services.local_ai_config_service import (
+    get_LOCAL_base_url,
+    get_LOCAL_text_model,
+)
+from app.services.portal_ai_mode_service import assert_deepseek_allowed
+from app.services.portal_job_service import get_current_job_id, limit_llm_call
 from app.utils.ai_usage_logger import log_ai_usage
 
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class LoggedLLM:
@@ -32,7 +40,8 @@ class LoggedLLM:
     ):
         start_time = time.time()
 
-        response = self.llm.invoke(prompt)
+        with limit_llm_call(self.provider):
+            response = self.llm.invoke(prompt)
 
         duration = time.time() - start_time
 
@@ -81,6 +90,16 @@ class LoggedLLM:
             duration_seconds=duration
         )
 
+        logger.info(
+            "LLM service call job_id=%s ticket_id=%s node_name=%s provider=%s model=%s duration_seconds=%.2f",
+            get_current_job_id(),
+            ticket_id,
+            node_name,
+            self.provider,
+            self.model,
+            duration,
+        )
+
         return response
 
 
@@ -93,14 +112,15 @@ def get_llm():
 
     if provider == "LOCAL":
 
-        model = os.getenv("LOCAL_LLM_MODEL")
+        model = get_LOCAL_text_model()
 
         return LocalLLM(
-            endpoint=os.getenv("LOCAL_LLM_URL"),
+            base_url=get_LOCAL_base_url(),
             model=model
         )
 
     if provider == "DEEPSEEK":
+        assert_deepseek_allowed()
 
         model = os.getenv("DEEPSEEK_MODEL")
 

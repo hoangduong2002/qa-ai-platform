@@ -3,6 +3,9 @@ import logging
 from requests import session
 
 from app.utils.artifact_loader import load_ticket_artifacts
+from app.services.portal_ai_mode_service import (
+    get_current_portal_ai_mode,
+)
 
 from graph.nodes.generate_test_case_structure import (
     generate_test_case_structure
@@ -98,6 +101,10 @@ def run_initial_structure_flow(ticket_id: str):
 
     state = load_ticket_artifacts(ticket_id)
     state["ticket_id"] = ticket_id
+    portal_ai_mode = get_current_portal_ai_mode()
+
+    if portal_ai_mode and portal_ai_mode.get("ai_mode"):
+        state["ai_mode"] = portal_ai_mode["ai_mode"]
 
     structure_result = generate_test_case_structure(state)
     state.update(structure_result)

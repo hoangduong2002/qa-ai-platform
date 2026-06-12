@@ -481,19 +481,62 @@ def get_clarification_questions(
         return []
 
     if isinstance(data, list):
-        return data
+        return [_normalize_clarification_question(item) for item in data]
 
     if isinstance(data, dict):
         if isinstance(data.get("clarification_questions"), list):
-            return data["clarification_questions"]
+            return [
+                _normalize_clarification_question(item)
+                for item in data["clarification_questions"]
+            ]
 
         if isinstance(data.get("questions"), list):
-            return data["questions"]
+            return [
+                _normalize_clarification_question(item)
+                for item in data["questions"]
+            ]
 
         if isinstance(data.get("clarifications"), list):
-            return data["clarifications"]
+            return [
+                _normalize_clarification_question(item)
+                for item in data["clarifications"]
+            ]
 
     return []
+
+
+def _normalize_clarification_question(item: dict) -> dict:
+    if not isinstance(item, dict):
+        return {}
+
+    question = dict(item)
+    question_id = (
+        question.get("question_id")
+        or question.get("clarification_id")
+        or question.get("id")
+        or ""
+    )
+
+    if question_id:
+        question["id"] = question.get("id") or question_id
+        question["question_id"] = question_id
+
+    question["question"] = (
+        question.get("question")
+        or question.get("question_text")
+        or question.get("text")
+        or question.get("description")
+        or ""
+    )
+    question["impact"] = question.get("impact") or "Medium"
+    question["category"] = question.get("category") or "Other"
+    question["reason"] = question.get("reason") or ""
+    question["free_text_allowed"] = question.get("free_text_allowed", True)
+
+    if not isinstance(question.get("suggested_options"), list):
+        question["suggested_options"] = []
+
+    return question
 
 
 def save_clarification_answers(
@@ -532,17 +575,51 @@ def save_clarification_answers(
             or ""
         )
 
-        answer_text = answers.get(
-            question_id,
-            ""
+        answer_payload = answers.get(question_id, {})
+
+        if isinstance(answer_payload, str):
+            answer_payload = {"answer": answer_payload}
+
+        if not isinstance(answer_payload, dict):
+            answer_payload = {}
+
+        selected_option_key = str(
+            answer_payload.get("selected_option_key") or ""
         ).strip()
+        custom_answer = str(
+            answer_payload.get("custom_answer")
+            or answer_payload.get("answer")
+            or ""
+        ).strip()
+
+        selected_option_label = ""
+
+        for option in question.get("suggested_options", []):
+            if not isinstance(option, dict):
+                continue
+
+            option_key = str(option.get("key") or "").strip()
+
+            if option_key == selected_option_key:
+                selected_option_label = str(option.get("label") or "").strip()
+                break
+
+        final_answer = custom_answer or selected_option_label
 
         answer_items.append(
             {
                 "question_id": question_id,
+                "id": question.get("id") or question_id,
                 "question": question.get("question", ""),
-                "impact": question.get("impact", ""),
-                "answer": answer_text,
+                "category": question.get("category", "Other"),
+                "impact": question.get("impact", "Medium"),
+                "reason": question.get("reason", ""),
+                "free_text_allowed": question.get("free_text_allowed", True),
+                "selected_option_key": selected_option_key,
+                "selected_option_label": selected_option_label,
+                "custom_answer": custom_answer,
+                "final_answer": final_answer,
+                "answer": final_answer,
             }
         )
 
@@ -584,7 +661,11 @@ def _build_clarification_answer_notes(
     ]
 
     for item in answer_items:
-        answer = item.get("answer", "").strip()
+        answer = (
+            item.get("final_answer")
+            or item.get("answer")
+            or ""
+        ).strip()
 
         if not answer:
             continue
@@ -597,6 +678,21 @@ def _build_clarification_answer_notes(
                 "",
                 f"Impact: {item.get('impact', 'N/A')}",
                 "",
+            ]
+        )
+
+        selected_option_key = item.get("selected_option_key", "")
+
+        if selected_option_key:
+            lines.extend(
+                [
+                    f"Selected option: {selected_option_key}",
+                    "",
+                ]
+            )
+
+        lines.extend(
+            [
                 f"Answer: {answer}",
                 "",
             ]
@@ -1299,7 +1395,10 @@ def _normalize_clarifications(
         return []
 
     if isinstance(clarifications, list):
-        return clarifications
+        return [
+            _normalize_clarification_question(item)
+            for item in clarifications
+        ]
 
     if isinstance(clarifications, dict):
         for key in [
@@ -1312,7 +1411,10 @@ def _normalize_clarifications(
             value = clarifications.get(key)
 
             if isinstance(value, list):
-                return value
+                return [
+                    _normalize_clarification_question(item)
+                    for item in value
+                ]
 
     return []
 

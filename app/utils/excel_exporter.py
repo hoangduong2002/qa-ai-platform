@@ -288,10 +288,28 @@ def export_testcases_to_excel(
         []
     )
 
-    answers = clarification_answers.get(
+    answers_raw = clarification_answers.get(
         "answers",
         {}
     )
+
+    answers = {}
+
+    if isinstance(answers_raw, dict):
+        answers = answers_raw
+    elif isinstance(answers_raw, list):
+        for item in answers_raw:
+            if not isinstance(item, dict):
+                continue
+
+            question_id = item.get("question_id", "")
+
+            if question_id:
+                answers[question_id] = (
+                    item.get("final_answer")
+                    or item.get("answer")
+                    or ""
+                )
 
     for question in questions:
 

@@ -148,9 +148,10 @@ def export_requirement_intelligence_to_excel(
             {}
         )
 
-        answer = answer_info.get(
-            "answer",
-            ""
+        answer = (
+            answer_info.get("final_answer")
+            or answer_info.get("answer")
+            or ""
         )
 
         status = (

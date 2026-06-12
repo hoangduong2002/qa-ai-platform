@@ -208,6 +208,40 @@ def extract_clarification_questions(result: dict) -> list:
     )
 
 
+def format_clarification_options(item: dict) -> str:
+    options = item.get("suggested_options") or []
+
+    if not isinstance(options, list) or not options:
+        return ""
+
+    lines = ["Suggested options:"]
+
+    for option in options:
+        if not isinstance(option, dict):
+            continue
+
+        key = option.get("key", "")
+        label = option.get("label", "")
+        assumption = option.get("assumption", "")
+
+        if not label:
+            continue
+
+        lines.append(f"{key}. {label}")
+
+        if assumption:
+            lines.append(f"   Assumption if selected: {assumption}")
+
+    if len(lines) == 1:
+        return ""
+
+    lines.append(
+        "Options are suggestions only until you answer."
+    )
+
+    return "\n".join(lines) + "\n"
+
+
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -678,6 +712,7 @@ async def ask_clarifications(
             f"{item.get('question', '')}\n"
             f"Priority: {item.get('priority') or item.get('impact', 'N/A')}\n"
             f"Impact: {item.get('impact_area', item.get('category', 'N/A'))}\n\n"
+            f"{format_clarification_options(item)}\n"
         )
 
     clarification_message += (
@@ -785,6 +820,7 @@ async def analyze_existing_ticket(
                 f"{item.get('question_id', '')}: "
                 f"{item.get('question', '')}\n"
                 f"Impact: {item.get('impact', 'N/A')}\n\n"
+                f"{format_clarification_options(item)}\n"
             )
 
         response_text += (
