@@ -30,6 +30,7 @@ from app.services.local_ai_config_service import (
     is_attachment_local_vision_enabled,
 )
 from app.services.local_image_extractor_service import extract_image_with_LOCAL
+from app.services.portal_job_service import update_job_progress
 
 
 REQUIREMENTS_ROOT = Path("requirements")
@@ -1043,6 +1044,11 @@ def create_requirement_from_jira(
         jira_pat=jira_pat,
     )
 
+    update_job_progress(
+        current_step="Preparing Jira source",
+        message="Creating Jira source directories and loading ticket details.",
+    )
+
     _, jira_dir = _prepare_source_directory(
         ticket_id=ticket_id,
         refresh_existing=refresh_existing,
@@ -1090,6 +1096,11 @@ def create_requirement_from_jira(
         comments=main_comments,
         source_location="main issue attachment; related description/comments",
         jira_pat=jira_pat,
+    )
+
+    update_job_progress(
+        current_step="Extracting attachments",
+        message="Downloaded Jira attachments and extracted file contents.",
     )
 
     markdown = f"# Jira Requirement: {issue_key}\n\n"
@@ -1197,10 +1208,20 @@ def create_requirement_from_jira(
         encoding="utf-8",
     )
 
+    update_job_progress(
+        current_step="Creating requirement workspace",
+        message="Saving Jira source files and building the requirement workspace.",
+    )
+
     _extract_figma_sources_safely(
         ticket_id=ticket_id,
         raw_sources=raw_figma_sources,
         sanitized_texts=[markdown],
+    )
+
+    update_job_progress(
+        current_step="Building compact context",
+        message="Generating compact Figma and requirement summaries for analysis.",
     )
 
     _build_compact_context_safely(ticket_id)

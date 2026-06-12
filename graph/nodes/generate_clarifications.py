@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import call_text_llm
 from app.utils.prompt_loader import load_prompt
 from app.utils.file_writer import save_clarifications, save_raw_response
 from app.utils.llm_json import parse_json
@@ -346,7 +346,6 @@ def generate_clarifications(state):
 
     next_round = current_round + 1
 
-    llm = get_llm()
     prompt = load_prompt("prompts/generate_clarifications.md")
 
     final_prompt = (
@@ -381,20 +380,30 @@ def generate_clarifications(state):
         )
     )
 
-    response = llm.invoke(
-        final_prompt,
-        ticket_id=ticket_id,
-        node_name="generate_clarifications",
-    )
+    try:
+        raw_response = call_text_llm(
+            task_type="clarification_generation",
+            prompt=final_prompt,
+            ai_mode=state.get("ai_mode"),
+        )
+    except Exception as error:
+        save_raw_response(
+            ticket_id,
+            "generate_clarifications_error",
+            str(error),
+        )
+        raise
 
     save_raw_response(
         ticket_id,
         "generate_clarifications_raw",
-        response.content,
+        raw_response,
     )
 
+    response_content = raw_response
+
     try:
-        parsed = parse_json(response.content)
+        parsed = parse_json(response_content)
         parsed = _normalize_clarifications(parsed)
 
         questions = _filter_and_limit_questions(
@@ -426,7 +435,7 @@ def generate_clarifications(state):
             "max_clarifications_per_round": max_questions,
             "clarification_status": "PARSE_ERROR",
             "clarification_questions": [],
-            "raw_response": response.content,
+            "raw_response": response_content,
             "parse_error": str(error),
         }
 

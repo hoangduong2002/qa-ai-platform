@@ -28,6 +28,7 @@ print(
     result["attachments_with_vision_analysis_count"],
 )
 print("Sections:", result["section_count"])
+print("Section summaries:", result.get("section_summary_count", 0))
 print("Chunks:", result["chunk_count"])
 print("Partial summaries:", result["partial_summary_count"])
 print("Compact context length:", result["compact_context_length"])

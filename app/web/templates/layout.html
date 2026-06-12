@@ -75,8 +75,7 @@
     </div>
 </div>
 <script>
-const PORTAL_PRODUCTION_MODE_KEY = "portal_production_mode";
-const PORTAL_LOCAL_AI_ENABLED_KEY = "portal_local_ai_enabled";
+const PORTAL_AI_MODE_KEY = "portal_ai_mode";
 
 function showLoading(title,message){
     document.getElementById("loadingTitle").innerHTML="<b>"+(title||"Processing...")+"</b>";
@@ -85,66 +84,40 @@ function showLoading(title,message){
     document.querySelectorAll("button").forEach(b=>b.disabled=true);
 }
 
-function readStoredBoolean(key, defaultValue) {
-    const value = localStorage.getItem(key);
-    if (value === null) {
-        return defaultValue;
-    }
-    return value === "true";
-}
-
 function getPortalAiState() {
-    let productionMode = readStoredBoolean(PORTAL_PRODUCTION_MODE_KEY, false);
-    let localAiEnabled = readStoredBoolean(PORTAL_LOCAL_AI_ENABLED_KEY, true);
-
-    if (!productionMode && !localAiEnabled) {
-        localAiEnabled = true;
-    }
-
-    let aiMode = "TEST_LOCAL_ONLY";
-
-    if (productionMode && localAiEnabled) {
-        aiMode = "PRODUCTION_HYBRID";
-    } else if (productionMode && !localAiEnabled) {
-        aiMode = "PRODUCTION_REMOTE_ONLY";
-    }
-
-    return { productionMode, localAiEnabled, aiMode };
+    const stored = localStorage.getItem(PORTAL_AI_MODE_KEY) || "TEST_LOCAL_ONLY";
+    const aiMode = String(stored).trim().toUpperCase();
+    const validModes = ["TEST_LOCAL_ONLY","PRODUCTION_HYBRID","DEEPSEEK_ONLY","NO_LLM"];
+    return {
+        aiMode: validModes.includes(aiMode) ? aiMode : "TEST_LOCAL_ONLY",
+    };
 }
 
 function getPortalAiStatusText(aiMode) {
     if (aiMode === "TEST_LOCAL_ONLY") {
-        return "Test mode: all AI tasks use LOCAL. DeepSeek is OFF.";
+        return "Test mode: all AI tasks use local providers only. DeepSeek is OFF.";
     }
     if (aiMode === "PRODUCTION_HYBRID") {
-        return "Production hybrid: reasoning uses DeepSeek, local AI is used for vision/compact/helper tasks.";
+        return "Production hybrid: DeepSeek handles reasoning; local AI handles vision/compact/helper tasks.";
     }
-    return "Production remote-only: Local AI is OFF. DeepSeek is used where required.";
+    if (aiMode === "DEEPSEEK_ONLY") {
+        return "DeepSeek only: all text reasoning uses DeepSeek. Local AI is OFF.";
+    }
+    return "No LLM: AI tasks are disabled for this session.";
 }
 
-function savePortalAiState(productionMode, localAiEnabled) {
-    if (!productionMode && !localAiEnabled) {
-        localAiEnabled = true;
-    }
-
-    localStorage.setItem(PORTAL_PRODUCTION_MODE_KEY, String(productionMode));
-    localStorage.setItem(PORTAL_LOCAL_AI_ENABLED_KEY, String(localAiEnabled));
+function savePortalAiState(aiMode) {
+    localStorage.setItem(PORTAL_AI_MODE_KEY, aiMode);
     renderPortalAiModeControls();
 }
 
 function renderPortalAiModeControls() {
-    const productionToggle = document.getElementById("portalProductionModeToggle");
-    const localToggle = document.getElementById("portalLocalAiToggle");
+    const modeSelect = document.getElementById("portalAiModeSelect");
     const status = document.getElementById("portalAiModeStatus");
     const state = getPortalAiState();
 
-    if (productionToggle) {
-        productionToggle.checked = state.productionMode;
-        productionToggle.disabled = !state.localAiEnabled;
-    }
-
-    if (localToggle) {
-        localToggle.checked = state.localAiEnabled;
+    if (modeSelect) {
+        modeSelect.value = state.aiMode;
     }
 
     if (status) {
@@ -155,22 +128,46 @@ function renderPortalAiModeControls() {
 function portalAiHeaders() {
     const state = getPortalAiState();
     return {
-        "X-Production-Mode": String(state.productionMode),
-        "X-Local-AI-Enabled": String(state.localAiEnabled),
-        "X-AI-Mode": state.aiMode
+        "X-AI-Mode": state.aiMode,
     };
 }
 
-function portalFetch(url, options = {}) {
+async function parseFetchResponse(response) {
+    const text = await response.text();
+    let data = null;
+
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch (_error) {
+        data = null;
+    }
+
+    return { text, data };
+}
+
+async function portalFetch(url, options = {}) {
     const headers = new Headers(options.headers || {});
     const aiHeaders = portalAiHeaders();
 
     Object.keys(aiHeaders).forEach(key => headers.set(key, aiHeaders[key]));
 
-    return fetch(url, {
+    const response = await fetch(url, {
         ...options,
-        headers
+        headers,
     });
+
+    const { text, data } = await parseFetchResponse(response);
+
+    if (!response.ok) {
+        const message =
+            (data && (data.detail || data.error || data.message)) ||
+            text ||
+            response.statusText ||
+            `HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return data ?? text;
 }
 
 async function submitPortalFormWithAiHeaders(form) {
@@ -183,20 +180,21 @@ async function submitPortalFormWithAiHeaders(form) {
         form.getAttribute("data-loading-message")
     );
 
-    const response = await portalFetch(action, {
+    const response = await fetch(action, {
         method,
         body: method === "GET" ? undefined : formData,
-        redirect: "follow"
+        redirect: "follow",
+        headers: new Headers(portalAiHeaders()),
     });
 
+    const { text, data } = await parseFetchResponse(response);
+
     if (!response.ok) {
-        let message = "Portal AI request failed.";
-        try {
-            const data = await response.json();
-            message = data.detail || message;
-        } catch (error) {
-            message = await response.text() || message;
-        }
+        const message =
+            (data && (data.detail || data.error || data.message)) ||
+            text ||
+            response.statusText ||
+            `HTTP ${response.status}`;
         throw new Error(message);
     }
 
@@ -209,20 +207,11 @@ window.submitPortalFormWithAiHeaders = submitPortalFormWithAiHeaders;
 document.addEventListener("DOMContentLoaded",()=>{
     renderPortalAiModeControls();
 
-    const productionToggle = document.getElementById("portalProductionModeToggle");
-    const localToggle = document.getElementById("portalLocalAiToggle");
+    const modeSelect = document.getElementById("portalAiModeSelect");
 
-    if (productionToggle) {
-        productionToggle.addEventListener("change", () => {
-            const state = getPortalAiState();
-            savePortalAiState(productionToggle.checked, productionToggle.checked ? state.localAiEnabled : true);
-        });
-    }
-
-    if (localToggle) {
-        localToggle.addEventListener("change", () => {
-            const state = getPortalAiState();
-            savePortalAiState(localToggle.checked ? state.productionMode : true, localToggle.checked);
+    if (modeSelect) {
+        modeSelect.addEventListener("change", () => {
+            savePortalAiState(modeSelect.value);
         });
     }
 

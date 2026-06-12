@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 TEST_LOCAL_ONLY = "TEST_LOCAL_ONLY"
 PRODUCTION_HYBRID = "PRODUCTION_HYBRID"
 PRODUCTION_REMOTE_ONLY = "PRODUCTION_REMOTE_ONLY"
+DEEPSEEK_ONLY = "DEEPSEEK_ONLY"
+NO_LLM = "NO_LLM"
 
 VALID_AI_MODES = {
     TEST_LOCAL_ONLY,
     PRODUCTION_HYBRID,
     PRODUCTION_REMOTE_ONLY,
+    DEEPSEEK_ONLY,
+    NO_LLM,
 }
 
 _portal_ai_mode: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -43,32 +47,20 @@ def _header_bool(headers: Any, name: str, default: bool) -> bool:
 
 
 def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
-    production_mode = _header_bool(headers, "X-Production-Mode", False)
-    local_ai_enabled = _header_bool(headers, "X-Local-AI-Enabled", True)
     requested_ai_mode = str(headers.get("X-AI-Mode") or "").strip().upper()
 
-    if not production_mode and not local_ai_enabled:
-        raise ValueError("Invalid AI mode: Test mode requires Local AI enabled.")
+    if not requested_ai_mode:
+        requested_ai_mode = NO_LLM
 
-    if not production_mode and local_ai_enabled:
-        ai_mode = TEST_LOCAL_ONLY
-    elif production_mode and local_ai_enabled:
-        ai_mode = PRODUCTION_HYBRID
-    else:
-        ai_mode = PRODUCTION_REMOTE_ONLY
-
-    if requested_ai_mode and requested_ai_mode != ai_mode:
-        raise ValueError(
-            "Invalid AI mode headers: X-AI-Mode does not match production/local flags."
-        )
-
-    if ai_mode not in VALID_AI_MODES:
-        raise ValueError(f"Invalid AI mode: {ai_mode}")
+    if requested_ai_mode not in VALID_AI_MODES:
+        raise ValueError(f"Invalid AI mode: {requested_ai_mode}")
 
     return {
-        "ai_mode": ai_mode,
-        "production_mode": production_mode,
-        "local_ai_enabled": local_ai_enabled,
+        "ai_mode": requested_ai_mode,
+        "production_mode": requested_ai_mode
+        in {PRODUCTION_HYBRID, PRODUCTION_REMOTE_ONLY, DEEPSEEK_ONLY},
+        "local_ai_enabled": requested_ai_mode
+        in {PRODUCTION_HYBRID, TEST_LOCAL_ONLY},
         "deepseek_enabled": _env_bool("DEEPSEEK_ENABLED", True),
         "server_local_ai_enabled": _env_bool("LOCAL_AI_ENABLED", True),
         "source": "portal",
@@ -97,7 +89,12 @@ def is_deepseek_allowed_for_request(headers: Any | None = None) -> bool:
     if not mode.get("deepseek_enabled", True):
         return False
 
-    return mode.get("ai_mode") != TEST_LOCAL_ONLY
+    return mode.get("ai_mode") in {
+        TEST_LOCAL_ONLY,
+        PRODUCTION_HYBRID,
+        PRODUCTION_REMOTE_ONLY,
+        DEEPSEEK_ONLY,
+    } and mode.get("ai_mode") != TEST_LOCAL_ONLY
 
 
 def is_local_ai_allowed_for_request(headers: Any | None = None) -> bool:
@@ -109,7 +106,7 @@ def is_local_ai_allowed_for_request(headers: Any | None = None) -> bool:
     if not mode.get("server_local_ai_enabled", True):
         return False
 
-    return mode.get("ai_mode") != PRODUCTION_REMOTE_ONLY
+    return mode.get("ai_mode") in {TEST_LOCAL_ONLY, PRODUCTION_HYBRID}
 
 
 def assert_deepseek_allowed() -> None:
@@ -119,8 +116,13 @@ def assert_deepseek_allowed() -> None:
     mode = _portal_ai_mode.get()
     message = "DeepSeek call blocked because DEEPSEEK_ENABLED=false."
 
-    if mode and mode.get("ai_mode") == TEST_LOCAL_ONLY:
-        message = "DeepSeek call blocked because Portal is in TEST_LOCAL_ONLY mode."
+    if mode:
+        if mode.get("ai_mode") == TEST_LOCAL_ONLY:
+            message = "DeepSeek call blocked because Portal is in TEST_LOCAL_ONLY mode."
+        elif mode.get("ai_mode") == NO_LLM:
+            message = "DeepSeek call blocked because Portal is in NO_LLM mode."
+        elif mode.get("ai_mode") == DEEPSEEK_ONLY:
+            message = "DeepSeek call blocked because DEEPSEEK_ENABLED=false."
 
     logger.warning(message)
     raise RuntimeError(message)
@@ -133,11 +135,19 @@ def assert_local_ai_allowed() -> None:
     mode = _portal_ai_mode.get()
     message = "Local AI call skipped because LOCAL_AI_ENABLED=false."
 
-    if mode and mode.get("ai_mode") == PRODUCTION_REMOTE_ONLY:
-        message = (
-            "Local AI call skipped because Portal is in "
-            "PRODUCTION_REMOTE_ONLY mode."
-        )
+    if mode:
+        if mode.get("ai_mode") == PRODUCTION_REMOTE_ONLY:
+            message = (
+                "Local AI call skipped because Portal is in "
+                "PRODUCTION_REMOTE_ONLY mode."
+            )
+        elif mode.get("ai_mode") == DEEPSEEK_ONLY:
+            message = (
+                "Local AI call skipped because Portal is in "
+                "DEEPSEEK_ONLY mode."
+            )
+        elif mode.get("ai_mode") == NO_LLM:
+            message = "Local AI call skipped because Portal is in NO_LLM mode."
 
     logger.warning(message)
     raise RuntimeError(message)

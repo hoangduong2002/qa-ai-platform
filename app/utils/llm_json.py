@@ -113,7 +113,7 @@ def _json_loads_with_debug(text: str):
         ) from error
 
 
-def parse_json(text: str):
+def parse_json(text: str, label: str | None = None):
     """
     Parse JSON returned by LLM.
 
@@ -156,10 +156,12 @@ def parse_json(text: str):
         except json.JSONDecodeError as error:
             last_error = error
 
+    prefix = f"{label}: " if label else ""
+
     if last_error:
         raise LLMJsonParseError(
             JSONParseDebugInfo(
-                message=last_error.msg,
+                message=f"{prefix}{last_error.msg}",
                 line=last_error.lineno,
                 column=last_error.colno,
                 position=last_error.pos,
@@ -172,7 +174,7 @@ def parse_json(text: str):
 
     raise LLMJsonParseError(
         JSONParseDebugInfo(
-            message="Unknown JSON parsing error.",
+            message=f"{prefix}Unknown JSON parsing error.",
             context=stripped_text[:1000],
         )
     )

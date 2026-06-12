@@ -24,27 +24,18 @@
     </div>
 
     <div class="ai-mode-panel">
-        <label class="toggle-row">
-            <input
-                id="portalProductionModeToggle"
-                type="checkbox"
-            >
-            Production Mode
+        <label class="toggle-row" for="portalAiModeSelect">
+            AI Execution Mode
         </label>
-
-        <label class="toggle-row">
-            <input
-                id="portalLocalAiToggle"
-                type="checkbox"
-            >
-            Local AI Mode
-        </label>
+        <select id="portalAiModeSelect">
+            <option value="TEST_LOCAL_ONLY">Test Local Only</option>
+            <option value="PRODUCTION_HYBRID">Production Hybrid</option>
+            <option value="DEEPSEEK_ONLY">DeepSeek Only</option>
+            <option value="NO_LLM">No LLM</option>
+        </select>
     </div>
 
-    <div
-        id="portalAiModeStatus"
-        class="ai-mode-status"
-    ></div>
+    <div id="portalAiModeStatus" class="ai-mode-status"></div>
 </div>
 
 <div class="card">
@@ -519,34 +510,76 @@
             return;
         }
 
+        startJiraLoadJob(form)
+            .catch(error => {
+                alert(error.message);
+                window.location.reload();
+            })
+            .finally(() => {
+                bypassExistingCheck = false;
+            });
+    }
+
+    async function startJiraLoadJob(form) {
         if (typeof showLoading === "function") {
             showLoading(
                 "Loading requirement from Jira...",
-                "Fetching Jira issue, comments, subtasks, and attachments."
+                "Starting Jira load job."
             );
         }
 
-        if (typeof submitPortalFormWithAiHeaders === "function") {
-            submitPortalFormWithAiHeaders(form).catch(error => {
-                alert(error.message);
-                window.location.reload();
-            });
-        } else {
-            form.submit();
+        const formData = new FormData(form);
+        const action = form.getAttribute("action") || window.location.href;
+        const method = (form.getAttribute("method") || "post").toUpperCase();
+
+        const data = await portalFetch(action, {
+            method,
+            body: formData,
+        });
+
+        if (!data || !data.job_id) {
+            throw new Error("Portal did not return a job ID.");
+        }
+
+        await pollJiraJobStatus(data.job_id, data.detail_url);
+    }
+
+    async function pollJiraJobStatus(jobId, detailUrl) {
+        const endpoint = `/portal/jobs/${encodeURIComponent(jobId)}/status`;
+
+        while (true) {
+            const status = await portalFetch(endpoint);
+            const currentStep = status.current_step || status.status || "In progress";
+            const statusMessage = status.message || "";
+            const loadingText = currentStep
+                ? `${currentStep}${statusMessage ? ` — ${statusMessage}` : ""}`
+                : "Waiting for status update...";
+
+            if (typeof showLoading === "function") {
+                showLoading(
+                    "Loading requirement from Jira...",
+                    loadingText,
+                );
+            }
+
+            if (status.status === "SUCCEEDED") {
+                window.location.href = detailUrl || status.detail_url || "/portal";
+                return;
+            }
+
+            if (status.status === "FAILED") {
+                const errorText = status.error || "The Jira load job failed.";
+                throw new Error(errorText);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
     }
 
     async function checkExistingRequirement(issueKey) {
-        const fetcher = typeof portalFetch === "function" ? portalFetch : fetch;
-        const response = await fetcher(
+        return await portalFetch(
             `/portal/requirements/check-jira?issue_key=${encodeURIComponent(issueKey)}`
         );
-
-        if (!response.ok) {
-            throw new Error("Failed to check local requirement.");
-        }
-
-        return await response.json();
     }
 
     document.addEventListener("DOMContentLoaded", function () {

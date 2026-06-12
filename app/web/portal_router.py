@@ -1,5 +1,8 @@
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
+import asyncio
+import threading
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -72,6 +75,8 @@ from app.services.portal_ai_mode_service import (
 from app.services.portal_job_service import (
     PortalConcurrencyError,
     PortalJobBusyError,
+    create_job,
+    get_job_status,
     run_portal_ticket_job,
 )
 from fastapi.responses import JSONResponse
@@ -154,21 +159,45 @@ async def create_requirement_from_jira(
     refresh_existing: str = Form("false"),
 ):
     ticket_id = normalize_requirement_id(issue_key)
-
-    await _run_ticket_job(
+    job_id = create_job(
         ticket_id=ticket_id,
         action="create_requirement_from_jira",
+        ai_mode_context=get_current_portal_ai_mode(),
+    )
+
+    _dispatch_portal_job(
+        ticket_id=ticket_id,
+        action="create_requirement_from_jira",
+        ai_mode_context=get_current_portal_ai_mode(),
         job_callable=lambda: create_requirement_from_jira_and_sanitize(
             issue_key=issue_key,
             jira_pat=jira_pat,
             refresh_existing=refresh_existing.lower() == "true",
         ),
+        job_id=job_id,
     )
 
-    return RedirectResponse(
-        url=f"/portal/requirements/{ticket_id}",
-        status_code=303,
+    return JSONResponse(
+        {
+            "job_id": job_id,
+            "ticket_id": ticket_id,
+            "detail_url": f"/portal/requirements/{ticket_id}",
+        },
+        status_code=202,
     )
+
+
+@router.get("/jobs/{job_id}/status")
+async def portal_job_status(job_id: str):
+    job_status = get_job_status(job_id)
+
+    if not job_status:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    ticket_id = job_status.get("ticket_id") or ""
+    job_status["detail_url"] = f"/portal/requirements/{ticket_id}" if ticket_id else None
+
+    return JSONResponse(job_status)
 
 
 @router.get("/requirements/check-jira")
@@ -675,6 +704,31 @@ async def download_scenarios_excel(
     )
 
 
+def _dispatch_portal_job(
+    ticket_id: str,
+    action: str,
+    ai_mode_context: dict[str, Any] | None,
+    job_callable,
+    job_id: str,
+) -> None:
+    def _background():
+        try:
+            asyncio.run(
+                run_portal_ticket_job(
+                    ticket_id=ticket_id,
+                    action=action,
+                    ai_mode_context=ai_mode_context,
+                    job_callable=job_callable,
+                    job_id=job_id,
+                )
+            )
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=_background, daemon=True)
+    thread.start()
+
+
 async def _run_ticket_job(ticket_id: str, action: str, job_callable):
     try:
         return await run_portal_ticket_job(
@@ -685,3 +739,5 @@ async def _run_ticket_job(ticket_id: str, action: str, job_callable):
         )
     except (PortalConcurrencyError, PortalJobBusyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

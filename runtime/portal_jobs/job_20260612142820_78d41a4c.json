@@ -1,0 +1,16 @@
+{
+  "job_id": "job_20260612142820_78d41a4c",
+  "ticket_id": "EVNWCL-3393",
+  "action": "analyze_requirement",
+  "ai_mode": "PRODUCTION_HYBRID",
+  "production_mode": true,
+  "local_ai_enabled": true,
+  "status": "FAILED",
+  "current_step": "",
+  "message": "",
+  "started_at": "2026-06-12T14:28:20+0700",
+  "ended_at": "2026-06-12T14:29:10+0700",
+  "duration_ms": 50076,
+  "error": "'list' object has no attribute 'get'",
+  "source": "web_portal"
+}

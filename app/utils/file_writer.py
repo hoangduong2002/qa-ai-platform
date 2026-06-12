@@ -259,3 +259,80 @@ def save_raw_response(
     )
 
     return str(output_file)
+
+
+def save_analysis_raw_response(
+    ticket_id: str,
+    content: str
+):
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "requirement_analysis_raw_response.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        content,
+        encoding="utf-8"
+    )
+
+    return str(output_file)
+
+
+def save_analysis_parse_error(
+    ticket_id: str,
+    error_content: str,
+):
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "requirement_analysis_parse_error.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        error_content,
+        encoding="utf-8"
+    )
+
+    return str(output_file)
+
+
+def save_analysis_error(
+    ticket_id: str,
+    error_content: str,
+):
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "analyze_error.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        error_content,
+        encoding="utf-8"
+    )
+
+    return str(output_file)
+
+    return str(output_file)

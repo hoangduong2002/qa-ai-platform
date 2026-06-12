@@ -17,6 +17,23 @@ FIGMA_ONLY_WARNING = (
 )
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
+FIGMA_PRIORITIZATION_KEYWORDS = [
+    "success",
+    "fail",
+    "error",
+    "retry",
+    "load",
+    "verified",
+    "not found",
+    "nia",
+    "ins",
+    "cps",
+    "carte vitale",
+    "traits d'identité",
+    "vérification",
+    "récupération",
+]
+
 
 SKIP_NAME_PARTS = {
     "debug",
@@ -307,6 +324,34 @@ def _append_limited_list(
         lines.append(f"- {empty_message}")
 
 
+def _unique_append_ci(items: list[str], value: str, max_items: int = 80) -> None:
+    value = _clean_list_item(value)
+
+    if _is_empty_marker(value):
+        return
+
+    lower_value = value.lower()
+    for item in items:
+        if item.lower() == lower_value:
+            return
+
+    if len(items) < max_items:
+        items.append(value)
+
+
+def _prioritize_items(items: list[str]) -> list[str]:
+    prioritized: list[str] = []
+    normal: list[str] = []
+    for item in items:
+        lowered = item.lower()
+        if any(keyword in lowered for keyword in FIGMA_PRIORITIZATION_KEYWORDS):
+            prioritized.append(item)
+        else:
+            normal.append(item)
+
+    return prioritized + normal
+
+
 def _classify_source_file(path: Path) -> str:
     lowered_parts = [part.lower() for part in path.parts]
     lowered_name = path.name.lower()
@@ -380,14 +425,159 @@ def _group_screens_by_section(
 
     for screen in screens:
         key = (
-            screen.get("page_id", ""),
-            screen.get("page_name", ""),
             screen.get("section_id", ""),
             screen.get("section_name", ""),
+            screen.get("page_id", ""),
+            screen.get("page_name", ""),
         )
         grouped.setdefault(key, []).append(screen)
 
     return grouped
+
+
+def group_screens_by_section(
+    screens: list[dict[str, Any]],
+) -> dict[tuple[str, str, str, str], list[dict[str, Any]]]:
+    return _group_screens_by_section(screens)
+
+
+def _screen_name_priority(screen: dict[str, Any]) -> int:
+    name = (screen.get("screen_name") or "").strip()
+    summary = (screen.get("vision_summary") or "").strip()
+    score = 0
+
+    lower_name = name.lower()
+    lower_summary = summary.lower()
+
+    if any(keyword in lower_name for keyword in FIGMA_PRIORITIZATION_KEYWORDS):
+        score += 5
+    if any(keyword in lower_summary for keyword in FIGMA_PRIORITIZATION_KEYWORDS):
+        score += 3
+
+    if re.match(r"^(fp|frame\s*\d+|screen\s*\d+|unnamed|default)$", lower_name):
+        score -= 5
+
+    if name and not re.match(r"^(frame|screen|fp|unnamed|default)\b", lower_name):
+        score += 1
+
+    return score
+
+
+def _summarize_figma_section(
+    section_key: tuple[str, str, str, str],
+    screens: list[dict[str, Any]],
+) -> dict[str, Any]:
+    section_id, section_name, page_id, page_name = section_key
+    max_screen_names = _env_int(
+        "REQUIREMENT_COMPACT_MAX_SCREEN_NAMES_PER_SECTION",
+        20,
+    )
+    max_texts = _env_int(
+        "REQUIREMENT_COMPACT_MAX_KEY_TEXTS_PER_SECTION",
+        20,
+    )
+    max_actions = _env_int(
+        "REQUIREMENT_COMPACT_MAX_ACTIONS_PER_SECTION",
+        10,
+    )
+    max_qa = _env_int(
+        "REQUIREMENT_COMPACT_MAX_QA_NOTES_PER_SECTION",
+        10,
+    )
+
+    important_screens: list[str] = []
+    visible_text: list[str] = []
+    possible_actions: list[str] = []
+    qa_notes: list[str] = []
+
+    for screen in sorted(screens, key=_screen_name_priority, reverse=True):
+        screen_name = screen.get("screen_name") or "[UNNAMED SCREEN]"
+        screen_id = screen.get("screen_id") or "[NO SCREEN ID]"
+        screen_summary = screen.get("vision_summary") or ""
+        label = f"{screen_name} ({screen_id})"
+
+        if screen_summary:
+            label = f"{label}: {screen_summary}"
+
+        _unique_append_ci(important_screens, label, max_items=max_screen_names)
+
+    for screen in screens:
+        for item in screen.get("visible_text") or []:
+            _unique_append_ci(visible_text, item, max_items=max_texts)
+        for item in screen.get("possible_actions") or []:
+            _unique_append_ci(possible_actions, item, max_items=max_actions)
+        for item in screen.get("qa_notes") or []:
+            _unique_append_ci(qa_notes, item, max_items=max_qa)
+
+    visible_text = _prioritize_items(visible_text)[:max_texts]
+    possible_actions = _prioritize_items(possible_actions)[:max_actions]
+    qa_notes = _prioritize_items(qa_notes)[:max_qa]
+
+    return {
+        "section_id": section_id,
+        "section_name": section_name,
+        "page_id": page_id,
+        "page_name": page_name,
+        "screen_count": len(screens),
+        "important_screens": important_screens,
+        "visible_texts": visible_text,
+        "possible_actions": possible_actions,
+        "qa_notes": qa_notes,
+    }
+
+
+def summarize_figma_section(
+    section: tuple[tuple[str, str, str, str], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    return _summarize_figma_section(section[0], section[1])
+
+
+def render_figma_section_summaries(
+    section_summaries: list[dict[str, Any]],
+) -> str:
+    lines: list[str] = []
+
+    if not section_summaries:
+        return "- [NO FIGMA SECTIONS FOUND]\n"
+
+    for summary in section_summaries:
+        lines.extend(
+            [
+                "",
+                f"### Section: {summary['section_name'] or '[UNNAMED SECTION]'}"
+                f" ({summary['section_id'] or '[NO SECTION ID]'})",
+                f"- Page: {summary['page_name'] or '[UNKNOWN PAGE]'}"
+                f" ({summary['page_id'] or '[NO PAGE ID]'})",
+                f"- Screen count: {summary['screen_count']}",
+                "",
+                "#### Important Screens / States",
+            ]
+        )
+
+        if summary["important_screens"]:
+            lines.extend(f"- {item}" for item in summary["important_screens"])
+        else:
+            lines.append("- [NO IMPORTANT SCREENS IDENTIFIED]")
+
+        lines.extend(["", "#### Key Visible Texts / Messages"])
+        if summary["visible_texts"]:
+            lines.extend(f"- {item}" for item in summary["visible_texts"])
+        else:
+            lines.append("- [NO KEY VISIBLE TEXTS EXTRACTED]")
+
+        lines.extend(["", "#### Possible Actions Summary"])
+        if summary["possible_actions"]:
+            lines.extend(f"- {item}" for item in summary["possible_actions"])
+        else:
+            lines.append("- [NO POSSIBLE ACTIONS EXTRACTED]")
+
+        lines.extend(["", "#### QA Notes Summary"])
+        if summary["qa_notes"]:
+            lines.extend(f"- {item}" for item in summary["qa_notes"])
+        else:
+            lines.append("- [NO QA NOTES EXTRACTED]")
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def _render_source_chunk(
@@ -696,12 +886,12 @@ def build_requirement_chunks(
 
     for section_key, section_screens in sorted(
         grouped_screens.items(),
-        key=lambda item: (item[0][1], item[0][3], item[0][2]),
+        key=lambda item: (item[0][2], item[0][3], item[0][0]),
     ):
-        page_id, page_name, section_id, section_name = section_key
+        section_id, section_name, page_id, page_name = section_key
         chunk_text = _render_figma_section_chunk(
             ticket_id=ticket_id,
-            section_key=section_key,
+            section_key=(page_id, page_name, section_id, section_name),
             screens=section_screens,
         )
 
@@ -1253,7 +1443,7 @@ def _build_merged_compact_markdown(
     if layers:
         section_counts = {
             section_id: len(items)
-            for (_, _, section_id, _), items in grouped_screens.items()
+            for (section_id, _, _, _), items in grouped_screens.items()
         }
         for layer in layers:
             section_id = layer.get("node_id", "")
@@ -1269,39 +1459,15 @@ def _build_merged_compact_markdown(
 
     lines.extend(["", "## Screens Grouped By Section"])
 
-    if grouped_screens:
-        max_screens = _env_int(
-            "REQUIREMENT_COMPACT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN",
-            DEFAULT_MAX_SCREENS_PER_SECTION_IN_MARKDOWN,
-        )
-        for (_, page_name, section_id, section_name), section_screens in sorted(
+    section_summaries = [
+        summarize_figma_section((section_key, section_screens))
+        for section_key, section_screens in sorted(
             grouped_screens.items(),
-            key=lambda item: (item[0][1], item[0][3], item[0][2]),
-        ):
-            lines.extend(
-                [
-                    "",
-                    f"### {section_name or '[UNNAMED SECTION]'} ({section_id or '[NO SECTION ID]'})",
-                    f"- Page: {page_name or '[UNKNOWN PAGE]'}",
-                    f"- Screen count: {len(section_screens)}",
-                ]
-            )
-            for screen in section_screens[:max_screens]:
-                screen_line = (
-                    "- "
-                    f"{screen.get('screen_name') or '[UNNAMED SCREEN]'} "
-                    f"({screen.get('screen_id')})"
-                )
-                summary = screen.get("vision_summary") or ""
+            key=lambda item: (item[0][1], item[0][3], item[0][0]),
+        )
+    ]
 
-                if summary:
-                    screen_line += f": {summary}"
-
-                lines.append(screen_line)
-            if len(section_screens) > max_screens:
-                lines.append(f"- [... {len(section_screens) - max_screens} more screens omitted]")
-    else:
-        lines.append("- [NO FIGMA SCREENS FOUND]")
+    lines.append(render_figma_section_summaries(section_summaries).strip())
 
     lines.extend(["", "## Key Visible Texts / States"])
     visible_text: list[str] = []
@@ -1476,6 +1642,7 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
             attachments_with_vision_analysis_count
         ),
         "section_count": len({layer.get("node_id") for layer in layers if layer.get("node_id")}),
+        "section_summary_count": len(_group_screens_by_section(screens)),
         "detected_mode": detected_mode,
         "warnings": warnings,
     }
@@ -1557,6 +1724,7 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
             evidence_index["attachments_with_vision_analysis_count"]
         ),
         "section_count": evidence_index["section_count"],
+        "section_summary_count": evidence_index["section_summary_count"],
         "source_files_count": evidence_index["source_files_count"],
         "detected_mode": evidence_index["detected_mode"],
         "chunk_count": evidence_index["chunk_count"],

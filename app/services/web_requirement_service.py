@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from app.services.jira_requirement_service import (
     create_requirement_from_jira,
 )
+from app.services.portal_job_service import update_job_progress
 
 from app.services.requirement_sanitization_service import (
     sanitize_requirement_for_analysis,
@@ -244,6 +245,11 @@ def create_requirement_from_jira_and_sanitize(
         refresh_existing=refresh_existing,
     )
 
+    update_job_progress(
+        current_step="Sanitizing requirement",
+        message="Cleaning the Jira requirement for analysis and AI workflows.",
+    )
+
     sanitize_existing_requirement(ticket_id)
 
     return ticket_id
@@ -322,6 +328,9 @@ def get_requirement_detail(
         requirement_summary_file
     )
 
+    analysis_error_file = analysis_dir / "analyze_error.txt"
+    analysis_error = _read_text(analysis_error_file)
+
     return {
         "ticket_id": ticket_id,
         "ticket": ticket_data,
@@ -334,6 +343,7 @@ def get_requirement_detail(
         "requirement_items": requirement_items,
         "clarifications": clarifications,
         "requirement_summary": requirement_summary,
+        "analysis_error": analysis_error,
 
         "has_sanitized": sanitized_file.exists(),
         "has_analysis": requirement_analysis_file.exists(),

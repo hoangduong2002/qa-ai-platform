@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
+RUNTIME_PORTAL_JOBS_DIR = Path("runtime") / "portal_jobs"
+
 TICKET_BUSY_MESSAGE = "This ticket is already being processed."
 JOB_LIMIT_MESSAGE = "The portal is currently processing the maximum number of jobs. Please try again shortly."
 LLM_LIMIT_MESSAGE = "The portal is currently processing the maximum number of LLM calls. Please try again shortly."
@@ -117,6 +119,69 @@ def get_current_job_id() -> str:
     return str(context.get("job_id") or "")
 
 
+def _runtime_job_path(job_id: str) -> Path:
+    return RUNTIME_PORTAL_JOBS_DIR / f"{job_id}.json"
+
+
+def _read_job_metadata(job_id: str) -> dict[str, Any] | None:
+    path = _runtime_job_path(job_id)
+
+    if not path.exists():
+        return None
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def create_job(
+    *,
+    ticket_id: str,
+    action: str,
+    ai_mode_context: dict[str, Any] | None,
+) -> str:
+    job_id = create_job_id()
+    context = {
+        "job_id": job_id,
+        "ticket_id": ticket_id,
+        "action": action,
+        "ai_mode": (ai_mode_context or {}).get("ai_mode"),
+        "production_mode": (ai_mode_context or {}).get("production_mode"),
+        "local_ai_enabled": (ai_mode_context or {}).get("local_ai_enabled"),
+        "status": "PENDING",
+        "current_step": "Queued",
+        "message": "Job has been queued and will start shortly.",
+        "started_at": "",
+        "ended_at": "",
+        "duration_ms": 0,
+        "error": "",
+    }
+    _write_job_metadata(context)
+    return job_id
+
+
+def update_job_progress(
+    current_step: str | None = None,
+    message: str | None = None,
+) -> None:
+    context = _job_context.get()
+    if not context:
+        return
+
+    if current_step is not None:
+        context["current_step"] = current_step
+
+    if message is not None:
+        context["message"] = message
+
+    _write_job_metadata(context)
+
+
+def get_job_status(job_id: str) -> dict[str, Any] | None:
+    return _read_job_metadata(job_id)
+
+
 def _ticket_lock(ticket_id: str) -> threading.Lock:
     with _ticket_locks_guard:
         lock = _ticket_locks.get(ticket_id)
@@ -142,6 +207,8 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
         "production_mode": context.get("production_mode"),
         "local_ai_enabled": context.get("local_ai_enabled"),
         "status": context.get("status"),
+        "current_step": context.get("current_step", ""),
+        "message": context.get("message", ""),
         "started_at": context.get("started_at"),
         "ended_at": context.get("ended_at"),
         "duration_ms": context.get("duration_ms"),
@@ -156,6 +223,10 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
     # so that the requirement folder is not created prematurely.
     # Premature folder creation causes requirement_exists() to return True
     # and the Jira loader gets skipped.
+    runtime_path = _runtime_job_path(str(context.get("job_id") or ""))
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_path.write_text(payload, encoding="utf-8")
+
     if action == "create_requirement_from_jira":
         jobs_dir = Path("requirements") / "_jobs" / ticket_id
         jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -215,6 +286,8 @@ def _copy_job_metadata_to_requirement(context: dict[str, Any]) -> None:
         "production_mode": context.get("production_mode"),
         "local_ai_enabled": context.get("local_ai_enabled"),
         "status": context.get("status"),
+        "current_step": context.get("current_step", ""),
+        "message": context.get("message", ""),
         "started_at": context.get("started_at"),
         "ended_at": context.get("ended_at"),
         "duration_ms": context.get("duration_ms"),
@@ -247,8 +320,9 @@ async def run_portal_ticket_job(
     action: str,
     ai_mode_context: dict[str, Any] | None,
     job_callable: Callable[[], Any],
+    job_id: str | None = None,
 ) -> Any:
-    job_id = create_job_id()
+    job_id = job_id or create_job_id()
     ticket_lock = _ticket_lock(ticket_id)
 
     if not ticket_lock.acquire(blocking=False):

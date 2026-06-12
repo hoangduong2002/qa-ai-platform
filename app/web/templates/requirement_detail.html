@@ -168,6 +168,18 @@
                 {% if has_summary %}<span class="status ok">Summary Ready</span>{% else %}<span class="status missing">No Summary</span>{% endif %}
             </div>
 
+            {% if error or analysis_error %}
+                <div class="card alert error">
+                    <h3>Analysis Error</h3>
+                    {% if error %}
+                        <p><strong>Error:</strong> {{ error }}</p>
+                    {% endif %}
+                    {% if analysis_error %}
+                        <pre>{{ analysis_error }}</pre>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             <div id="sanitized-requirement" class="card">
                 <h3>Sanitized Requirement</h3>
                 {% if sanitized_requirement %}<pre>{{ sanitized_requirement }}</pre>{% else %}<p>No sanitized requirement found.</p>{% endif %}

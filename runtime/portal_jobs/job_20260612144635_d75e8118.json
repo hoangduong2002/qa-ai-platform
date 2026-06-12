@@ -1,0 +1,16 @@
+{
+  "job_id": "job_20260612144635_d75e8118",
+  "ticket_id": "EVNWCL-3393",
+  "action": "analyze_requirement",
+  "ai_mode": "TEST_LOCAL_ONLY",
+  "production_mode": false,
+  "local_ai_enabled": true,
+  "status": "FAILED",
+  "current_step": "",
+  "message": "",
+  "started_at": "2026-06-12T14:46:35+0700",
+  "ended_at": "2026-06-12T14:46:51+0700",
+  "duration_ms": 15984,
+  "error": "Expecting value at line 1, column 2 char 1\n\nContext around error:\n[Medical Tab][Patient Response][BE] Synapse Data Synchronization  \n**Status:** Open  \n\n#### Description:\nThe task involves ensuring that user-entered information (Drugs, Pathologies, Allergies) in medical questionnaires is correctly mapped and synchronized with the Synapse database. Key points include:\n\n- **Data Mapping**: Ensure data entries are stored in a consistent cloud location as per previously developed mapping files.\n- **Search for Mappings**: Identify mappings between questionnaire cate",
+  "source": "web_portal"
+}
