@@ -134,7 +134,77 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
     if not ticket_id:
         return
 
+    metadata = {
+        "job_id": context.get("job_id"),
+        "ticket_id": ticket_id,
+        "action": context.get("action"),
+        "ai_mode": context.get("ai_mode"),
+        "production_mode": context.get("production_mode"),
+        "local_ai_enabled": context.get("local_ai_enabled"),
+        "status": context.get("status"),
+        "started_at": context.get("started_at"),
+        "ended_at": context.get("ended_at"),
+        "duration_ms": context.get("duration_ms"),
+        "error": context.get("error", ""),
+        "source": "web_portal",
+    }
+
+    payload = json.dumps(metadata, indent=2, ensure_ascii=False)
+    action = str(context.get("action") or "")
+
+    # For create_requirement_from_jira, write metadata to a staging location
+    # so that the requirement folder is not created prematurely.
+    # Premature folder creation causes requirement_exists() to return True
+    # and the Jira loader gets skipped.
+    if action == "create_requirement_from_jira":
+        jobs_dir = Path("requirements") / "_jobs" / ticket_id
+        jobs_dir.mkdir(parents=True, exist_ok=True)
+        (jobs_dir / f"{context.get('job_id')}_metadata.json").write_text(
+            payload,
+            encoding="utf-8",
+        )
+        (jobs_dir / "latest_job_metadata.json").write_text(
+            payload,
+            encoding="utf-8",
+        )
+        logger.info(
+            "Portal job metadata written to staging path. "
+            "job_id=%s ticket_id=%s action=%s path=%s",
+            context.get("job_id"),
+            ticket_id,
+            action,
+            jobs_dir,
+        )
+    else:
+        analysis_dir = Path("requirements") / ticket_id / "analysis"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        (analysis_dir / "latest_job_metadata.json").write_text(
+            payload,
+            encoding="utf-8",
+        )
+        (analysis_dir / f"{context.get('job_id')}_metadata.json").write_text(
+            payload,
+            encoding="utf-8",
+        )
+
+
+def _copy_job_metadata_to_requirement(context: dict[str, Any]) -> None:
+    """Copy job metadata from staging path to the requirement's analysis folder.
+
+    Only call after the requirement has been fully created.
+    """
+    ticket_id = str(context.get("ticket_id") or "").strip()
+    if not ticket_id:
+        return
+
     analysis_dir = Path("requirements") / ticket_id / "analysis"
+    jobs_dir = Path("requirements") / "_jobs" / ticket_id
+
+    if not jobs_dir.exists():
+        return
+
+    # Only copy if the requirement directory now exists (it should after a
+    # successful create_requirement_from_jira).
     analysis_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = {
@@ -160,6 +230,14 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
     (analysis_dir / f"{context.get('job_id')}_metadata.json").write_text(
         payload,
         encoding="utf-8",
+    )
+
+    logger.info(
+        "Portal job metadata copied to requirement analysis. "
+        "job_id=%s ticket_id=%s path=%s",
+        context.get("job_id"),
+        ticket_id,
+        analysis_dir,
     )
 
 
@@ -223,6 +301,14 @@ async def run_portal_ticket_job(
             result = await result
 
         context["status"] = "SUCCEEDED"
+
+        # After a successful create_requirement_from_jira, the requirement
+        # folder should now be complete.  Copy job metadata into the
+        # requirement's analysis/ directory so it is visible alongside the
+        # sanitized requirement.
+        if action == "create_requirement_from_jira":
+            _copy_job_metadata_to_requirement(context)
+
         return result
     except Exception as error:
         context["status"] = "FAILED"

@@ -1,10 +1,13 @@
 import json
+import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import UploadFile
+
+logger = logging.getLogger(__name__)
 
 from app.services.jira_requirement_service import (
     create_requirement_from_jira,
@@ -221,8 +224,19 @@ def create_requirement_from_jira_and_sanitize(
     issue_key = issue_key.strip()
     ticket_id = _safe_requirement_id(issue_key)
 
-    if requirement_exists(ticket_id) and not refresh_existing:
+    if requirement_is_complete(ticket_id) and not refresh_existing:
+        logger.info(
+            "Requirement exists and is complete, skipping Jira load. ticket_id=%s",
+            ticket_id,
+        )
         return ticket_id
+
+    if _requirement_dir(ticket_id).exists() and not requirement_is_complete(ticket_id):
+        logger.warning(
+            "Requirement folder exists but is incomplete, rebuilding. ticket_id=%s",
+            ticket_id,
+        )
+        refresh_existing = True
 
     ticket_id = create_requirement_from_jira(
         issue_key.strip(),
@@ -1425,6 +1439,37 @@ def requirement_exists(
     ticket_id = _safe_requirement_id(ticket_id)
 
     return _requirement_dir(ticket_id).exists()
+
+
+def requirement_is_complete(ticket_id: str) -> bool:
+    """Check whether a requirement has been fully loaded and sanitized.
+
+    Minimum criteria for a complete requirement:
+      - ticket.json exists
+      - source/jira_requirement.md or source/description.md exists
+      - analysis/sanitized_requirement.md exists
+    """
+    ticket_id = _safe_requirement_id(ticket_id)
+    base_dir = _requirement_dir(ticket_id)
+
+    if not base_dir.exists():
+        return False
+
+    ticket_file = _ticket_json_file(ticket_id)
+    if not ticket_file.exists():
+        return False
+
+    source_dir = _source_dir(ticket_id)
+    has_jira_md = (source_dir / "jira_requirement.md").exists()
+    has_description_md = (source_dir / "description.md").exists()
+    if not has_jira_md and not has_description_md:
+        return False
+
+    analysis_dir = _analysis_dir(ticket_id)
+    if not (analysis_dir / "sanitized_requirement.md").exists():
+        return False
+
+    return True
 
 
 def normalize_requirement_id(

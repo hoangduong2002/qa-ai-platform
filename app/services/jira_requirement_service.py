@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from atlassian import Jira
+
+logger = logging.getLogger(__name__)
 
 from app.utils.file_extractors import extract_file_text
 from app.utils.workspace_writer import create_workspace_from_text
@@ -970,6 +973,28 @@ def _write_ticket_snapshot(
     _write_json(ticket_file, ticket)
 
 
+def _requirement_is_complete(ticket_id: str) -> bool:
+    """Check whether a requirement has been fully loaded (source + ticket.json).
+
+    Does NOT require sanitized_requirement.md — that check belongs to the
+    higher-level requirement_is_complete() in web_requirement_service.
+    This lower-level check only verifies the Jira source is loaded.
+    """
+    requirement_dir = REQUIREMENTS_ROOT / ticket_id
+    if not requirement_dir.exists():
+        return False
+
+    ticket_file = requirement_dir / "ticket.json"
+    if not ticket_file.exists():
+        return False
+
+    source_dir = requirement_dir / "source"
+    has_jira_md = (source_dir / "jira_requirement.md").exists()
+    has_description_md = (source_dir / "description.md").exists()
+
+    return has_jira_md or has_description_md
+
+
 def _prepare_source_directory(
     ticket_id: str,
     refresh_existing: bool,
@@ -1000,8 +1025,19 @@ def create_requirement_from_jira(
 
     requirement_dir = REQUIREMENTS_ROOT / ticket_id
 
-    if requirement_dir.exists() and not refresh_existing:
+    if _requirement_is_complete(ticket_id) and not refresh_existing:
+        logger.info(
+            "Requirement source exists and is complete, skipping Jira load. ticket_id=%s",
+            ticket_id,
+        )
         return ticket_id
+
+    if requirement_dir.exists() and not _requirement_is_complete(ticket_id):
+        logger.warning(
+            "Requirement folder exists but source is incomplete, rebuilding. ticket_id=%s",
+            ticket_id,
+        )
+        refresh_existing = True
 
     jira = _get_jira_client(
         jira_pat=jira_pat,
