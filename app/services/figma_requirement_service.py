@@ -1258,9 +1258,9 @@ def _analyze_with_local_vision(
     if not image_file:
         return None
 
-    from app.services.gemma_image_extractor_service import extract_image_with_gemma
+    from app.services.LOCAL_image_extractor_service import extract_image_with_LOCAL
 
-    return extract_image_with_gemma(
+    return extract_image_with_LOCAL(
         image_path=image_file,
         prompt=FIGMA_IMAGE_ANALYSIS_PROMPT,
     )

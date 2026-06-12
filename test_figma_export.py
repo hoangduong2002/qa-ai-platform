@@ -13,8 +13,8 @@ from app.services.figma_requirement_service import (
 )
 from app.services.local_ai_config_service import (
     get_local_ai_provider,
-    get_ollama_base_url,
-    get_ollama_vision_model,
+    get_LOCAL_base_url,
+    get_LOCAL_vision_model,
     is_figma_local_vision_enabled,
     is_local_ai_enabled,
     is_local_vision_enabled,
@@ -34,8 +34,8 @@ print("LOCAL_AI_PROVIDER:", get_local_ai_provider())
 print("LOCAL_VISION_ENABLED:", is_local_vision_enabled())
 print("FIGMA_LOCAL_VISION_ENABLED:", os.getenv("FIGMA_LOCAL_VISION_ENABLED", ""))
 print("figma local vision enabled:", is_figma_local_vision_enabled())
-print("OLLAMA_BASE_URL:", get_ollama_base_url())
-print("OLLAMA_VISION_MODEL:", get_ollama_vision_model())
+print("LOCAL_BASE_URL:", get_LOCAL_base_url())
+print("LOCAL_VISION_MODEL:", get_LOCAL_vision_model())
 print()
 
 

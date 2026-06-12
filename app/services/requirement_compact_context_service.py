@@ -4,6 +4,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.services.compact_llm_service import (
+    compact_chunk_with_llm,
+    merge_compact_context_with_llm,
+)
+
 
 REQUIREMENTS_ROOT = Path("requirements")
 DEFAULT_MAX_CONTEXT_CHARS = 60_000
@@ -537,6 +542,55 @@ def _summarize_figma_section_chunk(
     return "\n".join(lines).strip() + "\n"
 
 
+def _compact_chunk_with_llm_or_rule_based(
+    chunk_type: str,
+    chunk_text: str,
+    rule_based_partial: str,
+    warnings: list[str],
+) -> str:
+    try:
+        result = compact_chunk_with_llm(
+            chunk_type=chunk_type,
+            chunk_text=chunk_text,
+        )
+        warnings.append(
+            "Compact chunk summarized with LLM "
+            f"provider={result.provider}, model={result.model}, "
+            f"fallback_used={result.fallback_used}."
+        )
+        return result.content.strip() + "\n"
+    except Exception as error:
+        warnings.append(
+            "Compact chunk LLM summary failed; using rule-based summary. "
+            f"chunk_type={chunk_type}, error={error}"
+        )
+        return rule_based_partial
+
+
+def _merge_compact_with_llm_or_rule_based(
+    ticket_id: str,
+    compact_context: str,
+    warnings: list[str],
+) -> str:
+    try:
+        result = merge_compact_context_with_llm(
+            ticket_id=ticket_id,
+            compact_context=compact_context,
+        )
+        warnings.append(
+            "Final compact context merged with LLM "
+            f"provider={result.provider}, model={result.model}, "
+            f"fallback_used={result.fallback_used}."
+        )
+        return result.content.strip() + "\n"
+    except Exception as error:
+        warnings.append(
+            "Final compact context LLM merge failed; using rule-based merge. "
+            f"error={error}"
+        )
+        return compact_context
+
+
 def _cleanup_chunk_folder(chunks_root: Path) -> None:
     chunks_root.mkdir(parents=True, exist_ok=True)
 
@@ -576,11 +630,14 @@ def _write_chunk_and_partial(
     }
 
 
-def build_requirement_chunks(ticket_id: str) -> list[dict]:
+def build_requirement_chunks(
+    ticket_id: str,
+    warnings: list[str] | None = None,
+) -> list[dict]:
     source_root = REQUIREMENTS_ROOT / ticket_id / "source"
     analysis_root = REQUIREMENTS_ROOT / ticket_id / "analysis"
     chunks_root = analysis_root / "compact_chunks"
-    warnings: list[str] = []
+    warnings = warnings if warnings is not None else []
     chunks: list[dict[str, Any]] = []
     chunk_max_chars = _env_int("REQUIREMENT_CHUNK_MAX_CHARS", DEFAULT_CHUNK_MAX_CHARS)
 
@@ -630,6 +687,12 @@ def build_requirement_chunks(ticket_id: str) -> list[dict]:
             partial_text = _summarize_source_chunk(
                 chunk_type=chunk_type,
                 source_items=items if len(parts) == 1 else part_items,
+            )
+            partial_text = _compact_chunk_with_llm_or_rule_based(
+                chunk_type=chunk_type,
+                chunk_text=chunk_text,
+                rule_based_partial=partial_text,
+                warnings=warnings,
             )
             suffix = _safe_name(
                 chunk_type if len(parts) == 1 else f"{chunk_type}_{part_index}"
@@ -685,6 +748,12 @@ def build_requirement_chunks(ticket_id: str) -> list[dict]:
             partial_text = _summarize_figma_section_chunk(
                 section_key=section_key,
                 screens=screen_batch,
+            )
+            partial_text = _compact_chunk_with_llm_or_rule_based(
+                chunk_type="figma_section",
+                chunk_text=chunk_text,
+                rule_based_partial=partial_text,
+                warnings=warnings,
             )
             chunks.append(
                 _write_chunk_and_partial(
@@ -1243,7 +1312,7 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         "detected_mode": detected_mode,
         "warnings": warnings,
     }
-    chunks = build_requirement_chunks(ticket_id)
+    chunks = build_requirement_chunks(ticket_id, warnings=warnings)
     partial_summary_count = len(
         [
             chunk
@@ -1262,6 +1331,11 @@ def build_compact_requirement_context(ticket_id: str) -> dict:
         screens=screens,
         evidence_index=evidence_index,
         chunks=chunks,
+        warnings=warnings,
+    )
+    compact_context = _merge_compact_with_llm_or_rule_based(
+        ticket_id=ticket_id,
+        compact_context=compact_context,
         warnings=warnings,
     )
     max_chars = _env_int(

@@ -48,7 +48,7 @@ def is_local_ai_enabled() -> bool:
 
 
 def get_local_ai_provider() -> str:
-    return _env_str("LOCAL_AI_PROVIDER", "OLLAMA").upper() or "OLLAMA"
+    return _env_str("LOCAL_AI_PROVIDER", "LOCAL").upper() or "LOCAL"
 
 
 def is_local_vision_enabled() -> bool:
@@ -101,25 +101,25 @@ def is_local_text_fallback_enabled() -> bool:
     return _env_bool("LOCAL_TEXT_FALLBACK_ENABLED", False)
 
 
-def get_ollama_base_url() -> str:
+def get_LOCAL_base_url() -> str:
     return (
-        _env_str("OLLAMA_BASE_URL")
-        or _env_str("GEMMA_VISION_BASE_URL")
+        _env_str("LOCAL_BASE_URL")
+        or _env_str("LOCAL_VISION_BASE_URL")
         or "http://localhost:11434"
     ).rstrip("/")
 
 
-def get_ollama_vision_model() -> str:
+def get_LOCAL_vision_model() -> str:
     return (
-        _env_str("OLLAMA_VISION_MODEL")
-        or _env_str("GEMMA_VISION_MODEL")
+        _env_str("LOCAL_VISION_MODEL")
+        or _env_str("LOCAL_VISION_MODEL")
         or "qwen2.5vl:7b"
     )
 
 
-def get_ollama_compact_model() -> str:
-    return _env_str("OLLAMA_COMPACT_MODEL", "qwen2.5:14b")
+def get_LOCAL_compact_model() -> str:
+    return _env_str("LOCAL_COMPACT_MODEL", "qwen2.5:14b")
 
 
-def get_ollama_text_model() -> str:
-    return _env_str("OLLAMA_TEXT_MODEL", "qwen2.5:14b")
+def get_LOCAL_text_model() -> str:
+    return _env_str("LOCAL_TEXT_MODEL", "qwen2.5:14b")

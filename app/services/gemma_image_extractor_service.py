@@ -8,8 +8,8 @@ from pathlib import Path
 from PIL import Image
 
 from app.services.local_ai_config_service import (
-    get_ollama_base_url,
-    get_ollama_vision_model,
+    get_LOCAL_base_url,
+    get_LOCAL_vision_model,
 )
 
 
@@ -66,25 +66,25 @@ Rules:
 """.strip()
 
 
-def _get_gemma_base_url() -> str:
-    base_url = get_ollama_base_url()
+def _get_LOCAL_base_url() -> str:
+    base_url = get_LOCAL_base_url()
 
     if not base_url:
         raise ValueError(
-            "OLLAMA_BASE_URL is missing. "
-            "Example: OLLAMA_BASE_URL=http://localhost:11434"
+            "LOCAL_BASE_URL is missing. "
+            "Example: LOCAL_BASE_URL=http://localhost:11434"
         )
 
     return base_url.rstrip("/")
 
 
-def _get_gemma_model() -> str:
-    model = get_ollama_vision_model()
+def _get_LOCAL_model() -> str:
+    model = get_LOCAL_vision_model()
 
     if not model:
         raise ValueError(
-            "OLLAMA_VISION_MODEL is missing. "
-            "Set it to the model name shown by `ollama list`."
+            "LOCAL_VISION_MODEL is missing. "
+            "Set it to the model name shown by `LOCAL list`."
         )
 
     return model
@@ -92,7 +92,7 @@ def _get_gemma_model() -> str:
 
 def _get_timeout() -> int:
     try:
-        return int(os.getenv("GEMMA_VISION_TIMEOUT", "180"))
+        return int(os.getenv("LOCAL_VISION_TIMEOUT", "180"))
     except Exception:
         return 180
     
@@ -194,10 +194,10 @@ def _looks_like_low_quality_vision_response(text: str) -> bool:
     
 def _normalize_image_to_png_base64(image_path: Path) -> str:
     """
-    Convert image to PNG RGB before sending to Ollama.
+    Convert image to PNG RGB before sending to LOCAL.
 
     This helps avoid errors when Jira pasted images are webp, palette PNG,
-    CMYK JPG, transparent PNG, or other formats/modes that Ollama/LLaVA
+    CMYK JPG, transparent PNG, or other formats/modes that LOCAL/LLaVA
     may not load correctly.
     """
     with Image.open(image_path) as image:
@@ -212,7 +212,7 @@ def _normalize_image_to_png_base64(image_path: Path) -> str:
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-def extract_image_with_gemma(
+def extract_image_with_LOCAL(
     image_path: str | Path,
     prompt: str | None = None,
 ) -> str:
@@ -224,8 +224,8 @@ def extract_image_with_gemma(
     if image_path.stat().st_size <= 0:
         raise ValueError(f"Image file is empty: {image_path}")
 
-    base_url = _get_gemma_base_url()
-    model = _get_gemma_model()
+    base_url = _get_LOCAL_base_url()
+    model = _get_LOCAL_model()
     timeout = _get_timeout()
 
     image_base64 = _normalize_image_to_png_base64(image_path)
@@ -265,7 +265,7 @@ def extract_image_with_gemma(
     except urllib.error.HTTPError as error:
         error_body = error.read().decode("utf-8", errors="ignore")
         raise RuntimeError(
-            "Gemma image extraction failed with HTTP "
+            "LOCAL image extraction failed with HTTP "
             f"{error.code}: {error_body}\n"
             f"Model: {model}\n"
             f"URL: {base_url}/api/chat\n"
@@ -276,8 +276,8 @@ def extract_image_with_gemma(
 
     except urllib.error.URLError as error:
         raise RuntimeError(
-            f"Cannot connect to Ollama vision server at {base_url}. "
-            f"Please check LAN IP, firewall, OLLAMA_HOST, and port 11434. "
+            f"Cannot connect to LOCAL vision server at {base_url}. "
+            f"Please check LAN IP, firewall, LOCAL_HOST, and port 11434. "
             f"Error: {error}"
         ) from error
 
@@ -291,13 +291,13 @@ def extract_image_with_gemma(
 
     if not extracted_text:
         raise RuntimeError(
-            f"Ollama vision model returned empty response for image: {image_path}. "
+            f"LOCAL vision model returned empty response for image: {image_path}. "
             f"Raw response: {raw_body[:1000]}"
         )
 
     if _looks_like_no_image_response(extracted_text):
         raise RuntimeError(
-            "Ollama vision model did not receive/read the image correctly. "
+            "LOCAL vision model did not receive/read the image correctly. "
             f"Model: {model}. "
             f"Image: {image_path}. "
             f"Response: {extracted_text[:500]}"
@@ -307,7 +307,7 @@ def extract_image_with_gemma(
 
     if _looks_like_low_quality_vision_response(extracted_text):
         raise RuntimeError(
-            "Ollama vision output looks low-quality or hallucinated. "
+            "LOCAL vision output looks low-quality or hallucinated. "
             "Extraction was rejected to avoid polluting requirement context. "
             f"Model: {model}. "
             f"Image: {image_path}. "

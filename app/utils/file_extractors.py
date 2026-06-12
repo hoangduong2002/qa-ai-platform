@@ -11,7 +11,7 @@ from app.utils.ocr_normalizer import normalize_ocr_requirement
 import os
 from pathlib import Path
 
-from app.services.gemma_image_extractor_service import extract_image_with_gemma
+from app.services.LOCAL_image_extractor_service import extract_image_with_LOCAL
 from app.services.local_ai_config_service import (
     is_attachment_local_vision_enabled,
 )
@@ -69,20 +69,20 @@ def _extract_image_text_with_tesseract(
 
 
 def _extract_image_text(file_path: str | Path) -> str:
-    extractor = os.getenv("IMAGE_EXTRACTOR", "GEMMA").strip().upper()
+    extractor = os.getenv("IMAGE_EXTRACTOR", "LOCAL").strip().upper()
 
-    if extractor in {"GEMMA", "OLLAMA", "QWEN"}:
+    if extractor in {"LOCAL", "LOCAL", "QWEN"}:
         if not is_attachment_local_vision_enabled():
             return ""
 
-        return extract_image_with_gemma(file_path)
+        return extract_image_with_LOCAL(file_path)
 
     if extractor == "TESSERACT":
         return _extract_image_text_with_tesseract(file_path)
 
     raise ValueError(
         f"Unsupported IMAGE_EXTRACTOR={extractor}. "
-        "Use GEMMA or TESSERACT."
+        "Use LOCAL or TESSERACT."
     )
 
 
