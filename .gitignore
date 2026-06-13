@@ -1,7 +1,6 @@
 .venv/
 .env
-.env.*
-!.env.example
+.env.secrets
 __pycache__/
 *.pyc
 requirements/
