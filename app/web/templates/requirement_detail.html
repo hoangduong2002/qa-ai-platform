@@ -18,6 +18,35 @@
                 <button class="side-action" type="submit">Run Sanitizer</button>
             </form>
 
+            <form id="syncJiraForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/sync-jira" data-loading="true" data-loading-title="Syncing Jira changes..." data-loading-message="Fetching Jira source and building deterministic change report.">
+                <input type="hidden" name="jira_pat" id="syncJiraPatField" value="">
+                <button class="side-action" type="submit">Sync Jira Changes</button>
+            </form>
+
+            <form id="buildRegenerationPlanForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/build-regeneration-plan" data-loading="true" data-loading-title="Building regeneration plan..." data-loading-message="Mapping changed sources to requirements, scenarios, and test cases.">
+                <button class="side-action" type="submit">Build Regeneration Plan</button>
+            </form>
+
+            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze-incremental" data-loading="true" data-ai-action="true" data-loading-title="Analyzing changed sources..." data-loading-message="AI is analyzing only new or changed source entities.">
+                <button class="side-action" type="submit">Analyze Changed Sources</button>
+            </form>
+
+            {% set partial_safe = regeneration_plan and regeneration_plan.can_partial_regenerate %}
+            {% set partial_reason = regeneration_plan.reason_if_full_regenerate_required if regeneration_plan else "Build regeneration plan first." %}
+            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to changed requirement items.">
+                <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Scenarios</button>
+            </form>
+
+            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
+                <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Test Cases</button>
+            </form>
+
+            <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Export Incremental Excel</a>
+
+            {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}
+                <div class="ai-mode-status">{{ regeneration_plan.reason_if_full_regenerate_required or "Partial regeneration is not safe. Run full regeneration." }}</div>
+            {% endif %}
+
             <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze" data-loading="true" data-ai-action="true" data-loading-title="Analyzing requirement..." data-loading-message="AI is extracting requirement items and clarification questions.">
                 <button class="side-action" type="submit">Analyze</button>
             </form>
@@ -86,6 +115,9 @@
                 <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating scope and scenarios..." data-loading-message="Generate only. No auto coverage review.">
                     <button class="side-action" type="submit">Generate Scope & Scenarios</button>
                 </form>
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to new or updated requirement items.">
+                    <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Scenarios</button>
+                </form>
             {% endif %}
 
             {% if selected_scenarios_json %}
@@ -115,6 +147,10 @@
                 <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating test cases..." data-loading-message="Generate only. No auto final review.">
                     <button class="side-action" type="submit">Generate Test Cases</button>
                 </form>
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
+                    <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Test Cases</button>
+                </form>
+                <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Download Incremental Excel</a>
             {% endif %}
 
             {% if selected_testcases_json %}
@@ -166,6 +202,162 @@
                 {% if has_analysis %}<span class="status ok">Analysis Ready</span>{% else %}<span class="status missing">No Analysis</span>{% endif %}
                 {% if has_clarifications %}<span class="status ok">Clarifications Ready</span>{% else %}<span class="status missing">No Clarifications</span>{% endif %}
                 {% if has_summary %}<span class="status ok">Summary Ready</span>{% else %}<span class="status missing">No Summary</span>{% endif %}
+            </div>
+
+            <div id="change-impact-report" class="card">
+                <div class="section-header">
+                    <h3>Latest Change Impact Report</h3>
+                    <form id="syncJiraInlineForm" method="post" action="/portal/requirements/{{ ticket_id }}/sync-jira" data-loading="true" data-loading-title="Syncing Jira changes..." data-loading-message="Fetching Jira source and building deterministic change report.">
+                        <input type="hidden" name="jira_pat" id="syncJiraInlinePatField" value="">
+                        <button type="submit" class="secondary">Sync Jira Changes</button>
+                    </form>
+                </div>
+
+                {% if change_impact_report %}
+                    {% if change_impact_report.message and "Initial snapshot created" in change_impact_report.message %}
+                        <div class="placeholder-box">Initial snapshot created.</div>
+                    {% elif (change_impact_report.change_count or 0) == 0 %}
+                        <div class="placeholder-box">No Jira changes detected.</div>
+                    {% endif %}
+
+                    <div class="summary-grid">
+                        <div class="metric-card"><div class="metric-label">Changes</div><div class="metric-value">{{ change_impact_report.change_count or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Report Version</div><div class="metric-value">{{ change_impact_report.report_version or "N/A" }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Recommended Action</div><div class="metric-value" style="font-size:14px">{{ change_impact_report.recommended_action or "NO_CHANGE" }}</div></div>
+                    </div>
+
+                    {% set groups = change_impact_report.display_groups or {} %}
+                    {% for key, title in [
+                        ("changed_fields", "Changed fields"),
+                        ("added_comments", "Added comments"),
+                        ("modified_comments", "Modified comments"),
+                        ("added_subtasks", "Added subtasks"),
+                        ("modified_subtasks", "Modified subtasks"),
+                        ("attachment_changes", "Attachment changes"),
+                        ("figma_link_changes", "Figma link changes"),
+                        ("figma_page_changes", "Figma page changes"),
+                        ("figma_section_changes", "Figma section changes"),
+                        ("figma_screen_changes", "Figma screen changes")
+                    ] %}
+                        <div class="section-block">
+                            <div class="section-title">{{ title }}</div>
+                            {% if groups[key] and groups[key] | length > 0 %}
+                                <table class="visual-table">
+                                    <thead><tr><th>ID</th><th>Type</th><th>Source</th><th>Action</th><th>Summary</th></tr></thead>
+                                    <tbody>
+                                        {% for item in groups[key] %}
+                                            <tr>
+                                                <td>{{ item.change_id }}</td>
+                                                <td>{{ item.change_type }}</td>
+                                                <td>{{ item.source_type }} / {{ item.source_id }}</td>
+                                                <td>{{ item.recommended_action }}</td>
+                                                <td>
+                                                    {{ item.summary }}
+                                                    {% if item.screen_name %}<br><small>Screen: {{ item.screen_name }}</small>{% endif %}
+                                                    {% if item.section_name %}<br><small>Section: {{ item.section_name }}</small>{% endif %}
+                                                    {% if item.image_path %}<br><small>Image: {{ item.image_path }}</small>{% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            {% else %}
+                                <p>No changes.</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p>No Jira change impact report found.</p>
+                {% endif %}
+            </div>
+
+            <div id="regeneration-plan" class="card">
+                <div class="section-header">
+                    <h3>Regeneration Plan</h3>
+                    <form id="buildRegenerationPlanInlineForm" method="post" action="/portal/requirements/{{ ticket_id }}/build-regeneration-plan" data-loading="true" data-loading-title="Building regeneration plan..." data-loading-message="Mapping changed sources to requirements, scenarios, and test cases.">
+                        <button type="submit" class="secondary">Build Regeneration Plan</button>
+                    </form>
+                </div>
+
+                {% if regeneration_plan %}
+                    <div class="summary-grid">
+                        <div class="metric-card"><div class="metric-label">Impacted Requirements</div><div class="metric-value">{{ regeneration_plan.impacted_requirement_ids | length }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Impacted Scenarios</div><div class="metric-value">{{ regeneration_plan.impacted_scenario_ids | length }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Impacted Test Cases</div><div class="metric-value">{{ regeneration_plan.impacted_testcase_ids | length }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Confidence</div><div class="metric-value">{{ regeneration_plan.impact_confidence or "N/A" }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Partial Regenerate</div><div class="metric-value">{% if regeneration_plan.can_partial_regenerate %}Yes{% else %}No{% endif %}</div></div>
+                    </div>
+
+                    {% if regeneration_plan.reason_if_full_regenerate_required %}
+                        <p><b>Reason:</b> {{ regeneration_plan.reason_if_full_regenerate_required }}</p>
+                    {% endif %}
+                {% else %}
+                    <p>No regeneration plan found.</p>
+                {% endif %}
+            </div>
+
+            <div id="incremental-requirement-items" class="card">
+                <h3>Incremental Requirement Items</h3>
+                {% if incremental_requirement_items and incremental_requirement_items | length > 0 %}
+                    <table class="visual-table">
+                        <thead><tr><th>ID</th><th>Status</th><th>Title</th><th>Source Snapshot</th><th>Related Changes</th><th>Source Refs</th></tr></thead>
+                        <tbody>
+                            {% for item in incremental_requirement_items %}
+                                <tr>
+                                    <td><b>{{ item.requirement_id or item.id }}</b></td>
+                                    <td>{{ item.change_status or "New" }}</td>
+                                    <td>{{ item.title or item.description or item.requirement or "" }}</td>
+                                    <td>{{ item.source_snapshot_version or "" }}</td>
+                                    <td>{{ item.related_change_ids | join(", ") if item.related_change_ids else "" }}</td>
+                                    <td>{{ item.source_refs | join(", ") if item.source_refs else "" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No incremental requirement items found.</p>
+                {% endif %}
+            </div>
+
+            <div id="incremental-scenario-merge-report" class="card">
+                <h3>Incremental Scenario Merge Report</h3>
+                {% if incremental_scenario_merge_report %}
+                    <div class="summary-grid">
+                        <div class="metric-card"><div class="metric-label">Old Scenarios</div><div class="metric-value">{{ incremental_scenario_merge_report.old_scenario_count or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">New Scenarios</div><div class="metric-value">{{ incremental_scenario_merge_report.new_scenario_count or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Merged Scenarios</div><div class="metric-value">{{ incremental_scenario_merge_report.merged_scenario_count or 0 }}</div></div>
+                    </div>
+                    <pre>{{ incremental_scenario_merge_report }}</pre>
+                {% else %}
+                    <p>No incremental scenario merge report found.</p>
+                {% endif %}
+            </div>
+
+            <div id="incremental-testcase-merge-report" class="card">
+                <h3>Incremental Testcase Merge Report</h3>
+                {% if incremental_testcase_merge_report %}
+                    <div class="summary-grid">
+                        <div class="metric-card"><div class="metric-label">Old Test Cases</div><div class="metric-value">{{ incremental_testcase_merge_report.old_testcase_count or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">New Test Cases</div><div class="metric-value">{{ incremental_testcase_merge_report.new_testcase_count or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Merged Test Cases</div><div class="metric-value">{{ incremental_testcase_merge_report.merged_testcase_count or 0 }}</div></div>
+                    </div>
+                    <pre>{{ incremental_testcase_merge_report }}</pre>
+                {% else %}
+                    <p>No incremental testcase merge report found.</p>
+                {% endif %}
+            </div>
+
+            <div id="incremental-export-links" class="card">
+                <h3>Export Links</h3>
+                <div class="mini-actions">
+                    <a class="button" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Export Incremental Excel</a>
+                    {% if selected_testcases_json %}
+                        <a class="button secondary" href="/portal/requirements/{{ ticket_id }}/testcases/excel?testcase_version={{ testcase_version }}">Export Current Test Cases</a>
+                    {% endif %}
+                </div>
+                {% if not has_incremental_testcases %}
+                    <p>No incremental test suite found yet.</p>
+                {% endif %}
             </div>
 
             {% if error or analysis_error %}
@@ -522,5 +714,62 @@
         {% endif %}
     </section>
 </div>
+
+<script>
+    (function () {
+        const storageKey = "qa_ai_platform_jira_pat";
+
+        function savedPat() {
+            return localStorage.getItem(storageKey) || "";
+        }
+
+        async function submitPortalJsonForm(form) {
+            const pat = savedPat();
+
+            form.querySelectorAll("input[name='jira_pat']").forEach(input => {
+                input.value = pat;
+            });
+
+            if (typeof showLoading === "function") {
+                showLoading(
+                    form.getAttribute("data-loading-title"),
+                    form.getAttribute("data-loading-message")
+                );
+            }
+
+            await portalFetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+            });
+
+            const target = form.id.indexOf("RegenerationPlan") >= 0 ? "regeneration-plan" : "change-impact-report";
+            window.location.href = "/portal/requirements/{{ ticket_id }}?tab=analysis#" + target;
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            [
+                "syncJiraForm",
+                "syncJiraInlineForm",
+                "buildRegenerationPlanForm",
+                "buildRegenerationPlanInlineForm"
+            ].forEach(id => {
+                const form = document.getElementById(id);
+
+                if (!form) {
+                    return;
+                }
+
+                form.addEventListener("submit", function (event) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    submitPortalJsonForm(form).catch(error => {
+                        alert(error.message);
+                        window.location.reload();
+                    });
+                });
+            });
+        });
+    })();
+</script>
 
 {% endblock %}

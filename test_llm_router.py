@@ -3,7 +3,14 @@ import sys
 
 from dotenv import load_dotenv
 
-from app.services.llm_router_service import call_llm_with_fallback
+from app.services.llm_router_service import (
+    PROVIDER_DEEPSEEK,
+    PROVIDER_OLLAMA_TEXT,
+    PROVIDER_SKIP,
+    TASK_REQUIREMENT_ANALYSIS,
+    call_llm_with_fallback,
+    resolve_provider_for_task,
+)
 
 
 load_dotenv()
@@ -35,6 +42,56 @@ def _provider_notes() -> list[str]:
     notes.append(f"COMPACT_LLM_PRIMARY={primary or '[empty]'}")
     notes.append(f"COMPACT_LLM_FALLBACK={fallback or '[empty]'}")
     return notes
+
+
+def test_resolve_provider_for_requirement_analysis_all_primary_modes(monkeypatch):
+    monkeypatch.setenv("LOCAL_AI_ENABLED", "true")
+    monkeypatch.setenv("DEEPSEEK_ENABLED", "true")
+
+    expected = {
+        "NO_LLM": PROVIDER_SKIP,
+        "TEST_LOCAL_ONLY": PROVIDER_OLLAMA_TEXT,
+        "PRODUCTION_HYBRID": PROVIDER_DEEPSEEK,
+        "DEEPSEEK_ONLY": PROVIDER_DEEPSEEK,
+    }
+
+    for ai_mode, provider in expected.items():
+        result = resolve_provider_for_task(TASK_REQUIREMENT_ANALYSIS, ai_mode)
+        assert result["provider"] == provider
+
+
+def test_test_local_only_requirement_analysis_resolves_to_ollama_text(monkeypatch):
+    monkeypatch.setenv("LOCAL_AI_ENABLED", "true")
+    monkeypatch.setenv("DEEPSEEK_ENABLED", "true")
+
+    result = resolve_provider_for_task(
+        TASK_REQUIREMENT_ANALYSIS,
+        "TEST_LOCAL_ONLY",
+    )
+
+    assert result["provider"] == PROVIDER_OLLAMA_TEXT
+
+
+def test_no_llm_requirement_analysis_resolves_to_skip(monkeypatch):
+    monkeypatch.setenv("LOCAL_AI_ENABLED", "true")
+    monkeypatch.setenv("DEEPSEEK_ENABLED", "true")
+
+    result = resolve_provider_for_task(TASK_REQUIREMENT_ANALYSIS, "NO_LLM")
+
+    assert result["provider"] == PROVIDER_SKIP
+    assert "This action requires LLM" in result["reason"]
+
+
+def test_production_hybrid_requirement_analysis_resolves_to_deepseek(monkeypatch):
+    monkeypatch.setenv("LOCAL_AI_ENABLED", "false")
+    monkeypatch.setenv("DEEPSEEK_ENABLED", "true")
+
+    result = resolve_provider_for_task(
+        TASK_REQUIREMENT_ANALYSIS,
+        "PRODUCTION_HYBRID",
+    )
+
+    assert result["provider"] == PROVIDER_DEEPSEEK
 
 
 def main() -> int:

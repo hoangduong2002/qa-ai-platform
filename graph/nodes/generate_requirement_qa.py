@@ -1,6 +1,10 @@
 import json
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_REQUIREMENT_SUMMARY,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import (
@@ -8,12 +12,21 @@ from app.utils.file_writer import (
 )
 
 
+def _resolve_ai_mode(state: dict | None = None) -> str | None:
+    state = state or {}
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
+
+
 def generate_requirement_qa(
     state
 ):
-
-    llm = get_llm()
-
     prompt = load_prompt(
         "prompts/generate_requirement_qa.md"
     )
@@ -30,16 +43,16 @@ def generate_requirement_qa(
         )
     )
 
-    response = llm.invoke(
-        final_prompt,
-        ticket_id=state.get("ticket_id", ""),
-        node_name="generate_requirement_qa"
+    response_content = call_text_llm(
+        task_type=TASK_REQUIREMENT_SUMMARY,
+        prompt=final_prompt,
+        ai_mode=_resolve_ai_mode(state),
     )
 
     try:
 
         qa = parse_json(
-            response.content
+            response_content
         )
         
         save_requirement_qa(
@@ -51,7 +64,7 @@ def generate_requirement_qa(
 
         qa = {
             "raw_response":
-            response.content
+            response_content
         }
 
     return {

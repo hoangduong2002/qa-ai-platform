@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -332,6 +333,10 @@ def _write_testcase_header(ws) -> None:
         "Test Steps",
         "Expected Results",
         "Traceability",
+        "Change Status",
+        "Previous Test Case ID",
+        "Related Change IDs",
+        "Source Snapshot Version",
     ]
 
     ws.append(headers)
@@ -353,6 +358,10 @@ def _write_testcase_row(ws, testcase: dict) -> None:
             _to_text(testcase.get("test_steps", [])),
             _to_text(testcase.get("expected_results", [])),
             testcase.get("traceability", ""),
+            testcase.get("change_status", ""),
+            testcase.get("previous_testcase_id", ""),
+            _to_text(testcase.get("related_change_ids", [])),
+            testcase.get("source_snapshot_version", ""),
         ]
     )
 
@@ -1100,6 +1109,212 @@ def _create_requirement_matrix_sheet(
     _auto_width(ws)
 
 
+def _create_incremental_testcases_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("Test Cases")
+    _write_testcase_header(ws)
+
+    for testcase in testcases:
+        _write_testcase_row(ws, testcase)
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_change_impact_sheet(wb: Workbook, change_impact_report: dict) -> None:
+    ws = wb.create_sheet("Change Impact Report")
+    ws.append(
+        [
+            "Change ID",
+            "Source Type",
+            "Source ID",
+            "Change Type",
+            "Summary",
+            "Recommended Action",
+            "Impact Confidence",
+        ]
+    )
+
+    for change in change_impact_report.get("changes", []) or []:
+        if not isinstance(change, dict):
+            continue
+        ws.append(
+            [
+                change.get("change_id", ""),
+                change.get("source_type", ""),
+                change.get("source_id", ""),
+                change.get("change_type", ""),
+                change.get("summary", ""),
+                change.get("recommended_action", ""),
+                change.get("impact_confidence", ""),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_regeneration_plan_sheet(wb: Workbook, regeneration_plan: dict) -> None:
+    ws = wb.create_sheet("Regeneration Plan")
+    ws.append(["Field", "Value"])
+    _append_kv(ws, "Impacted Requirements", regeneration_plan.get("impacted_requirement_ids", []))
+    _append_kv(ws, "Impacted Scenarios", regeneration_plan.get("impacted_scenario_ids", []))
+    _append_kv(ws, "Impacted Test Cases", regeneration_plan.get("impacted_testcase_ids", []))
+    _append_kv(
+        ws,
+        "Can Partial Regenerate",
+        regeneration_plan.get("can_partial_regenerate", ""),
+    )
+    _append_kv(ws, "Confidence", regeneration_plan.get("impact_confidence", ""))
+    _append_kv(
+        ws,
+        "Reason If Full Regenerate Required",
+        regeneration_plan.get("reason_if_full_regenerate_required", ""),
+    )
+    _append_kv(ws, "Source Snapshot Version", regeneration_plan.get("source_snapshot_version", ""))
+    _append_kv(ws, "Change Report Version", regeneration_plan.get("change_report_version", ""))
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _status_reason(testcase: dict) -> str:
+    status = testcase.get("change_status", "")
+
+    if status == "DeprecatedCandidate":
+        return "Linked source was removed or deprecated."
+
+    if status == "Replaced":
+        return "Impacted test case retained for history and replaced by regenerated coverage."
+
+    return status
+
+
+def _create_deprecated_replaced_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("Deprecated Replaced Test Cases")
+    ws.append(
+        [
+            "Test Case ID",
+            "Title",
+            "Previous/Current Status",
+            "Reason",
+            "Related Source Change",
+        ]
+    )
+
+    for testcase in testcases or []:
+        if not isinstance(testcase, dict):
+            continue
+
+        status = testcase.get("change_status", "")
+        if status not in {"DeprecatedCandidate", "Replaced"}:
+            continue
+
+        ws.append(
+            [
+                testcase.get("testcase_id", ""),
+                testcase.get("title", ""),
+                status,
+                _status_reason(testcase),
+                _to_text(testcase.get("related_change_ids", [])),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_source_traceability_sheet(
+    wb: Workbook,
+    testcases: list,
+    change_impact_report: dict | None = None,
+) -> None:
+    ws = wb.create_sheet("Source Traceability")
+    ws.append(
+        [
+            "Source Type",
+            "Source ID",
+            "Requirement ID",
+            "Scenario ID",
+            "Test Case ID",
+            "Source Snapshot Version",
+        ]
+    )
+    change_by_id = {
+        change.get("change_id"): change
+        for change in (change_impact_report or {}).get("changes", []) or []
+        if isinstance(change, dict) and change.get("change_id")
+    }
+
+    for testcase in testcases or []:
+        if not isinstance(testcase, dict):
+            continue
+
+        testcase_id = testcase.get("testcase_id", "")
+        scenario_id = testcase.get("related_scenario_id") or testcase.get("scenario_id", "")
+        snapshot_version = testcase.get("source_snapshot_version", "")
+        requirement_ids = testcase.get("related_requirement_ids") or []
+        source_refs = testcase.get("source_refs") or []
+        related_change_ids = testcase.get("related_change_ids") or []
+
+        if isinstance(requirement_ids, str):
+            requirement_ids = [
+                item.strip()
+                for item in requirement_ids.split(",")
+                if item.strip()
+            ]
+
+        if isinstance(source_refs, str):
+            source_refs = [
+                item.strip()
+                for item in source_refs.split(",")
+                if item.strip()
+            ]
+
+        if isinstance(related_change_ids, str):
+            related_change_ids = [
+                item.strip()
+                for item in related_change_ids.split(",")
+                if item.strip()
+            ]
+
+        for change_id in related_change_ids:
+            change = change_by_id.get(change_id)
+            if not change:
+                continue
+            source_refs.append(
+                f"{change.get('source_type', '')}:{change.get('source_id', '')}"
+            )
+
+        if not requirement_ids:
+            requirement_ids = [""]
+
+        if not source_refs:
+            source_refs = [""]
+
+        for source_ref in source_refs:
+            source_text = str(source_ref)
+            source_type = ""
+            source_id = source_text
+
+            if ":" in source_text:
+                source_type, source_id = source_text.split(":", 1)
+
+            for requirement_id in requirement_ids:
+                ws.append(
+                    [
+                        source_type,
+                        source_id,
+                        requirement_id,
+                        scenario_id,
+                        testcase_id,
+                        snapshot_version,
+                    ]
+                )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
 def export_function_based_testcases_to_excel(
     ticket_id: str,
     testcases: list,
@@ -1193,6 +1408,90 @@ def export_function_based_testcases_to_excel(
     exports_dir = _ensure_exports_dir(ticket_id)
     export_file = exports_dir / f"{ticket_id}_function_based_testcases.xlsx"
 
+    wb.save(export_file)
+
+    return str(export_file)
+
+
+def _next_incremental_export_file(ticket_id: str) -> Path:
+    exports_dir = _ensure_exports_dir(ticket_id)
+    max_version = 0
+    pattern = re.compile(rf"{re.escape(ticket_id)}_incremental_testcases_v(\d+)\.xlsx$")
+
+    for path in exports_dir.glob(f"{ticket_id}_incremental_testcases_v*.xlsx"):
+        match = pattern.match(path.name)
+        if match:
+            max_version = max(max_version, int(match.group(1)))
+
+    return exports_dir / f"{ticket_id}_incremental_testcases_v{max_version + 1}.xlsx"
+
+
+def export_incremental_testcases_to_excel(
+    ticket_id: str,
+    testcases: list,
+    change_impact_report: dict | None = None,
+    regeneration_plan: dict | None = None,
+    merge_report: dict | None = None,
+    coverage_review: dict | None = None,
+    final_coverage_review: dict | None = None,
+    approved_structure: dict | None = None,
+    analysis: dict | None = None,
+    clarifications: dict | None = None,
+    clarification_answers: dict | None = None,
+    requirement_summary: dict | None = None,
+) -> str:
+    coverage_review = coverage_review or {}
+    final_coverage_review = final_coverage_review or {}
+    change_impact_report = change_impact_report or {}
+    regeneration_plan = regeneration_plan or {}
+    merge_report = merge_report or {}
+
+    if not approved_structure:
+        approved_structure = load_approved_test_case_structure(ticket_id)
+
+    wb = Workbook()
+    grouped_testcases = _group_testcases_by_function(
+        testcases=testcases,
+        approved_structure=approved_structure or {},
+    )
+
+    _create_summary_sheet(
+        wb=wb,
+        ticket_id=ticket_id,
+        approved_structure=approved_structure or {},
+        testcases=testcases,
+        coverage_review=coverage_review,
+        final_coverage_review=final_coverage_review,
+    )
+    _append_kv(wb["Summary"], "Incremental Export", "Yes")
+    _append_kv(wb["Summary"], "Incremental Merge Report", merge_report.get("version", ""))
+    _auto_width(wb["Summary"])
+
+    _create_requirements_sheet(wb=wb, analysis=analysis or {})
+    _create_requirement_matrix_sheet(wb=wb, analysis=analysis or {}, testcases=testcases)
+    _create_clarifications_sheet(
+        wb=wb,
+        clarifications=clarifications or {},
+        clarification_answers=clarification_answers or {},
+    )
+    _create_requirement_summary_sheet(wb=wb, requirement_summary=requirement_summary or {})
+    _create_test_case_structure_sheet(wb=wb, approved_structure=approved_structure or {})
+    _create_incremental_testcases_sheet(wb=wb, testcases=testcases)
+    _create_master_testcases_sheet(wb=wb, testcases=testcases)
+    _create_function_testcase_sheets(wb=wb, grouped_testcases=grouped_testcases)
+    _create_coverage_review_sheet(wb=wb, coverage_review=coverage_review)
+    _create_final_review_sheet(wb=wb, final_coverage_review=final_coverage_review)
+    _create_traceability_matrix_sheet(wb=wb, testcases=testcases)
+    _create_change_impact_sheet(wb=wb, change_impact_report=change_impact_report)
+    _create_regeneration_plan_sheet(wb=wb, regeneration_plan=regeneration_plan)
+    _create_deprecated_replaced_sheet(wb=wb, testcases=testcases)
+    _create_source_traceability_sheet(
+        wb=wb,
+        testcases=testcases,
+        change_impact_report=change_impact_report,
+    )
+
+    export_file = _next_incremental_export_file(ticket_id)
     wb.save(export_file)
 
     return str(export_file)

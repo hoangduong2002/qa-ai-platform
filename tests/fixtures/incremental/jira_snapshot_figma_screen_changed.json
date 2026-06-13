@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "ticket_id": "INC-001",
+    "snapshot_version": 2,
+    "created_at": "2026-06-13T01:20:00Z",
+    "jira_updated": "2026-06-13T09:20:00Z"
+  },
+  "field_hashes": {
+    "summary_hash": "sum-old",
+    "description_hash": "desc-old",
+    "acceptance_criteria_hash": "acc-old"
+  },
+  "comments_inventory": [
+    {
+      "comment_id": "C1",
+      "issue_key": "INC-001",
+      "author": "Alice",
+      "created": "2026-06-12T09:00:00Z",
+      "updated": "2026-06-12T09:00:00Z",
+      "body_hash": "comment-c1-old",
+      "body_preview": "Need review"
+    }
+  ],
+  "subtasks_inventory": [
+    {
+      "subtask_key": "SUB-1",
+      "summary_hash": "sub1-old",
+      "description_hash": "sub1-desc-old",
+      "status": "Open",
+      "updated": "2026-06-12T09:30:00Z"
+    }
+  ],
+  "attachments_inventory": [
+    {
+      "attachment_id": "ATT-1",
+      "issue_key": "INC-001",
+      "filename": "spec-v1.pdf",
+      "mime_type": "application/pdf",
+      "size": 1000,
+      "created": "2026-06-12T09:10:00Z",
+      "content_hash": "att1-old",
+      "local_path": ""
+    }
+  ],
+  "figma_links_inventory": [],
+  "figma_screen_inventory": [
+    {
+      "file_key": "FIG-100",
+      "page_id": "Page-A",
+      "section_id": "Section-A",
+      "section_name": "Checkout",
+      "screen_node_id": "Node-1",
+      "screen_name": "Checkout Main",
+      "screen_path": "",
+      "frame_image_path": "",
+      "image_hash": "fig-img-new",
+      "screen_node_hash": "fig-node-old",
+      "screen_context_hash": "fig-ctx-old",
+      "vision_analysis_hash": "fig-vision-old",
+      "text_hash": "fig-text-old",
+      "component_hash": "fig-comp-old"
+    },
+    {
+      "file_key": "FIG-100",
+      "page_id": "Page-A",
+      "section_id": "Section-A",
+      "section_name": "Checkout",
+      "screen_node_id": "Node-2",
+      "screen_name": "Checkout Confirmation",
+      "screen_path": "",
+      "frame_image_path": "",
+      "image_hash": "fig-img-added",
+      "screen_node_hash": "fig-node-added",
+      "screen_context_hash": "fig-ctx-added",
+      "vision_analysis_hash": "fig-vision-added",
+      "text_hash": "fig-text-added",
+      "component_hash": "fig-comp-added"
+    }
+  ]
+}

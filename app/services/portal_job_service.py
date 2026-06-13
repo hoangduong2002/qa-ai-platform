@@ -20,6 +20,20 @@ JOB_LIMIT_MESSAGE = "The portal is currently processing the maximum number of jo
 LLM_LIMIT_MESSAGE = "The portal is currently processing the maximum number of LLM calls. Please try again shortly."
 OLLAMA_LIMIT_MESSAGE = "The local AI server is currently busy. Please try again shortly."
 
+# Provider safety messages
+NO_LLM_BLOCKED_MESSAGE = (
+    "AI mode is NO_LLM. This action requires an LLM. "
+    "Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID."
+)
+TEST_LOCAL_ONLY_UNAVAILABLE_MESSAGE = (
+    "AI mode is TEST_LOCAL_ONLY but the local AI provider is not available. "
+    "Check that the local server is running and LOCAL_AI_ENABLED=true."
+)
+FALLBACK_TO_DEEPSEEK_BLOCKED_MESSAGE = (
+    "AI mode is TEST_LOCAL_ONLY; falling back to DeepSeek is not allowed. "
+    "Ensure the local AI provider is running."
+)
+
 _job_context: ContextVar[dict[str, Any] | None] = ContextVar(
     "portal_job_context",
     default=None,
@@ -135,6 +149,36 @@ def _read_job_metadata(job_id: str) -> dict[str, Any] | None:
         return None
 
 
+def check_provider_safety(ai_mode_context: dict[str, Any] | None) -> None:
+    """Validate provider safety rules before dispatching a job.
+
+    Raises ``RuntimeError`` when the action is unsafe for the current AI mode.
+    Does **not** call any LLM.
+    """
+    if not ai_mode_context:
+        return
+
+    ai_mode = str(ai_mode_context.get("ai_mode") or "").strip().upper()
+
+    # NO_LLM blocks everything
+    if ai_mode == "NO_LLM":
+        raise RuntimeError(NO_LLM_BLOCKED_MESSAGE)
+
+    local_enabled = bool(ai_mode_context.get("local_ai_enabled", False))
+    server_local_enabled = bool(ai_mode_context.get("server_local_ai_enabled", False))
+    deepseek_enabled = bool(ai_mode_context.get("deepseek_enabled", False))
+
+    # TEST_LOCAL_ONLY: local must be available, never fallback to DeepSeek
+    if ai_mode == "TEST_LOCAL_ONLY":
+        if not local_enabled or not server_local_enabled:
+            raise RuntimeError(TEST_LOCAL_ONLY_UNAVAILABLE_MESSAGE)
+        if deepseek_enabled:
+            logger.info(
+                "TEST_LOCAL_ONLY mode: DeepSeek is enabled but will not be "
+                "used as a fallback for this action."
+            )
+
+
 def create_job(
     *,
     ticket_id: str,
@@ -151,7 +195,10 @@ def create_job(
         "local_ai_enabled": (ai_mode_context or {}).get("local_ai_enabled"),
         "status": "PENDING",
         "current_step": "Queued",
+        "step_label": "Queued",
         "message": "Job has been queued and will start shortly.",
+        "detail": "Job has been queued and will start shortly.",
+        "progress_percent": 0,
         "started_at": "",
         "ended_at": "",
         "duration_ms": 0,
@@ -164,6 +211,9 @@ def create_job(
 def update_job_progress(
     current_step: str | None = None,
     message: str | None = None,
+    step_label: str | None = None,
+    detail: str | None = None,
+    progress_percent: int | None = None,
 ) -> None:
     context = _job_context.get()
     if not context:
@@ -171,9 +221,22 @@ def update_job_progress(
 
     if current_step is not None:
         context["current_step"] = current_step
+        context["step_label"] = current_step
+
+    if step_label is not None:
+        context["step_label"] = step_label
+        context["current_step"] = step_label
 
     if message is not None:
         context["message"] = message
+        context["detail"] = message
+
+    if detail is not None:
+        context["detail"] = detail
+        context["message"] = detail
+
+    if progress_percent is not None:
+        context["progress_percent"] = max(0, min(100, int(progress_percent)))
 
     _write_job_metadata(context)
 
@@ -208,7 +271,10 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
         "local_ai_enabled": context.get("local_ai_enabled"),
         "status": context.get("status"),
         "current_step": context.get("current_step", ""),
+        "step_label": context.get("step_label") or context.get("current_step", ""),
         "message": context.get("message", ""),
+        "detail": context.get("detail") or context.get("message", ""),
+        "progress_percent": context.get("progress_percent", 0),
         "started_at": context.get("started_at"),
         "ended_at": context.get("ended_at"),
         "duration_ms": context.get("duration_ms"),
@@ -287,7 +353,10 @@ def _copy_job_metadata_to_requirement(context: dict[str, Any]) -> None:
         "local_ai_enabled": context.get("local_ai_enabled"),
         "status": context.get("status"),
         "current_step": context.get("current_step", ""),
+        "step_label": context.get("step_label") or context.get("current_step", ""),
         "message": context.get("message", ""),
+        "detail": context.get("detail") or context.get("message", ""),
+        "progress_percent": context.get("progress_percent", 0),
         "started_at": context.get("started_at"),
         "ended_at": context.get("ended_at"),
         "duration_ms": context.get("duration_ms"),
@@ -355,6 +424,11 @@ async def run_portal_ticket_job(
         "production_mode": (ai_mode_context or {}).get("production_mode"),
         "local_ai_enabled": (ai_mode_context or {}).get("local_ai_enabled"),
         "status": "RUNNING",
+        "current_step": "Starting",
+        "step_label": "Starting",
+        "message": "Starting job.",
+        "detail": "Starting job.",
+        "progress_percent": 5,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
     token = _job_context.set(context)
@@ -375,6 +449,11 @@ async def run_portal_ticket_job(
             result = await result
 
         context["status"] = "SUCCEEDED"
+        context["current_step"] = "Complete"
+        context["step_label"] = "Complete"
+        context["message"] = "Job completed."
+        context["detail"] = "Job completed."
+        context["progress_percent"] = 100
 
         # After a successful create_requirement_from_jira, the requirement
         # folder should now be complete.  Copy job metadata into the
@@ -387,6 +466,10 @@ async def run_portal_ticket_job(
     except Exception as error:
         context["status"] = "FAILED"
         context["error"] = str(error)
+        context["current_step"] = "Failed"
+        context["step_label"] = "Failed"
+        context["message"] = str(error)
+        context["detail"] = str(error)
         logger.exception(
             "Portal job failed job_id=%s ticket_id=%s action=%s",
             job_id,

@@ -19,5 +19,12 @@ class Settings:
         "GITHUB_TOKEN"
     )
 
+    # Incremental regeneration safety threshold.
+    # Description text length ratio above this value triggers a
+    # FULL_REGENERATE_RECOMMENDED safety decision.
+    INCREMENTAL_MAJOR_CHANGE_THRESHOLD = float(
+        os.getenv("INCREMENTAL_MAJOR_CHANGE_THRESHOLD", "0.35")
+    )
+
 
 settings = Settings()

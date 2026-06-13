@@ -289,7 +289,7 @@ def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
                 normalized_task_type,
                 normalized_ai_mode,
                 PROVIDER_SKIP,
-                "This action requires LLM and NO_LLM mode disables all LLM providers.",
+                "This action requires LLM. Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID.",
             )
 
     if normalized_task_type in COMPACT_TASK_TYPES:
@@ -594,6 +594,9 @@ def call_text_llm(
     if json_output_task and provider in {PROVIDER_OLLAMA_TEXT, PROVIDER_OLLAMA_COMPACT}:
         kwargs.setdefault("format", "json")
         kwargs.setdefault("temperature", 0)
+
+    if json_output_task and provider == PROVIDER_DEEPSEEK:
+        kwargs.setdefault("response_format", {"type": "json_object"})
 
     if provider == PROVIDER_SKIP:
         provider_status = "skipped"

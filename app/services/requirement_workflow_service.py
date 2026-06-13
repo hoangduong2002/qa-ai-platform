@@ -13,6 +13,13 @@ from app.utils.clarification_session import (
 from app.services.portal_ai_mode_service import (
     get_current_portal_ai_mode,
 )
+from app.services.incremental_requirement_analysis_service import (
+    run_incremental_requirement_analysis,
+)
+from app.services.incremental_generation_service import (
+    run_incremental_scenario_generation,
+    run_incremental_testcase_generation,
+)
 
 
 def _current_ai_mode() -> str | None:
@@ -58,3 +65,30 @@ async def run_requirement_questions(
     )
 
     return result
+
+
+async def run_incremental_requirement_questions(
+    ticket_id: str
+):
+    return run_incremental_requirement_analysis(
+        ticket_id=ticket_id,
+        ai_mode=_current_ai_mode(),
+    )
+
+
+async def run_incremental_scenarios(
+    ticket_id: str
+):
+    return run_incremental_scenario_generation(
+        ticket_id=ticket_id,
+        ai_mode=_current_ai_mode(),
+    )
+
+
+async def run_incremental_testcases(
+    ticket_id: str
+):
+    return run_incremental_testcase_generation(
+        ticket_id=ticket_id,
+        ai_mode=_current_ai_mode(),
+    )

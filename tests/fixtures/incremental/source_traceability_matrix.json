@@ -1,0 +1,27 @@
+{
+  "mappings": [
+    {
+      "requirement_id": "REQ-001",
+      "source_refs": ["comment:c1", "comment:c2"],
+      "label": "comment traceability"
+    },
+    {
+      "requirement_id": "REQ-002",
+      "source_refs": ["subtask:sub-2"],
+      "label": "subtask traceability"
+    },
+    {
+      "requirement_id": "REQ-003",
+      "source_refs": ["attachment:att-2"],
+      "label": "attachment traceability"
+    },
+    {
+      "requirement_id": "REQ-004",
+      "source_refs": [
+        "figma_screen:FIG-100:Page-A:Node-1",
+        "figma_screen:FIG-100:Page-A:Node-2"
+      ],
+      "label": "figma traceability"
+    }
+  ]
+}

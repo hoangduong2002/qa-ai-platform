@@ -1,6 +1,10 @@
 import json
 
-from app.services.llm_service import get_llm
+from app.services.llm_router_service import (
+    TASK_COVERAGE_REVIEW,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 
@@ -9,10 +13,19 @@ from app.utils.test_structure_store import (
 )
 
 
+def _resolve_ai_mode(state: dict | None = None) -> str | None:
+    state = state or {}
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
+
+
 def review_test_case_structure(state):
-
-    llm = get_llm()
-
     prompt = load_prompt(
         "prompts/review_test_case_structure.md"
     )
@@ -48,22 +61,22 @@ def review_test_case_structure(state):
         )
     )
 
-    response = llm.invoke(
-        final_prompt,
-        ticket_id=state.get("ticket_id", ""),
-        node_name="review_test_case_structure"
+    response_content = call_text_llm(
+        task_type=TASK_COVERAGE_REVIEW,
+        prompt=final_prompt,
+        ai_mode=_resolve_ai_mode(state),
     )
 
     try:
         review = parse_json(
-            response.content
+            response_content
         )
 
     except Exception as error:
         review = {
             "coverage_score": 0,
             "approved_by_ai": False,
-            "raw_response": response.content,
+            "raw_response": response_content,
             "parse_error": str(error)
         }
 

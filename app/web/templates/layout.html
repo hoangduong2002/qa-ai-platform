@@ -5,8 +5,10 @@
     <title>QA AI Platform</title>
     <style>
         body{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#111827}
-        header{height:44px;background:#111827;color:white;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;padding:0 16px;box-sizing:border-box}
+        header{height:44px;background:#111827;color:white;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 16px;box-sizing:border-box}
         header h1{font-size:17px;margin:0}
+        .header-ai-mode{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}
+        .header-ai-mode select{font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid #374151;background:#f9fafb;color:#111827;max-width:190px}
         main{padding:56px 12px 18px}
         .portal-layout{display:grid;grid-template-columns:232px minmax(0,1fr);gap:12px;align-items:start}
         .sidebar{position:sticky;top:56px;height:calc(100vh - 68px);overflow-y:auto;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px;box-shadow:0 1px 5px rgba(0,0,0,.07);box-sizing:border-box}
@@ -65,7 +67,18 @@
     </style>
 </head>
 <body>
-<header><h1>QA AI Platform - Web Portal</h1></header>
+<header>
+    <h1>QA AI Platform - Web Portal</h1>
+    <label class="header-ai-mode" for="portalAiModeSelect">
+        AI Execution Mode:
+        <select id="portalAiModeSelect">
+            <option value="NO_LLM">NO_LLM</option>
+            <option value="TEST_LOCAL_ONLY">TEST_LOCAL_ONLY</option>
+            <option value="PRODUCTION_HYBRID">PRODUCTION_HYBRID</option>
+            <option value="DEEPSEEK_ONLY">DEEPSEEK_ONLY</option>
+        </select>
+    </label>
+</header>
 <main>{% block content %}{% endblock %}</main>
 <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-box">
@@ -85,11 +98,11 @@ function showLoading(title,message){
 }
 
 function getPortalAiState() {
-    const stored = localStorage.getItem(PORTAL_AI_MODE_KEY) || "TEST_LOCAL_ONLY";
+    const stored = localStorage.getItem(PORTAL_AI_MODE_KEY) || "NO_LLM";
     const aiMode = String(stored).trim().toUpperCase();
     const validModes = ["TEST_LOCAL_ONLY","PRODUCTION_HYBRID","DEEPSEEK_ONLY","NO_LLM"];
     return {
-        aiMode: validModes.includes(aiMode) ? aiMode : "TEST_LOCAL_ONLY",
+        aiMode: validModes.includes(aiMode) ? aiMode : "NO_LLM",
     };
 }
 
@@ -104,6 +117,20 @@ function getPortalAiStatusText(aiMode) {
         return "DeepSeek only: all text reasoning uses DeepSeek. Local AI is OFF.";
     }
     return "No LLM: AI tasks are disabled for this session.";
+}
+
+function friendlyPortalError(message) {
+    const text = String(message || "").trim();
+
+    if (!text) {
+        return "Request failed. Please try again.";
+    }
+
+    if (text.includes("Traceback") || text.includes("stack trace")) {
+        return "The action failed. Check the latest job status or server logs for details.";
+    }
+
+    return text;
 }
 
 function savePortalAiState(aiMode) {
@@ -123,12 +150,27 @@ function renderPortalAiModeControls() {
     if (status) {
         status.textContent = getPortalAiStatusText(state.aiMode);
     }
+
+    document.querySelectorAll("form[data-ai-action='true'] button[type='submit']").forEach(button => {
+        if (state.aiMode === "NO_LLM") {
+            button.disabled = true;
+            button.title = "This action requires LLM. Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID.";
+        } else if (button.dataset.partialBlocked !== "true") {
+            button.disabled = false;
+            button.title = "";
+        }
+    });
 }
 
 function portalAiHeaders() {
     const state = getPortalAiState();
+    const productionMode = ["PRODUCTION_HYBRID","DEEPSEEK_ONLY"].includes(state.aiMode);
+    const localAiEnabled = ["TEST_LOCAL_ONLY","PRODUCTION_HYBRID"].includes(state.aiMode);
+
     return {
         "X-AI-Mode": state.aiMode,
+        "X-Production-Mode": productionMode ? "true" : "false",
+        "X-Local-AI-Enabled": localAiEnabled ? "true" : "false",
     };
 }
 
@@ -164,7 +206,7 @@ async function portalFetch(url, options = {}) {
             text ||
             response.statusText ||
             `HTTP ${response.status}`;
-        throw new Error(message);
+        throw new Error(friendlyPortalError(message));
     }
 
     return data ?? text;
@@ -195,7 +237,7 @@ async function submitPortalFormWithAiHeaders(form) {
             text ||
             response.statusText ||
             `HTTP ${response.status}`;
-        throw new Error(message);
+        throw new Error(friendlyPortalError(message));
     }
 
     window.location.href = response.url || window.location.href;

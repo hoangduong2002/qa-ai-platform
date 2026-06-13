@@ -1,0 +1,50 @@
+[
+  {
+    "testcase_id": "TC-001",
+    "title": "Verify comment workflow",
+    "scenario_id": "SC-001",
+    "related_scenario_id": "SC-001",
+    "related_requirement_ids": ["REQ-001"],
+    "source_refs": ["comment:c1"],
+    "change_status": "Unchanged",
+    "preconditions": ["User is on the ticket page"],
+    "steps": ["Open the comment panel", "Verify the latest comment is visible"],
+    "expected_result": "The comment panel shows the saved comment."
+  },
+  {
+    "testcase_id": "TC-002",
+    "title": "Verify unaffected baseline flow",
+    "scenario_id": "SC-900",
+    "related_scenario_id": "SC-900",
+    "related_requirement_ids": ["REQ-900"],
+    "source_refs": ["misc:baseline"],
+    "change_status": "Unchanged",
+    "preconditions": ["User is authenticated"],
+    "steps": ["Open baseline page"],
+    "expected_result": "Baseline flow remains unchanged."
+  },
+  {
+    "testcase_id": "TC-003",
+    "title": "Verify checkout screen flow",
+    "scenario_id": "SC-004",
+    "related_scenario_id": "SC-004",
+    "related_requirement_ids": ["REQ-004"],
+    "source_refs": ["figma_screen:FIG-100:Page-A:Node-1"],
+    "change_status": "Unchanged",
+    "preconditions": ["Checkout screen exists"],
+    "steps": ["Open checkout"],
+    "expected_result": "Checkout UI matches the approved screen."
+  },
+  {
+    "testcase_id": "TC-004",
+    "title": "Legacy removed testcase",
+    "scenario_id": "SC-005",
+    "related_scenario_id": "SC-005",
+    "related_requirement_ids": ["REQ-005"],
+    "source_refs": ["subtask:old"],
+    "change_status": "Unchanged",
+    "preconditions": ["Legacy state exists"],
+    "steps": ["Open legacy path"],
+    "expected_result": "Legacy path remains available."
+  }
+]

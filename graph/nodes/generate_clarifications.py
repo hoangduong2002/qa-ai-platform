@@ -2,7 +2,11 @@ import json
 import os
 from typing import Any
 
-from app.services.llm_router_service import call_text_llm
+from app.services.llm_router_service import (
+    TASK_CLARIFICATION_GENERATION,
+    call_text_llm,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.utils.prompt_loader import load_prompt
 from app.utils.file_writer import save_clarifications, save_raw_response
 from app.utils.llm_json import parse_json
@@ -19,6 +23,44 @@ PRIORITY_ORDER = {
 }
 
 VALID_IMPACTS = set(PRIORITY_ORDER.keys())
+
+
+def _resolve_ai_mode(state: dict | None = None) -> str | None:
+    state = state or {}
+
+    if state.get("ai_mode"):
+        return state.get("ai_mode")
+
+    portal_ai_mode = get_current_portal_ai_mode()
+
+    if portal_ai_mode:
+        return portal_ai_mode.get("ai_mode")
+
+    return None
+
+
+def _assert_llm_json_candidate(content: str) -> None:
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError(
+            "Clarification generation LLM returned an empty response. Expected strict JSON."
+        )
+
+    stripped = content.strip()
+    lowered = stripped.lower()
+
+    blocked_markers = [
+        "[skipped]",
+        "[error]",
+        "provider blocked",
+        "call blocked",
+        "no_llm",
+        "requires llm",
+    ]
+
+    if any(marker in lowered for marker in blocked_markers):
+        raise RuntimeError(
+            "Clarification generation did not receive a valid LLM JSON response."
+        )
 
 
 def _normalize_suggested_options(value: Any) -> list[dict]:
@@ -310,6 +352,7 @@ def _get_current_round(previous_clarifications: dict) -> int:
 
 def generate_clarifications(state):
     ticket_id = state["ticket_id"]
+    ai_mode = _resolve_ai_mode(state)
 
     max_questions = _get_max_clarifications_per_round()
     max_rounds = _get_max_clarification_rounds()
@@ -382,9 +425,9 @@ def generate_clarifications(state):
 
     try:
         raw_response = call_text_llm(
-            task_type="clarification_generation",
+            task_type=TASK_CLARIFICATION_GENERATION,
             prompt=final_prompt,
-            ai_mode=state.get("ai_mode"),
+            ai_mode=ai_mode,
         )
     except Exception as error:
         save_raw_response(
@@ -403,6 +446,7 @@ def generate_clarifications(state):
     response_content = raw_response
 
     try:
+        _assert_llm_json_candidate(response_content)
         parsed = parse_json(response_content)
         parsed = _normalize_clarifications(parsed)
 

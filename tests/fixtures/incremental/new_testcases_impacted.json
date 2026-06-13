@@ -1,0 +1,41 @@
+[
+  {
+    "testcase_id": "TC-101",
+    "previous_testcase_id": "TC-001",
+    "title": "Recheck comment workflow",
+    "scenario_id": "SC-001",
+    "related_scenario_id": "SC-001",
+    "related_requirement_ids": ["REQ-001"],
+    "source_refs": ["comment:c1", "comment:c2"],
+    "change_status": "Updated",
+    "preconditions": ["User is on the ticket page"],
+    "steps": ["Open the comment panel", "Verify the latest comment is visible"],
+    "expected_result": "The comment panel shows the updated comment content."
+  },
+  {
+    "testcase_id": "TC-102",
+    "previous_testcase_id": "",
+    "title": "New subtask coverage",
+    "scenario_id": "SC-002",
+    "related_scenario_id": "SC-002",
+    "related_requirement_ids": ["REQ-002"],
+    "source_refs": ["subtask:sub-2"],
+    "change_status": "New",
+    "preconditions": ["Subtask exists"],
+    "steps": ["Open the subtask"],
+    "expected_result": "The new subtask is covered by a fresh test case."
+  },
+  {
+    "testcase_id": "TC-103",
+    "previous_testcase_id": "TC-003",
+    "title": "Refresh checkout screen test",
+    "scenario_id": "SC-004",
+    "related_scenario_id": "SC-004",
+    "related_requirement_ids": ["REQ-004"],
+    "source_refs": ["figma_screen:FIG-100:Page-A:Node-1", "figma_screen:FIG-100:Page-A:Node-2"],
+    "change_status": "Updated",
+    "preconditions": ["Checkout screen exists"],
+    "steps": ["Open checkout"],
+    "expected_result": "The checkout test reflects the updated Figma screen."
+  }
+]

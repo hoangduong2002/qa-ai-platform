@@ -9,6 +9,9 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.services.requirement_workflow_service import (
+    run_incremental_requirement_questions,
+    run_incremental_scenarios,
+    run_incremental_testcases,
     run_requirement_questions,
     run_requirement_summary,
 )
@@ -65,19 +68,32 @@ from app.services.web_test_design_artifact_service import (
     run_scenario_coverage_review,
     save_testcases_json_as_new_version,
     export_scenarios_excel,
+    export_incremental_testcases_excel,
 )
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
 from app.services.portal_ai_mode_service import (
+    NO_LLM,
     get_current_portal_ai_mode,
     portal_ai_mode_dependency,
 )
 from app.services.portal_job_service import (
     PortalConcurrencyError,
     PortalJobBusyError,
+    check_provider_safety,
     create_job,
     get_job_status,
     run_portal_ticket_job,
+)
+from app.services.jira_delta_service import (
+    build_and_save_latest_stored_jira_snapshot,
+    sync_jira_changes_for_requirement,
+)
+from app.services.impact_mapping_service import (
+    SAFETY_FULL_RECOMMENDED,
+    SAFETY_MANUAL_REVIEW,
+    build_and_save_regeneration_plan,
+    load_latest_regeneration_plan,
 )
 from fastapi.responses import JSONResponse
 
@@ -87,6 +103,10 @@ BASE_DIR = Path(__file__).resolve().parent
 router = APIRouter(prefix="/portal", tags=["Web Portal"])
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+LLM_REQUIRED_MESSAGE = (
+    "This action requires LLM. Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID."
+)
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
@@ -325,6 +345,42 @@ async def sanitize_requirement(ticket_id: str):
     return _redirect_detail(ticket_id)
 
 
+@router.post("/requirements/{ticket_id}/snapshot-jira")
+async def snapshot_jira_requirement(ticket_id: str):
+    try:
+        result = build_and_save_latest_stored_jira_snapshot(ticket_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    return JSONResponse(result)
+
+
+@router.post("/requirements/{ticket_id}/sync-jira")
+async def sync_jira_requirement(
+    ticket_id: str,
+    jira_pat: str = Form(""),
+):
+    try:
+        result = sync_jira_changes_for_requirement(
+            ticket_id=ticket_id,
+            jira_pat=jira_pat,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return JSONResponse(result)
+
+
+@router.post("/requirements/{ticket_id}/build-regeneration-plan")
+async def build_regeneration_plan_for_requirement(ticket_id: str):
+    try:
+        result = build_and_save_regeneration_plan(ticket_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return JSONResponse(result)
+
+
 @router.post("/requirements/{ticket_id}/analyze")
 async def analyze_requirement(
     ticket_id: str,
@@ -337,6 +393,66 @@ async def analyze_requirement(
     )
 
     return _redirect_detail(ticket_id)
+
+
+@router.post("/requirements/{ticket_id}/analyze-incremental")
+async def analyze_incremental_requirement(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    try:
+        # Safety gate before dispatching
+        _check_incremental_safety(ticket_id)
+        await _run_ticket_job(
+            ticket_id=ticket_id,
+            action="analyze_incremental_requirement",
+            job_callable=lambda: run_incremental_requirement_questions(ticket_id=ticket_id),
+        )
+    except (RuntimeError, ValueError, HTTPException) as error:
+        detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
+        return _redirect_detail(ticket_id, error=detail)
+
+    return _redirect_detail(ticket_id)
+
+
+@router.post("/requirements/{ticket_id}/scenarios/generate-incremental")
+async def generate_incremental_scenarios_for_web(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    try:
+        # Safety gate before dispatching
+        _check_incremental_safety(ticket_id)
+        await _run_ticket_job(
+            ticket_id=ticket_id,
+            action="generate_incremental_scenarios",
+            job_callable=lambda: run_incremental_scenarios(ticket_id=ticket_id),
+        )
+    except (RuntimeError, ValueError, HTTPException) as error:
+        detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
+        return _redirect_detail(ticket_id, tab="design", error=detail)
+
+    return _redirect_detail(ticket_id, tab="design")
+
+
+@router.post("/requirements/{ticket_id}/testcases/generate-incremental")
+async def generate_incremental_testcases_for_web(
+    ticket_id: str,
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    try:
+        # Safety gate before dispatching
+        _check_incremental_safety(ticket_id)
+        await _run_ticket_job(
+            ticket_id=ticket_id,
+            action="generate_incremental_testcases",
+            job_callable=lambda: run_incremental_testcases(ticket_id=ticket_id),
+        )
+    except (RuntimeError, ValueError, HTTPException) as error:
+        detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
+        return _redirect_detail(ticket_id, tab="design", error=detail)
+
+    return _redirect_detail(ticket_id, tab="design")
 
 
 @router.get("/requirements")
@@ -687,6 +803,20 @@ async def download_testcases_excel(
     )
 
 
+@router.get("/requirements/{ticket_id}/testcases/incremental-excel")
+async def download_incremental_testcases_excel(ticket_id: str):
+    try:
+        excel_file = export_incremental_testcases_excel(ticket_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return FileResponse(
+        path=str(excel_file),
+        filename=excel_file.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @router.get("/requirements/{ticket_id}/scenarios/excel")
 async def download_scenarios_excel(
     ticket_id: str,
@@ -729,12 +859,51 @@ def _dispatch_portal_job(
     thread.start()
 
 
+def _check_incremental_safety(ticket_id: str) -> None:
+    """Load the regeneration plan and raise HTTPException if safety blocks incremental action.
+
+    Does **not** call any LLM.
+    """
+    plan = load_latest_regeneration_plan(ticket_id)
+    if not plan:
+        return  # no plan yet – the downstream service will raise a clearer error
+
+    safety = plan.get("safety", {})
+    status = safety.get("overall_status", "")
+    reasons = safety.get("safety_reasons", [])
+
+    if status == SAFETY_FULL_RECOMMENDED:
+        msg = (
+            "Incremental regeneration is blocked by safety rules.\n"
+            "Status: FULL_REGENERATE_RECOMMENDED.\n"
+        )
+        if reasons:
+            msg += "Reasons:\n" + "\n".join(f"  - {r}" for r in reasons)
+        msg += "\n\nRun a full regenerate instead."
+        raise HTTPException(status_code=400, detail=msg)
+
+    if status == SAFETY_MANUAL_REVIEW:
+        msg = (
+            "Incremental regeneration is blocked by safety rules.\n"
+            "Status: MANUAL_REVIEW_RECOMMENDED.\n"
+        )
+        if reasons:
+            msg += "Reasons:\n" + "\n".join(f"  - {r}" for r in reasons)
+        msg += "\n\nManual review is required before proceeding."
+        raise HTTPException(status_code=400, detail=msg)
+
+
 async def _run_ticket_job(ticket_id: str, action: str, job_callable):
+    ai_mode_context = get_current_portal_ai_mode()
+
+    # Provider safety check – handles NO_LLM, TEST_LOCAL_ONLY unavailable, etc.
+    check_provider_safety(ai_mode_context)
+
     try:
         return await run_portal_ticket_job(
             ticket_id=ticket_id,
             action=action,
-            ai_mode_context=get_current_portal_ai_mode(),
+            ai_mode_context=ai_mode_context,
             job_callable=job_callable,
         )
     except (PortalConcurrencyError, PortalJobBusyError) as error:

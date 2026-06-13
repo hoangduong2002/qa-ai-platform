@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from app.exporters.function_based_excel_exporter import (
+    export_incremental_testcases_to_excel,
     export_function_based_testcases_to_excel,
 )
-from app.services.llm_service import get_llm
 from app.services.llm_router_service import (
     TASK_COVERAGE_REVIEW,
+    TASK_SCENARIO_GENERATION,
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
@@ -409,14 +410,13 @@ Current scenarios:
 {json.dumps(scenarios, ensure_ascii=False)}
 """
 
-    llm = get_llm()
-    response = llm.invoke(
+    response_content = call_text_llm(
+        TASK_SCENARIO_GENERATION,
         prompt,
-        ticket_id=ticket_id,
-        node_name="improve_scenarios",
+        ai_mode=_current_ai_mode(),
     )
 
-    improved_scenarios = _normalize_scenarios(parse_json(response.content))
+    improved_scenarios = _normalize_scenarios(parse_json(response_content))
 
     existing = [
         item["version"]
@@ -567,6 +567,7 @@ def _improve_testcases(
     state["coverage_review"] = get_final_review(ticket_id, version) or {}
     state["review_comments"] = [comment]
     state["improve_version"] = "web"
+    state["ai_mode"] = _current_ai_mode()
 
     result = improve_testcases(state)
     improved = result.get("improved_testcases") or result.get("testcases")
@@ -661,6 +662,84 @@ def export_testcases_excel(ticket_id: str, version: str) -> Path:
         testcases=testcases,
         coverage_review=get_coverage_review(ticket_id, "latest"),
         final_coverage_review=get_final_review(ticket_id, version),
+        approved_structure=load_approved_test_case_structure(ticket_id),
+        analysis=_load_requirement_analysis_for_export(ticket_id),
+        clarifications=_load_clarifications_for_export(ticket_id),
+        clarification_answers=_load_clarification_answers_for_export(ticket_id),
+        requirement_summary=_load_requirement_summary_for_export(ticket_id),
+    )
+
+    return Path(excel_file)
+
+
+def _latest_versioned_json(
+    directory: Path,
+    pattern: str,
+    version_pattern: str,
+    default,
+):
+    if not directory.exists():
+        return default
+
+    latest_path = None
+    latest_version = 0
+
+    for path in directory.glob(pattern):
+        match = re.match(version_pattern, path.name)
+        if match and int(match.group(1)) > latest_version:
+            latest_version = int(match.group(1))
+            latest_path = path
+
+    if latest_path is None:
+        return default
+
+    return _read_json_file(latest_path, default=default)
+
+
+def export_incremental_testcases_excel(ticket_id: str) -> Path:
+    root = _root(ticket_id)
+    generated_dir = root / "generated"
+    analysis_dir = root / "analysis"
+
+    testcases = _read_json_file(
+        generated_dir / "latest_testcases.json",
+        default=[],
+    )
+
+    if not testcases:
+        testcases = _latest_versioned_json(
+            generated_dir,
+            "incremental_testcases_v*.json",
+            r"incremental_testcases_v(\d+)\.json$",
+            [],
+        )
+
+    if not testcases:
+        raise ValueError("No incremental test cases found.")
+
+    merge_report = _latest_versioned_json(
+        analysis_dir,
+        "incremental_testcase_merge_report_v*.json",
+        r"incremental_testcase_merge_report_v(\d+)\.json$",
+        {},
+    )
+    change_impact_report = _read_json_file(
+        analysis_dir / "latest_change_impact_report.json",
+        default={},
+    )
+    regeneration_plan = _read_json_file(
+        analysis_dir / "latest_regeneration_plan.json",
+        default={},
+    )
+
+    excel_file = export_incremental_testcases_to_excel(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        change_impact_report=change_impact_report,
+        regeneration_plan=regeneration_plan,
+        merge_report=merge_report,
+        coverage_review=get_coverage_review(ticket_id, "latest"),
+        final_coverage_review=get_final_review(ticket_id, "latest"),
         approved_structure=load_approved_test_case_structure(ticket_id),
         analysis=_load_requirement_analysis_for_export(ticket_id),
         clarifications=_load_clarifications_for_export(ticket_id),

@@ -17,9 +17,12 @@ NO_LLM = "NO_LLM"
 VALID_AI_MODES = {
     TEST_LOCAL_ONLY,
     PRODUCTION_HYBRID,
-    PRODUCTION_REMOTE_ONLY,
     DEEPSEEK_ONLY,
     NO_LLM,
+}
+
+BACKWARD_COMPATIBLE_AI_MODE_ALIASES = {
+    PRODUCTION_REMOTE_ONLY: DEEPSEEK_ONLY,
 }
 
 _portal_ai_mode: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -46,11 +49,53 @@ def _header_bool(headers: Any, name: str, default: bool) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _default_ai_mode() -> str:
+    configured = os.getenv("PORTAL_DEFAULT_AI_MODE", NO_LLM).strip().upper()
+    configured = BACKWARD_COMPATIBLE_AI_MODE_ALIASES.get(configured, configured)
+
+    if configured in VALID_AI_MODES:
+        return configured
+
+    logger.warning(
+        "Invalid PORTAL_DEFAULT_AI_MODE=%s; falling back to %s.",
+        configured,
+        NO_LLM,
+    )
+    return NO_LLM
+
+
+def _derive_ai_mode_from_legacy_headers(headers: Any) -> str:
+    production_header = headers.get("X-Production-Mode")
+    local_header = headers.get("X-Local-AI-Enabled")
+
+    if production_header is None and local_header is None:
+        return _default_ai_mode()
+
+    production_mode = _header_bool(headers, "X-Production-Mode", False)
+    local_ai_enabled = _header_bool(headers, "X-Local-AI-Enabled", False)
+
+    if production_mode and local_ai_enabled:
+        return PRODUCTION_HYBRID
+
+    if production_mode and not local_ai_enabled:
+        return DEEPSEEK_ONLY
+
+    if local_ai_enabled:
+        return TEST_LOCAL_ONLY
+
+    return NO_LLM
+
+
 def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
     requested_ai_mode = str(headers.get("X-AI-Mode") or "").strip().upper()
 
     if not requested_ai_mode:
-        requested_ai_mode = NO_LLM
+        requested_ai_mode = _derive_ai_mode_from_legacy_headers(headers)
+
+    requested_ai_mode = BACKWARD_COMPATIBLE_AI_MODE_ALIASES.get(
+        requested_ai_mode,
+        requested_ai_mode,
+    )
 
     if requested_ai_mode not in VALID_AI_MODES:
         raise ValueError(f"Invalid AI mode: {requested_ai_mode}")
@@ -58,7 +103,7 @@ def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
     return {
         "ai_mode": requested_ai_mode,
         "production_mode": requested_ai_mode
-        in {PRODUCTION_HYBRID, PRODUCTION_REMOTE_ONLY, DEEPSEEK_ONLY},
+        in {PRODUCTION_HYBRID, DEEPSEEK_ONLY},
         "local_ai_enabled": requested_ai_mode
         in {PRODUCTION_HYBRID, TEST_LOCAL_ONLY},
         "deepseek_enabled": _env_bool("DEEPSEEK_ENABLED", True),
@@ -90,11 +135,9 @@ def is_deepseek_allowed_for_request(headers: Any | None = None) -> bool:
         return False
 
     return mode.get("ai_mode") in {
-        TEST_LOCAL_ONLY,
         PRODUCTION_HYBRID,
-        PRODUCTION_REMOTE_ONLY,
         DEEPSEEK_ONLY,
-    } and mode.get("ai_mode") != TEST_LOCAL_ONLY
+    }
 
 
 def is_local_ai_allowed_for_request(headers: Any | None = None) -> bool:
@@ -136,12 +179,7 @@ def assert_local_ai_allowed() -> None:
     message = "Local AI call skipped because LOCAL_AI_ENABLED=false."
 
     if mode:
-        if mode.get("ai_mode") == PRODUCTION_REMOTE_ONLY:
-            message = (
-                "Local AI call skipped because Portal is in "
-                "PRODUCTION_REMOTE_ONLY mode."
-            )
-        elif mode.get("ai_mode") == DEEPSEEK_ONLY:
+        if mode.get("ai_mode") == DEEPSEEK_ONLY:
             message = (
                 "Local AI call skipped because Portal is in "
                 "DEEPSEEK_ONLY mode."

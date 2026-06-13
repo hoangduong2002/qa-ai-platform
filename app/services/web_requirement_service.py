@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 from app.services.jira_requirement_service import (
     create_requirement_from_jira,
+)
+from app.services.jira_delta_service import (
+    load_latest_change_impact_report,
+)
+from app.services.impact_mapping_service import (
+    load_latest_regeneration_plan,
 )
 from app.services.portal_job_service import update_job_progress
 
@@ -47,6 +54,32 @@ def _read_json(
         )
     except Exception:
         return None
+
+
+def _read_latest_versioned_json(
+    directory: Path,
+    glob_pattern: str,
+    version_pattern: str,
+    default,
+):
+    if not directory.exists():
+        return default
+
+    latest_path = None
+    latest_version = 0
+
+    for path in directory.glob(glob_pattern):
+        match = re.match(version_pattern, path.name)
+        if match and int(match.group(1)) > latest_version:
+            latest_version = int(match.group(1))
+            latest_path = path
+
+    if latest_path is None:
+        return default
+
+    value = _read_json(latest_path)
+    return default if value is None else value
+
 
 def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -330,6 +363,27 @@ def get_requirement_detail(
 
     analysis_error_file = analysis_dir / "analyze_error.txt"
     analysis_error = _read_text(analysis_error_file)
+    incremental_requirement_items = _read_latest_versioned_json(
+        analysis_dir,
+        "incremental_requirement_items_v*.json",
+        r"incremental_requirement_items_v(\d+)\.json$",
+        [],
+    )
+    incremental_scenario_merge_report = _read_latest_versioned_json(
+        analysis_dir,
+        "incremental_scenario_merge_report_v*.json",
+        r"incremental_scenario_merge_report_v(\d+)\.json$",
+        {},
+    )
+    incremental_testcase_merge_report = _read_latest_versioned_json(
+        analysis_dir,
+        "incremental_testcase_merge_report_v*.json",
+        r"incremental_testcase_merge_report_v(\d+)\.json$",
+        {},
+    )
+    has_incremental_testcases = (
+        base_dir / "generated" / "latest_testcases.json"
+    ).exists()
 
     return {
         "ticket_id": ticket_id,
@@ -343,6 +397,11 @@ def get_requirement_detail(
         "requirement_items": requirement_items,
         "clarifications": clarifications,
         "requirement_summary": requirement_summary,
+        "change_impact_report": load_latest_change_impact_report(ticket_id),
+        "regeneration_plan": load_latest_regeneration_plan(ticket_id),
+        "incremental_requirement_items": incremental_requirement_items,
+        "incremental_scenario_merge_report": incremental_scenario_merge_report,
+        "incremental_testcase_merge_report": incremental_testcase_merge_report,
         "analysis_error": analysis_error,
 
         "has_sanitized": sanitized_file.exists(),
@@ -350,6 +409,7 @@ def get_requirement_detail(
         "has_items": requirement_items_file.exists(),
         "has_summary": requirement_summary_file.exists(),
         "has_clarifications": len(clarifications) > 0,
+        "has_incremental_testcases": has_incremental_testcases,
     }
 
 
