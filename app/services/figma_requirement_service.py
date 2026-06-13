@@ -14,7 +14,7 @@ import requests
 
 from app.config.env_loader import load_project_env
 from app.services.local_ai_config_service import (
-    is_figma_local_vision_enabled,
+    is_local_vision_enabled,
 )
 from app.services.llm_router_service import (
     AI_MODE_DEEPSEEK_ONLY,
@@ -44,14 +44,19 @@ def _current_ai_mode() -> str | None:
     if portal_ai_mode and portal_ai_mode.get("ai_mode"):
         return str(portal_ai_mode["ai_mode"]).strip().upper()
 
-    return None
+    return (
+        os.getenv("NON_PORTAL_AI_MODE")
+        or os.getenv("TELEGRAM_AI_MODE")
+        or os.getenv("PORTAL_DEFAULT_AI_MODE")
+        or ""
+    ).strip().upper() or None
 
 
 def _vision_skip_message(ai_mode: str | None) -> str:
     if ai_mode == AI_MODE_DEEPSEEK_ONLY:
         return (
             "Vision analysis skipped because AI mode is DEEPSEEK_ONLY. "
-            "Local/Ollama vision is disabled for this mode."
+            "Local/LOCAL vision is disabled for this mode."
         )
 
     if ai_mode == AI_MODE_NO_LLM:
@@ -1508,7 +1513,7 @@ def export_figma_page_scope(
             frame_file = screen_dir / "frame.png"
             image_export_status = "not_attempted"
             vision_analysis_status = "not_attempted"
-            local_vision_enabled = is_figma_local_vision_enabled()
+            local_vision_enabled = is_local_vision_enabled()
             image_url = image_urls.get(screen.node_id)
 
             if not image_export_enabled:
@@ -1593,8 +1598,8 @@ def export_figma_page_scope(
                 vision_provider = vision_resolution.get("provider", "")
                 vision_reason = vision_resolution.get("reason", "")
             else:
-                vision_provider = "OLLAMA_VISION" if local_vision_enabled else "SKIP"
-                vision_reason = _vision_skip_message(None) if not local_vision_enabled else "Local vision is enabled; vision_extract uses OLLAMA_VISION."
+                vision_provider = "LOCAL_VISION" if local_vision_enabled else "SKIP"
+                vision_reason = _vision_skip_message(None) if not local_vision_enabled else "Local vision is enabled; vision_extract uses LOCAL_VISION."
 
             logger.info(
                 "Figma vision decision task_type=%s ai_mode=%s provider=%s reason=%s screen_id=%s image_path=%s",

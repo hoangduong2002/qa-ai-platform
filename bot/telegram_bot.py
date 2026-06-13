@@ -239,7 +239,7 @@ def format_ai_provider_error(error: Exception, ai_mode: str | None = None) -> st
             "provider",
             "deepseek",
             "local ai",
-            "ollama",
+            "LOCAL",
             "no_llm",
             "requires llm",
             "blocked",

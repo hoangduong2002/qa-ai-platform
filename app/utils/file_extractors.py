@@ -12,8 +12,10 @@ import os
 from pathlib import Path
 
 from app.services.local_image_extractor_service import extract_image_with_LOCAL
-from app.services.local_ai_config_service import (
-    is_attachment_local_vision_enabled,
+from app.services.llm_router_service import (
+    PROVIDER_SKIP,
+    TASK_VISION_EXTRACT,
+    resolve_provider_for_task,
 )
 
 IMAGE_EXTENSIONS = {
@@ -72,7 +74,18 @@ def _extract_image_text(file_path: str | Path) -> str:
     extractor = os.getenv("IMAGE_EXTRACTOR", "LOCAL").strip().upper()
 
     if extractor in {"LOCAL", "LOCAL", "QWEN"}:
-        if not is_attachment_local_vision_enabled():
+        ai_mode = (
+            os.getenv("NON_PORTAL_AI_MODE")
+            or os.getenv("TELEGRAM_AI_MODE")
+            or os.getenv("PORTAL_DEFAULT_AI_MODE")
+            or "NO_LLM"
+        ).strip().upper()
+        provider = resolve_provider_for_task(
+            TASK_VISION_EXTRACT,
+            ai_mode,
+        )
+
+        if provider.get("provider") == PROVIDER_SKIP:
             return ""
 
         return extract_image_with_LOCAL(file_path)

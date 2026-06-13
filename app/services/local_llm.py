@@ -4,7 +4,7 @@ import requests
 from app.services.portal_ai_mode_service import assert_local_ai_allowed
 from app.services.portal_job_service import (
     limit_llm_call,
-    limit_ollama_call,
+    limit_LOCAL_call,
 )
 from app.utils.ai_usage_logger import log_ai_usage
 
@@ -36,7 +36,7 @@ class LocalLLM:
 
         assert_local_ai_allowed()
 
-        with limit_llm_call(self.provider), limit_ollama_call(self.provider):
+        with limit_llm_call(self.provider), limit_LOCAL_call(self.provider):
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 headers={

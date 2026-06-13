@@ -10,6 +10,11 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Callable
 
+from app.services.portal_ai_mode_service import (
+    reset_portal_ai_mode,
+    set_portal_ai_mode_context,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +23,16 @@ RUNTIME_PORTAL_JOBS_DIR = Path("runtime") / "portal_jobs"
 TICKET_BUSY_MESSAGE = "This ticket is already being processed."
 JOB_LIMIT_MESSAGE = "The portal is currently processing the maximum number of jobs. Please try again shortly."
 LLM_LIMIT_MESSAGE = "The portal is currently processing the maximum number of LLM calls. Please try again shortly."
-OLLAMA_LIMIT_MESSAGE = "The local AI server is currently busy. Please try again shortly."
+LOCAL_LIMIT_MESSAGE = "The local AI server is currently busy. Please try again shortly."
 
 # Provider safety messages
 NO_LLM_BLOCKED_MESSAGE = (
     "AI mode is NO_LLM. This action requires an LLM. "
-    "Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID."
+    "Select TEST_LOCAL_ONLY, PRODUCTION_HYBRID, or DEEPSEEK_ONLY."
 )
 TEST_LOCAL_ONLY_UNAVAILABLE_MESSAGE = (
     "AI mode is TEST_LOCAL_ONLY but the local AI provider is not available. "
-    "Check that the local server is running and LOCAL_AI_ENABLED=true."
+    "Check that LOCAL_BASE_URL is set and FORCE_DISABLE_LOCAL_AI=false."
 )
 FALLBACK_TO_DEEPSEEK_BLOCKED_MESSAGE = (
     "AI mode is TEST_LOCAL_ONLY; falling back to DeepSeek is not allowed. "
@@ -45,8 +50,8 @@ _generation_semaphore: threading.BoundedSemaphore | None = None
 _generation_semaphore_size: int | None = None
 _llm_semaphore: threading.BoundedSemaphore | None = None
 _llm_semaphore_size: int | None = None
-_ollama_semaphore: threading.BoundedSemaphore | None = None
-_ollama_semaphore_size: int | None = None
+_LOCAL_semaphore: threading.BoundedSemaphore | None = None
+_LOCAL_semaphore_size: int | None = None
 
 
 class PortalJobBusyError(RuntimeError):
@@ -104,16 +109,16 @@ def _llm_limit() -> threading.BoundedSemaphore:
     return _llm_semaphore
 
 
-def _ollama_limit() -> threading.BoundedSemaphore:
-    global _ollama_semaphore, _ollama_semaphore_size
+def _LOCAL_limit() -> threading.BoundedSemaphore:
+    global _LOCAL_semaphore, _LOCAL_semaphore_size
 
-    _ollama_semaphore, _ollama_semaphore_size = _get_semaphore(
-        "MAX_PARALLEL_OLLAMA_CALLS",
+    _LOCAL_semaphore, _LOCAL_semaphore_size = _get_semaphore(
+        "MAX_PARALLEL_LOCAL_CALLS",
         1,
-        _ollama_semaphore,
-        _ollama_semaphore_size,
+        _LOCAL_semaphore,
+        _LOCAL_semaphore_size,
     )
-    return _ollama_semaphore
+    return _LOCAL_semaphore
 
 
 def create_job_id() -> str:
@@ -432,6 +437,7 @@ async def run_portal_ticket_job(
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
     token = _job_context.set(context)
+    ai_mode_token = set_portal_ai_mode_context(ai_mode_context)
     _write_job_metadata(context)
 
     logger.info(
@@ -481,6 +487,7 @@ async def run_portal_ticket_job(
         context["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         context["duration_ms"] = int((time.time() - started) * 1000)
         _write_job_metadata(context)
+        reset_portal_ai_mode(ai_mode_token)
         logger.info(
             "Portal job finished job_id=%s ticket_id=%s action=%s status=%s duration_ms=%s",
             job_id,
@@ -513,16 +520,16 @@ def limit_llm_call(provider: str = ""):
 
 
 @contextmanager
-def limit_ollama_call(provider: str = ""):
-    semaphore = _ollama_limit()
+def limit_LOCAL_call(provider: str = ""):
+    semaphore = _LOCAL_limit()
 
     if not semaphore.acquire(blocking=False):
         logger.warning(
-            "Ollama concurrency limit reached job_id=%s provider=%s",
+            "LOCAL concurrency limit reached job_id=%s provider=%s",
             get_current_job_id(),
             provider,
         )
-        raise PortalConcurrencyError(OLLAMA_LIMIT_MESSAGE)
+        raise PortalConcurrencyError(LOCAL_LIMIT_MESSAGE)
 
     try:
         yield

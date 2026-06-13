@@ -2,8 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
+from app.config.env_loader import load_project_env
 from app.services.figma_requirement_service import (
     FigmaFileReference,
     FigmaPageScope,
@@ -15,13 +14,12 @@ from app.services.local_ai_config_service import (
     get_local_ai_provider,
     get_LOCAL_base_url,
     get_LOCAL_vision_model,
-    is_figma_local_vision_enabled,
     is_local_ai_enabled,
     is_local_vision_enabled,
 )
 
 
-load_dotenv()
+load_project_env()
 
 os.environ["FIGMA_IMAGE_EXPORT_BATCH_SIZE"] = os.getenv(
     "FIGMA_TEST_IMAGE_EXPORT_BATCH_SIZE",
@@ -29,11 +27,9 @@ os.environ["FIGMA_IMAGE_EXPORT_BATCH_SIZE"] = os.getenv(
 )
 
 print("Local AI config:")
-print("LOCAL_AI_ENABLED:", is_local_ai_enabled())
+print("LOCAL_AI_CONFIGURED:", is_local_ai_enabled())
 print("LOCAL_AI_PROVIDER:", get_local_ai_provider())
-print("LOCAL_VISION_ENABLED:", is_local_vision_enabled())
-print("FIGMA_LOCAL_VISION_ENABLED:", os.getenv("FIGMA_LOCAL_VISION_ENABLED", ""))
-print("figma local vision enabled:", is_figma_local_vision_enabled())
+print("LOCAL_VISION_AVAILABLE:", is_local_vision_enabled())
 print("LOCAL_BASE_URL:", get_LOCAL_base_url())
 print("LOCAL_VISION_MODEL:", get_LOCAL_vision_model())
 print()

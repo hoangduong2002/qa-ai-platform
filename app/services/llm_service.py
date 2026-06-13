@@ -10,7 +10,14 @@ from app.services.local_ai_config_service import (
     get_LOCAL_base_url,
     get_LOCAL_text_model,
 )
-from app.services.portal_ai_mode_service import assert_deepseek_allowed
+from app.services.portal_ai_mode_service import (
+    DEEPSEEK_ONLY,
+    NO_LLM,
+    PRODUCTION_HYBRID,
+    TEST_LOCAL_ONLY,
+    assert_deepseek_allowed,
+    get_current_portal_ai_mode,
+)
 from app.services.portal_job_service import get_current_job_id, limit_llm_call
 from app.utils.ai_usage_logger import log_ai_usage
 
@@ -103,25 +110,35 @@ class LoggedLLM:
 
 
 def get_llm():
+    portal_mode = get_current_portal_ai_mode() or {}
+    ai_mode = (
+        portal_mode.get("ai_mode")
+        or os.getenv("NON_PORTAL_AI_MODE")
+        or os.getenv("TELEGRAM_AI_MODE")
+        or PRODUCTION_HYBRID
+    )
+    ai_mode = str(ai_mode).strip().upper()
 
-    provider = os.getenv(
-        "LLM_PROVIDER",
-        "DEEPSEEK"
-    ).upper()
-
-    if provider == "LOCAL":
+    if ai_mode == TEST_LOCAL_ONLY:
 
         model = get_LOCAL_text_model()
+        base_url = get_LOCAL_base_url()
+
+        if not base_url:
+            raise RuntimeError(
+                "Local AI is required in TEST_LOCAL_ONLY mode but "
+                "LOCAL_BASE_URL is missing."
+            )
 
         return LocalLLM(
-            base_url=get_LOCAL_base_url(),
+            base_url=base_url,
             model=model
         )
 
-    if provider == "DEEPSEEK":
+    if ai_mode in {PRODUCTION_HYBRID, DEEPSEEK_ONLY}:
         assert_deepseek_allowed()
 
-        model = os.getenv("DEEPSEEK_MODEL")
+        model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
         deepseek_llm = ChatDeepSeek(
             model=model,
@@ -135,6 +152,11 @@ def get_llm():
             model=model
         )
 
+    if ai_mode == NO_LLM:
+        raise RuntimeError(
+            "AI mode is NO_LLM. This action requires an LLM."
+        )
+
     raise ValueError(
-        f"Unsupported provider: {provider}"
+        f"Unsupported AI mode: {ai_mode}"
     )

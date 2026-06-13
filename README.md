@@ -329,23 +329,31 @@ qa-ai-platform
 
 ---
 
-# 🤖 Supported LLM Providers
+# Supported AI Modes
 
-## DeepSeek
+AI Mode controls routing. Provider config only defines endpoints and models.
 
 ```env
-LLM_PROVIDER=DEEPSEEK
-DEEPSEEK_MODEL=deepseek-v4-flash
+PORTAL_DEFAULT_AI_MODE=NO_LLM
+TELEGRAM_AI_MODE=PRODUCTION_HYBRID
+
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+LOCAL_AI_PROVIDER=OLLAMA
+LOCAL_BASE_URL=http://localhost:11434
+LOCAL_TEXT_MODEL=qwen2.5:14b
+LOCAL_COMPACT_MODEL=
+LOCAL_VISION_MODEL=qwen2.5vl:7b
 ```
 
-## Local Enterprise Gateway
+Supported modes: `PRODUCTION_HYBRID`, `DEEPSEEK_ONLY`, `TEST_LOCAL_ONLY`, `NO_LLM`.
+
+Emergency kill switches:
 
 ```env
-LLM_PROVIDER=LOCAL
-
-LOCAL_LLM_URL=http://localhost:xxxx/v1/chat/completions
-
-LOCAL_LLM_MODEL=claude-sonnet-4.6
+FORCE_DISABLE_DEEPSEEK=false
+FORCE_DISABLE_LOCAL_AI=false
 ```
 
 ---

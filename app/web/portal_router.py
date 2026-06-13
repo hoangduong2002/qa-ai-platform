@@ -73,8 +73,8 @@ from app.services.web_test_design_artifact_service import (
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
 from app.services.portal_ai_mode_service import (
-    NO_LLM,
     get_current_portal_ai_mode,
+    get_default_ai_mode,
     portal_ai_mode_dependency,
 )
 from app.services.portal_job_service import (
@@ -104,9 +104,7 @@ router = APIRouter(prefix="/portal", tags=["Web Portal"])
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-LLM_REQUIRED_MESSAGE = (
-    "This action requires LLM. Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID."
-)
+templates.env.globals["portal_default_ai_mode"] = get_default_ai_mode()
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
@@ -148,7 +146,10 @@ async def dashboard(request: Request):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"requirements": list_requirements()},
+        {
+            "requirements": list_requirements(),
+            "portal_default_ai_mode": get_default_ai_mode(),
+        },
     )
 
 
@@ -386,10 +387,14 @@ async def analyze_requirement(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="analyze_requirement",
-        job_callable=lambda: run_requirement_questions(ticket_id=ticket_id),
+        job_callable=lambda: run_requirement_questions(
+            ticket_id=ticket_id,
+            ai_mode=ai_mode,
+        ),
     )
 
     return _redirect_detail(ticket_id)
@@ -468,10 +473,14 @@ async def generate_summary(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="generate_requirement_summary",
-        job_callable=lambda: run_requirement_summary(ticket_id=ticket_id),
+        job_callable=lambda: run_requirement_summary(
+            ticket_id=ticket_id,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(ticket_id)
 
@@ -896,7 +905,7 @@ def _check_incremental_safety(ticket_id: str) -> None:
 async def _run_ticket_job(ticket_id: str, action: str, job_callable):
     ai_mode_context = get_current_portal_ai_mode()
 
-    # Provider safety check – handles NO_LLM, TEST_LOCAL_ONLY unavailable, etc.
+    # Provider safety check handles NO_LLM, TEST_LOCAL_ONLY unavailable, etc.
     check_provider_safety(ai_mode_context)
 
     try:
@@ -908,5 +917,5 @@ async def _run_ticket_job(ticket_id: str, action: str, job_callable):
         )
     except (PortalConcurrencyError, PortalJobBusyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
-    except RuntimeError as error:
+    except (RuntimeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

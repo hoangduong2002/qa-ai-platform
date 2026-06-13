@@ -3,7 +3,7 @@
 Usage:
     python test_jira_delta_snapshot.py
 
-This script does not call Jira, Figma, DeepSeek, or Ollama. It validates the
+This script does not call Jira, Figma, DeepSeek, or LOCAL. It validates the
 fixture snapshot structure and verifies save/load round-trip behavior with a
 temporary requirements root.
 """

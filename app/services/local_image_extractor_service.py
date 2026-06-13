@@ -12,7 +12,7 @@ from app.services.local_ai_config_service import (
     get_LOCAL_vision_model,
 )
 from app.services.portal_ai_mode_service import assert_local_ai_allowed
-from app.services.portal_job_service import limit_llm_call, limit_ollama_call
+from app.services.portal_job_service import limit_llm_call, limit_LOCAL_call
 
 
 DEFAULT_IMAGE_EXTRACTION_PROMPT = """
@@ -271,7 +271,7 @@ def extract_image_with_LOCAL(
     )
 
     try:
-        with limit_llm_call("LOCAL_VISION"), limit_ollama_call("LOCAL_VISION"):
+        with limit_llm_call("LOCAL_VISION"), limit_LOCAL_call("LOCAL_VISION"):
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw_body = response.read().decode("utf-8", errors="ignore")
 

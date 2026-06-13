@@ -40,13 +40,22 @@ def _env_bool(name: str, default: bool = True) -> bool:
     return value in {"1", "true", "yes", "y", "on"}
 
 
-def _header_bool(headers: Any, name: str, default: bool) -> bool:
-    value = headers.get(name)
+def _env_str(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
 
-    if value is None or str(value).strip() == "":
-        return default
 
-    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+def _deepseek_available() -> bool:
+    return bool(_env_str("DEEPSEEK_API_KEY")) and not _env_bool(
+        "FORCE_DISABLE_DEEPSEEK",
+        False,
+    )
+
+
+def _local_ai_available() -> bool:
+    return bool(_env_str("LOCAL_BASE_URL")) and not _env_bool(
+        "FORCE_DISABLE_LOCAL_AI",
+        False,
+    )
 
 
 def _default_ai_mode() -> str:
@@ -64,33 +73,15 @@ def _default_ai_mode() -> str:
     return NO_LLM
 
 
-def _derive_ai_mode_from_legacy_headers(headers: Any) -> str:
-    production_header = headers.get("X-Production-Mode")
-    local_header = headers.get("X-Local-AI-Enabled")
-
-    if production_header is None and local_header is None:
-        return _default_ai_mode()
-
-    production_mode = _header_bool(headers, "X-Production-Mode", False)
-    local_ai_enabled = _header_bool(headers, "X-Local-AI-Enabled", False)
-
-    if production_mode and local_ai_enabled:
-        return PRODUCTION_HYBRID
-
-    if production_mode and not local_ai_enabled:
-        return DEEPSEEK_ONLY
-
-    if local_ai_enabled:
-        return TEST_LOCAL_ONLY
-
-    return NO_LLM
+def get_default_ai_mode() -> str:
+    return _default_ai_mode()
 
 
 def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
     requested_ai_mode = str(headers.get("X-AI-Mode") or "").strip().upper()
 
     if not requested_ai_mode:
-        requested_ai_mode = _derive_ai_mode_from_legacy_headers(headers)
+        requested_ai_mode = _default_ai_mode()
 
     requested_ai_mode = BACKWARD_COMPATIBLE_AI_MODE_ALIASES.get(
         requested_ai_mode,
@@ -106,8 +97,8 @@ def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
         in {PRODUCTION_HYBRID, DEEPSEEK_ONLY},
         "local_ai_enabled": requested_ai_mode
         in {PRODUCTION_HYBRID, TEST_LOCAL_ONLY},
-        "deepseek_enabled": _env_bool("DEEPSEEK_ENABLED", True),
-        "server_local_ai_enabled": _env_bool("LOCAL_AI_ENABLED", True),
+        "deepseek_enabled": _deepseek_available(),
+        "server_local_ai_enabled": _local_ai_available(),
         "source": "portal",
     }
 
@@ -115,6 +106,10 @@ def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
 def set_portal_ai_mode_for_request(headers: Any):
     resolved = resolve_ai_mode_from_headers(headers)
     return _portal_ai_mode.set(resolved)
+
+
+def set_portal_ai_mode_context(ai_mode_context: dict[str, Any] | None):
+    return _portal_ai_mode.set(ai_mode_context)
 
 
 def reset_portal_ai_mode(token) -> None:
@@ -129,9 +124,9 @@ def is_deepseek_allowed_for_request(headers: Any | None = None) -> bool:
     mode = resolve_ai_mode_from_headers(headers) if headers is not None else _portal_ai_mode.get()
 
     if mode is None:
-        return _env_bool("DEEPSEEK_ENABLED", True)
+        return _deepseek_available()
 
-    if not mode.get("deepseek_enabled", True):
+    if not _deepseek_available():
         return False
 
     return mode.get("ai_mode") in {
@@ -144,9 +139,9 @@ def is_local_ai_allowed_for_request(headers: Any | None = None) -> bool:
     mode = resolve_ai_mode_from_headers(headers) if headers is not None else _portal_ai_mode.get()
 
     if mode is None:
-        return _env_bool("LOCAL_AI_ENABLED", True)
+        return _local_ai_available()
 
-    if not mode.get("server_local_ai_enabled", True):
+    if not _local_ai_available():
         return False
 
     return mode.get("ai_mode") in {TEST_LOCAL_ONLY, PRODUCTION_HYBRID}
@@ -157,15 +152,17 @@ def assert_deepseek_allowed() -> None:
         return
 
     mode = _portal_ai_mode.get()
-    message = "DeepSeek call blocked because DEEPSEEK_ENABLED=false."
+    message = "DeepSeek call blocked because DeepSeek is not available."
 
     if mode:
         if mode.get("ai_mode") == TEST_LOCAL_ONLY:
             message = "DeepSeek call blocked because Portal is in TEST_LOCAL_ONLY mode."
         elif mode.get("ai_mode") == NO_LLM:
             message = "DeepSeek call blocked because Portal is in NO_LLM mode."
-        elif mode.get("ai_mode") == DEEPSEEK_ONLY:
-            message = "DeepSeek call blocked because DEEPSEEK_ENABLED=false."
+        elif _env_bool("FORCE_DISABLE_DEEPSEEK", False):
+            message = "DeepSeek call blocked because FORCE_DISABLE_DEEPSEEK=true."
+        elif not _env_str("DEEPSEEK_API_KEY"):
+            message = "DeepSeek call blocked because DEEPSEEK_API_KEY is missing."
 
     logger.warning(message)
     raise RuntimeError(message)
@@ -176,7 +173,7 @@ def assert_local_ai_allowed() -> None:
         return
 
     mode = _portal_ai_mode.get()
-    message = "Local AI call skipped because LOCAL_AI_ENABLED=false."
+    message = "Local AI call skipped because Local AI is not available."
 
     if mode:
         if mode.get("ai_mode") == DEEPSEEK_ONLY:
@@ -186,6 +183,10 @@ def assert_local_ai_allowed() -> None:
             )
         elif mode.get("ai_mode") == NO_LLM:
             message = "Local AI call skipped because Portal is in NO_LLM mode."
+        elif _env_bool("FORCE_DISABLE_LOCAL_AI", False):
+            message = "Local AI call skipped because FORCE_DISABLE_LOCAL_AI=true."
+        elif not _env_str("LOCAL_BASE_URL"):
+            message = "Local AI call skipped because LOCAL_BASE_URL is missing."
 
     logger.warning(message)
     raise RuntimeError(message)

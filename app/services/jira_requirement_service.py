@@ -31,9 +31,14 @@ from app.services.requirement_compact_context_service import (
     build_compact_requirement_context,
 )
 from app.services.local_ai_config_service import (
-    is_attachment_local_vision_enabled,
+    is_local_vision_enabled,
 )
 from app.services.local_image_extractor_service import extract_image_with_LOCAL
+from app.services.llm_router_service import (
+    PROVIDER_SKIP,
+    TASK_VISION_EXTRACT,
+    resolve_provider_for_task,
+)
 from app.services.portal_job_service import update_job_progress
 
 
@@ -42,6 +47,27 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 VISION_ANALYSIS_SKIPPED_MESSAGE = (
     "Vision analysis skipped because local vision analysis is disabled."
 )
+
+
+def _current_ai_mode() -> str:
+    return (
+        os.getenv("NON_PORTAL_AI_MODE")
+        or os.getenv("TELEGRAM_AI_MODE")
+        or os.getenv("PORTAL_DEFAULT_AI_MODE")
+        or "NO_LLM"
+    ).strip().upper()
+
+
+def _can_run_local_vision() -> bool:
+    if not is_local_vision_enabled():
+        return False
+
+    resolution = resolve_provider_for_task(
+        TASK_VISION_EXTRACT,
+        _current_ai_mode(),
+    )
+
+    return resolution.get("provider") != PROVIDER_SKIP
 
 
 def _remove_file_if_exists(file_path: Path) -> None:
@@ -735,7 +761,7 @@ def _download_and_extract_attachments(
                     f"{attachment_file.stem}_vision_analysis_error.txt"
                 )
 
-                if is_attachment_local_vision_enabled():
+                if _can_run_local_vision():
                     _remove_file_if_exists(vision_skipped_file)
                     _remove_file_if_exists(vision_file)
                     _remove_file_if_exists(vision_json_file)
@@ -782,7 +808,7 @@ def _download_and_extract_attachments(
             if (
                 _is_image_file(attachment_file)
                 and attachment_file.exists()
-                and is_attachment_local_vision_enabled()
+                and _can_run_local_vision()
             ):
                 _remove_file_if_exists(
                     attachment_file.with_name(
