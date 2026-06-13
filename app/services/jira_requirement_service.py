@@ -13,6 +13,10 @@ from typing import Any
 
 from atlassian import Jira
 
+from app.config.env_loader import load_project_env
+
+load_project_env()
+
 logger = logging.getLogger(__name__)
 
 from app.utils.file_extractors import extract_file_text

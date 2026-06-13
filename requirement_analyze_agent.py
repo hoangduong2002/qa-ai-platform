@@ -3,6 +3,10 @@ from typing import Any
 from typing_extensions import TypedDict
 from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import StateGraph, START, END
+from app.config.env_loader import load_project_env
+
+
+load_project_env()
 
 # Khởi tạo mô hình DeepSeek nội bộ cho Agent
 llm = ChatDeepSeek(

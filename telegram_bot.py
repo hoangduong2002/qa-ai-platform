@@ -1,18 +1,232 @@
+"""
+Legacy Telegram entrypoint.
+
+Use `python -m bot.telegram_bot` for the maintained bot flow.
+"""
+
 import os
 import re
 import asyncio
 import json
-from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
+from app.config.env_loader import load_project_env
+
 # Nạp các thành phần từ các file Agent chuyên biệt của bạn
-from jira_agent import jira_agent_app, llm
-from generate_testcase_agent import four_steps_agent, export_markdown_to_excel as export_test_excel
-from requirement_analyze_agent import requirement_analyze_agent
+_llm_instance = None
+
+
+def get_llm():
+    global _llm_instance
+
+    if _llm_instance is None:
+        from langchain_deepseek import ChatDeepSeek
+
+        _llm_instance = ChatDeepSeek(
+            model="deepseek-chat",
+            temperature=0.1,
+            timeout=120,
+        )
+
+    return _llm_instance
+
+
+class LLMProxy:
+    def invoke(self, prompt: str):
+        return get_llm().invoke(prompt)
+
+
+llm = LLMProxy()
+
+
+def get_requirement_analyze_agent():
+    from requirement_analyze_agent import requirement_analyze_agent
+
+    return requirement_analyze_agent
+
+
+def get_jira_agent_app():
+    from jira_agent import jira_agent_app
+
+    return jira_agent_app
+
+
+class LegacyTestcaseAgent:
+    """Small compatibility agent for the legacy root bot."""
+
+    def invoke(self, inputs: dict) -> dict:
+        requirement = (inputs or {}).get("requirement", "").strip()
+
+        prompt = f"""
+        Role: Senior QA Engineer.
+        Task: Generate a professional test suite from the requirement below.
+
+        REQUIREMENT:
+        ---
+        {requirement}
+        ---
+
+        Return a Markdown table with columns:
+        Test Case ID | Title | Preconditions | Steps | Expected Result | Priority
+        """
+
+        response = llm.invoke(prompt)
+
+        return {
+            "final_test_cases": response.content
+        }
+
+
+four_steps_agent = LegacyTestcaseAgent()
+
+
+def _markdown_table_rows(markdown_text: str) -> list[list[str]]:
+    rows = []
+
+    for raw_line in (markdown_text or "").splitlines():
+        line = raw_line.strip()
+
+        if not line.startswith("|"):
+            continue
+
+        if re.match(r"^\|[\s|:\-]*\|$", line):
+            continue
+
+        columns = [
+            column.strip().strip("*")
+            for column in line.split("|")[1:-1]
+        ]
+
+        if columns:
+            rows.append(columns)
+
+    return rows
+
+
+def export_test_excel(final_test_cases: str, output_filename: str):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Test Cases"
+
+    rows = _markdown_table_rows(final_test_cases)
+
+    if rows:
+        for row in rows:
+            worksheet.append(row)
+    else:
+        worksheet.append(["Generated Test Cases"])
+        for line in (final_test_cases or "").splitlines():
+            if line.strip():
+                worksheet.append([line.strip()])
+
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(
+            start_color="1F4E78",
+            end_color="1F4E78",
+            fill_type="solid",
+        )
+
+    for row in worksheet.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    for column_cells in worksheet.columns:
+        max_length = max(
+            len(str(cell.value or ""))
+            for cell in column_cells
+        )
+        worksheet.column_dimensions[column_cells[0].column_letter].width = min(
+            max(max_length + 4, 18),
+            60,
+        )
+
+    workbook.save(output_filename)
+
+
+def export_jira_reports(ticket_id: str, qa_markdown: str, summary_markdown: str):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    md_file = f"{ticket_id}_Summarized_Requirements.md"
+    excel_file = f"{ticket_id}_QA_Clarifications.xlsx"
+
+    with open(md_file, "w", encoding="utf-8") as file:
+        file.write(summary_markdown or "")
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Q&A Tracking"
+
+    rows = _markdown_table_rows(qa_markdown)
+
+    if rows:
+        for row in rows:
+            worksheet.append(row)
+    else:
+        worksheet.append([
+            "No.",
+            "Content",
+            "Assignee / Confirmed Resolution",
+            "Status",
+        ])
+        worksheet.append(["1", qa_markdown or "", "", "Open"])
+
+    first_empty_column = worksheet.max_column + 1
+    worksheet.cell(
+        row=1,
+        column=first_empty_column,
+        value="Assignee / Confirmed Resolution",
+    )
+    worksheet.cell(
+        row=1,
+        column=first_empty_column + 1,
+        value="Status",
+    )
+
+    for row_index in range(2, worksheet.max_row + 1):
+        worksheet.cell(
+            row=row_index,
+            column=first_empty_column + 1,
+            value="Open",
+        )
+
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(
+            start_color="1F4E78",
+            end_color="1F4E78",
+            fill_type="solid",
+        )
+
+    for row in worksheet.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    for column_cells in worksheet.columns:
+        max_length = max(
+            len(str(cell.value or ""))
+            for cell in column_cells
+        )
+        worksheet.column_dimensions[column_cells[0].column_letter].width = min(
+            max(max_length + 4, 18),
+            60,
+        )
+
+    workbook.save(excel_file)
 
 # Nạp cấu hình môi trường từ file .env
-load_dotenv()
+load_project_env()
 
 # ==========================================
 # 🤖 HÀM HIỂN THỊ MENU HƯỚNG DẪN BAN ĐẦU
@@ -166,6 +380,7 @@ async def handle_subtask_selection(update: Update, context: ContextTypes.DEFAULT
         else:
             initial_inputs = {"ticket_id": ticket_id, "subtask_queue": ["SKIP_LOOP"], "current_context": ""}
             
+        jira_agent_app = get_jira_agent_app()
         jira_outputs = await loop.run_in_executor(None, jira_agent_app.invoke, initial_inputs)
         compiled_context = jira_outputs["current_context"].replace("=== SUB-TICKETS LẶP: SKIP_LOOP ===", "")
 
@@ -175,6 +390,7 @@ async def handle_subtask_selection(update: Update, context: ContextTypes.DEFAULT
         if sub_intent == "ANALYSIS":
             await status_msg.edit_text("🧠 *[Requirement Analyst Agent]* Analyzing gaps, building Q&A and technical summary...")
             analyst_inputs = {"ticket_id": ticket_id, "raw_requirement": compiled_context}
+            requirement_analyze_agent = get_requirement_analyze_agent()
             analyst_outputs = await loop.run_in_executor(None, requirement_analyze_agent.invoke, analyst_inputs)
             
             await status_msg.edit_text("💾 *[System]* Generating clean Excel tracker and Markdown summary report...")

@@ -3,10 +3,11 @@ from pathlib import Path
 
 import cv2
 import pytesseract
-from dotenv import load_dotenv
+
+from app.config.env_loader import load_project_env
 
 
-load_dotenv()
+load_project_env()
 
 TESSERACT_CMD = os.getenv("TESSERACT_CMD")
 OCR_LANGUAGE = os.getenv("OCR_LANGUAGE", "eng+fra")

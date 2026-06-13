@@ -20,6 +20,10 @@ from app.services.incremental_generation_service import (
     run_incremental_scenario_generation,
     run_incremental_testcase_generation,
 )
+import os
+
+
+NON_PORTAL_AI_MODE_ENV = "NON_PORTAL_AI_MODE"
 
 
 def _current_ai_mode() -> str | None:
@@ -30,13 +34,27 @@ def _current_ai_mode() -> str | None:
 
     return mode.get("ai_mode")
 
+
+def _resolve_ai_mode(ai_mode: str | None = None) -> str | None:
+    if ai_mode:
+        return ai_mode
+
+    portal_ai_mode = _current_ai_mode()
+
+    if portal_ai_mode:
+        return portal_ai_mode
+
+    return os.getenv(NON_PORTAL_AI_MODE_ENV, "").strip().upper() or None
+
+
 async def run_requirement_summary(
-    ticket_id: str
+    ticket_id: str,
+    ai_mode: str | None = None,
 ):
     state = {
         "ticket_id": ticket_id,
     }
-    ai_mode = _current_ai_mode()
+    ai_mode = _resolve_ai_mode(ai_mode)
 
     if ai_mode:
         state["ai_mode"] = ai_mode
@@ -47,12 +65,13 @@ async def run_requirement_summary(
 
 
 async def run_requirement_questions(
-    ticket_id: str
+    ticket_id: str,
+    ai_mode: str | None = None,
 ):
     state = {
         "ticket_id": ticket_id,
     }
-    ai_mode = _current_ai_mode()
+    ai_mode = _resolve_ai_mode(ai_mode)
 
     if ai_mode:
         state["ai_mode"] = ai_mode

@@ -1,5 +1,6 @@
-import json
 import html
+import json
+import logging
 import os
 import re
 import time
@@ -11,19 +12,52 @@ from typing import Any
 
 import requests
 
+from app.config.env_loader import load_project_env
 from app.services.local_ai_config_service import (
     is_figma_local_vision_enabled,
 )
+from app.services.llm_router_service import (
+    AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_NO_LLM,
+    TASK_VISION_EXTRACT,
+    resolve_provider_for_task,
+)
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 
+
+load_project_env()
 
 REQUIREMENTS_ROOT = Path("requirements")
 FIGMA_API_BASE_URL = "https://api.figma.com/v1"
+logger = logging.getLogger(__name__)
 FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE = (
     "Figma image export skipped or unavailable for this screen."
 )
 VISION_ANALYSIS_SKIPPED_MESSAGE = (
     "Vision analysis skipped because local vision analysis is disabled."
 )
+
+
+def _current_ai_mode() -> str | None:
+    portal_ai_mode = get_current_portal_ai_mode()
+
+    if portal_ai_mode and portal_ai_mode.get("ai_mode"):
+        return str(portal_ai_mode["ai_mode"]).strip().upper()
+
+    return None
+
+
+def _vision_skip_message(ai_mode: str | None) -> str:
+    if ai_mode == AI_MODE_DEEPSEEK_ONLY:
+        return (
+            "Vision analysis skipped because AI mode is DEEPSEEK_ONLY. "
+            "Local/Ollama vision is disabled for this mode."
+        )
+
+    if ai_mode == AI_MODE_NO_LLM:
+        return "Vision analysis skipped because AI mode is NO_LLM."
+
+    return VISION_ANALYSIS_SKIPPED_MESSAGE
 
 
 FIGMA_IMAGE_ANALYSIS_PROMPT = """
@@ -1547,8 +1581,32 @@ def export_figma_page_scope(
             )
 
             vision_analysis = None
+            current_ai_mode = _current_ai_mode()
+            vision_provider = ""
+            vision_reason = ""
 
-            if image_file and local_vision_enabled:
+            if current_ai_mode:
+                vision_resolution = resolve_provider_for_task(
+                    task_type=TASK_VISION_EXTRACT,
+                    ai_mode=current_ai_mode,
+                )
+                vision_provider = vision_resolution.get("provider", "")
+                vision_reason = vision_resolution.get("reason", "")
+            else:
+                vision_provider = "OLLAMA_VISION" if local_vision_enabled else "SKIP"
+                vision_reason = _vision_skip_message(None) if not local_vision_enabled else "Local vision is enabled; vision_extract uses OLLAMA_VISION."
+
+            logger.info(
+                "Figma vision decision task_type=%s ai_mode=%s provider=%s reason=%s screen_id=%s image_path=%s",
+                TASK_VISION_EXTRACT,
+                current_ai_mode or "",
+                vision_provider,
+                vision_reason,
+                screen.node_id,
+                str(image_file or frame_file),
+            )
+
+            if image_file and vision_provider != "SKIP" and local_vision_enabled:
                 try:
                     _remove_file_if_exists(screen_dir / "vision_analysis_skipped.txt")
                     _remove_file_if_exists(screen_dir / "vision_analysis.md")

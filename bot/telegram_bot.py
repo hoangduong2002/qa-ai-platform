@@ -2,6 +2,11 @@ import os
 import shutil
 import asyncio
 import logging
+import re
+
+from app.config.env_loader import load_project_env
+
+load_project_env()
 
 from app.services.requirement_sanitization_service import (
     sanitize_requirement_for_analysis,
@@ -9,8 +14,6 @@ from app.services.requirement_sanitization_service import (
 
 from pathlib import Path
 from datetime import datetime
-
-from dotenv import load_dotenv
 
 from telegram import (
     Update,
@@ -81,7 +84,8 @@ from app.services.requirement_resolver import (
 )
 
 from app.services.requirement_update_service import (
-    apply_clarification_answers_to_requirement
+    apply_clarification_answers_to_requirement,
+    invalidate_analysis,
 )
 
 from app.services.report_service import (
@@ -171,6 +175,11 @@ from app.services.requirement_workflow_service import (
     run_requirement_questions,
     run_requirement_summary,
 )
+from app.services.llm_router_service import (
+    AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_TEST_LOCAL_ONLY,
+)
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
@@ -181,12 +190,74 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 ADD_TEXT_STATE = "add_text"
 ADD_FILE_STATE = "add_file"
+
+TELEGRAM_VALID_AI_MODES = {
+    AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_TEST_LOCAL_ONLY,
+    AI_MODE_DEEPSEEK_ONLY,
+}
+
+TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID
+
+
+def get_telegram_ai_mode() -> str:
+    ai_mode = os.getenv(
+        "TELEGRAM_AI_MODE",
+        TELEGRAM_DEFAULT_AI_MODE,
+    ).strip().upper()
+
+    if ai_mode not in TELEGRAM_VALID_AI_MODES:
+        raise ValueError(
+            "Unsupported TELEGRAM_AI_MODE="
+            f"{ai_mode or '[empty]'}. "
+            "Use PRODUCTION_HYBRID, TEST_LOCAL_ONLY, or DEEPSEEK_ONLY."
+        )
+
+    return ai_mode
+
+
+def is_jira_issue_key(value: str) -> bool:
+    return bool(
+        re.fullmatch(
+            r"[A-Z][A-Z0-9]+-\d+",
+            (value or "").strip().upper(),
+        )
+    )
+
+
+def format_ai_provider_error(error: Exception, ai_mode: str | None = None) -> str:
+    message = str(error).strip() or "Unknown provider error."
+    lowered = message.lower()
+
+    if any(
+        marker in lowered
+        for marker in [
+            "provider",
+            "deepseek",
+            "local ai",
+            "ollama",
+            "no_llm",
+            "requires llm",
+            "blocked",
+            "unavailable",
+            "not available",
+        ]
+    ):
+        mode = ai_mode or os.getenv(
+            "TELEGRAM_AI_MODE",
+            TELEGRAM_DEFAULT_AI_MODE,
+        ).strip().upper()
+
+        return (
+            f"AI provider is not available for TELEGRAM_AI_MODE={mode}.\n"
+            f"{message}"
+        )
+
+    return message
 
 
 def get_message(update):
@@ -474,13 +545,16 @@ async def continue_generation_with_structure_gate(
     message,
     ticket_id: str,
     prepare_requirement_context: bool = True,
+    ai_mode: str | None = None,
 ):
+    ai_mode = ai_mode or get_telegram_ai_mode()
+
     if prepare_requirement_context:
         await message.reply_text(
             f"Preparing requirement summary and generation context for {ticket_id}..."
         )
 
-        await run_requirement_summary(ticket_id)
+        await run_requirement_summary(ticket_id, ai_mode=ai_mode)
 
     await message.reply_text(
         f"Checking approved test case structure for {ticket_id}..."
@@ -503,7 +577,10 @@ async def continue_generation_with_structure_gate(
 
     await message.reply_text(generation_gate_result.message)
 
-    generation_state = build_structured_generation_state(ticket_id)
+    generation_state = build_structured_generation_state(
+        ticket_id,
+        ai_mode=ai_mode,
+    )
 
     if not generation_state.get("approved_test_case_structure"):
         raise ValueError(
@@ -643,6 +720,9 @@ async def run_generation(
         f"Running test case generation graph for {ticket_id}..."
     )
 
+    ai_mode = generation_state.get("ai_mode") or get_telegram_ai_mode()
+    generation_state["ai_mode"] = ai_mode
+
     result = test_generation_graph.invoke(generation_state)
 
     await message.reply_text(
@@ -734,6 +814,7 @@ async def ask_clarifications(
 
 async def process_ticket(update: Update, ticket_id: str):
     message = get_message(update)
+    ai_mode = get_telegram_ai_mode()
 
     artifacts = load_ticket_artifacts(ticket_id)
 
@@ -765,7 +846,10 @@ async def process_ticket(update: Update, ticket_id: str):
 
     # If no clarification questions exist yet, analyze requirement first.
     if not questions:
-        result = await run_requirement_questions(ticket_id)
+        result = await run_requirement_questions(
+            ticket_id,
+            ai_mode=ai_mode,
+        )
         questions = extract_clarification_questions(result)
 
         if questions:
@@ -782,6 +866,7 @@ async def process_ticket(update: Update, ticket_id: str):
     await continue_generation_with_structure_gate(
         get_message(update),
         ticket_id,
+        ai_mode=ai_mode,
     )
 
     
@@ -790,8 +875,11 @@ async def analyze_existing_ticket(
     context: ContextTypes.DEFAULT_TYPE,
     ticket_id: str
 ):
+    ai_mode = get_telegram_ai_mode()
+
     result = await run_requirement_questions(
-        ticket_id
+        ticket_id,
+        ai_mode=ai_mode,
     )
 
     analysis = result.get(
@@ -848,7 +936,8 @@ async def analyze_existing_ticket(
     )
 
     await run_requirement_summary(
-        ticket_id
+        ticket_id,
+        ai_mode=ai_mode,
     )
 
     await export_requirement_intelligence(
@@ -887,11 +976,23 @@ async def analyze(
         f"Analyzing requirement for {ticket_id}..."
     )
 
-    await analyze_existing_ticket(
-        update.message,
-        context,
-        ticket_id
-    )
+    try:
+        await analyze_existing_ticket(
+            update.message,
+            context,
+            ticket_id
+        )
+    except Exception as error:
+        ai_mode = get_telegram_ai_mode()
+        logger.exception(
+            "Failed during analyze. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed during analyze:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
     
 async def analyze_text(
     update: Update,
@@ -923,11 +1024,23 @@ async def analyze_text(
         f"Analyzing..."
     )
 
-    await analyze_existing_ticket(
-        update.message,
-        context,
-        ticket_id
-    )
+    try:
+        await analyze_existing_ticket(
+            update.message,
+            context,
+            ticket_id
+        )
+    except Exception as error:
+        ai_mode = get_telegram_ai_mode()
+        logger.exception(
+            "Failed during analyze_text. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed during analyze_text:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
 
 
 async def generate(
@@ -935,10 +1048,11 @@ async def generate(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     message = get_message(update)
+    ai_mode = get_telegram_ai_mode()
 
     if not context.args:
         await message.reply_text(
-            "Usage: /generate DEMO-001"
+            "Usage: /generate <requirement_id_or_jira_issue_key>"
         )
         return
 
@@ -946,10 +1060,29 @@ async def generate(
     ticket_id = resolve_requirement_id(raw_id)
 
     if not ticket_id:
-        await message.reply_text(
-            f"Requirement not found: {raw_id}"
-        )
-        return
+        if is_jira_issue_key(raw_id):
+            await message.reply_text(
+                "Requirement not found locally. Creating from Jira first..."
+            )
+
+            try:
+                ticket_id = create_requirement_from_jira(raw_id)
+            except Exception as error:
+                logger.exception(
+                    "Failed to create requirement from Jira. issue_key=%s",
+                    raw_id,
+                )
+                await message.reply_text(
+                    f"Failed to create requirement from Jira:\n{error}"
+                )
+                return
+        else:
+            await message.reply_text(
+                f"Requirement not found: {raw_id}\n"
+                "Use /analyze_jira <issue_key> or /generate_jira <issue_key> "
+                "to create a requirement from Jira first."
+            )
+            return
 
     await message.reply_text(
         f"Preparing structured generation for {ticket_id}...\n\n"
@@ -959,8 +1092,62 @@ async def generate(
     try:
         await process_ticket(update, ticket_id)
     except Exception as error:
+        logger.exception(
+            "Failed during structured generation. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
         await message.reply_text(
-            f"Failed during structured generation:\n{error}"
+            "Failed during structured generation:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
+
+
+async def generate_jira(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    message = get_message(update)
+
+    if not context.args:
+        await message.reply_text(
+            "Usage:\n/generate_jira <jira_issue_key>"
+        )
+        return
+
+    issue_key = " ".join(context.args).strip().upper()
+
+    if not is_jira_issue_key(issue_key):
+        await message.reply_text(
+            f"Invalid Jira issue key: {issue_key}"
+        )
+        return
+
+    await message.reply_text(
+        f"Creating requirement from Jira ticket {issue_key}..."
+    )
+
+    try:
+        ticket_id = create_requirement_from_jira(issue_key)
+
+        await message.reply_text(
+            f"Requirement created from Jira.\n"
+            f"Requirement ID: {ticket_id}\n\n"
+            "Analyzing clarifications before generation..."
+        )
+
+        await process_ticket(update, ticket_id)
+
+    except Exception as error:
+        ai_mode = get_telegram_ai_mode()
+        logger.exception(
+            "Failed to generate from Jira ticket. issue_key=%s ai_mode=%s",
+            issue_key,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed to generate from Jira ticket:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
         )
 
 
@@ -968,6 +1155,8 @@ async def generate_text(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    ai_mode = get_telegram_ai_mode()
+
     if not context.args:
         message = get_message(update)
 
@@ -994,10 +1183,21 @@ async def generate_text(
         f"Processing..."
     )
 
-    await process_ticket(
-        update,
-        ticket_id
-    )
+    try:
+        await process_ticket(
+            update,
+            ticket_id
+        )
+    except Exception as error:
+        logger.exception(
+            "Failed during generate_text. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed during generate_text:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
 
 
 async def handle_requirement_file(
@@ -1156,11 +1356,155 @@ async def handle_requirement_file(
         f"Processing {ticket_id}..."
     )
 
-    await analyze_existing_ticket(
-        message,
-        context,
-        ticket_id,
+    try:
+        await analyze_existing_ticket(
+            message,
+            context,
+            ticket_id,
+        )
+    except Exception as error:
+        ai_mode = get_telegram_ai_mode()
+        logger.exception(
+            "Failed during uploaded file analysis. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed during uploaded file analysis:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
+
+
+async def handle_requirement_photo(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    message = get_message(update)
+    photos = update.message.photo or []
+
+    if not photos:
+        await message.reply_text(
+            "No photo found."
+        )
+        return
+
+    add_file_ticket_id = context.user_data.get(
+        "add_file_ticket_id"
     )
+
+    ticket_id = (
+        add_file_ticket_id
+        or "TG-" + datetime.now().strftime("%Y%m%d%H%M%S")
+    )
+
+    photo = photos[-1]
+    file_name = (
+        f"telegram_photo_{datetime.now().strftime('%Y%m%d%H%M%S')}_"
+        f"{photo.file_unique_id}.jpg"
+    )
+
+    source_dir = (
+        Path("requirements")
+        / ticket_id
+        / "source"
+    )
+    original_dir = source_dir / "original_files"
+    extracted_dir = source_dir / "extracted"
+
+    original_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    extracted_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    file_path = original_dir / file_name
+
+    await message.reply_text(
+        f"Photo received for {ticket_id}. Downloading highest resolution..."
+    )
+
+    telegram_file = await photo.get_file()
+    await telegram_file.download_to_drive(
+        custom_path=str(file_path)
+    )
+
+    await message.reply_text(
+        "Photo saved. Extracting image-based requirements..."
+    )
+
+    try:
+        extracted_text = extract_file_text(file_path)
+    except Exception as error:
+        await message.reply_text(
+            f"Photo saved, but image extraction failed:\n{error}"
+        )
+        return
+
+    if not extracted_text.strip():
+        if add_file_ticket_id:
+            context.user_data.pop(
+                "add_file_ticket_id",
+                None,
+            )
+            invalidate_analysis(ticket_id)
+
+        await message.reply_text(
+            "Photo saved, but no readable requirement text was extracted. "
+            "Vision analysis may be disabled for attachments."
+        )
+        return
+
+    extracted_file = extracted_dir / f"{Path(file_name).stem}.md"
+    extracted_file.write_text(
+        extracted_text,
+        encoding="utf-8",
+    )
+
+    if add_file_ticket_id:
+        context.user_data.pop(
+            "add_file_ticket_id",
+            None,
+        )
+        invalidate_analysis(ticket_id)
+
+        await message.reply_text(
+            f"Photo added to requirement: {ticket_id}\n\n"
+            "Analysis artifacts invalidated.\n"
+            "Please run /analyze again."
+        )
+        return
+
+    create_workspace_from_text(
+        ticket_id,
+        extracted_text,
+        source=f"telegram_photo:{file_name}",
+    )
+
+    await message.reply_text(
+        f"Requirement extracted from photo.\n"
+        f"Processing {ticket_id}..."
+    )
+
+    try:
+        await analyze_existing_ticket(
+            message,
+            context,
+            ticket_id,
+        )
+    except Exception as error:
+        ai_mode = get_telegram_ai_mode()
+        logger.exception(
+            "Failed during photo analysis. ticket_id=%s ai_mode=%s",
+            ticket_id,
+            ai_mode,
+        )
+        await message.reply_text(
+            "Failed during photo analysis:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
+        )
 
 
 def run_comment_improve_testcases(
@@ -1419,8 +1763,10 @@ async def handle_text_message(
         f"Generating requirement summary..."
     )
 
+    ai_mode = get_telegram_ai_mode()
+
     if next_action == "analyze":
-        await run_requirement_summary(ticket_id)
+        await run_requirement_summary(ticket_id, ai_mode=ai_mode)
         await export_requirement_intelligence(
             message,
             ticket_id,
@@ -1430,6 +1776,7 @@ async def handle_text_message(
     await continue_generation_with_structure_gate(
         message,
         ticket_id,
+        ai_mode=ai_mode,
     )
 
 
@@ -1575,8 +1922,10 @@ async def handle_review_action(
                 f"Generating requirement summary..."
             )
 
+            ai_mode = get_telegram_ai_mode()
+
             if mode == "analyze":
-                await run_requirement_summary(ticket_id)
+                await run_requirement_summary(ticket_id, ai_mode=ai_mode)
                 await export_requirement_intelligence(
                     query.message,
                     ticket_id,
@@ -1586,6 +1935,7 @@ async def handle_review_action(
             await continue_generation_with_structure_gate(
                 query.message,
                 ticket_id,
+                ai_mode=ai_mode,
             )
             return
 
@@ -1934,13 +2284,16 @@ async def analyze_jira(
         )
 
     except Exception as error:
+        ai_mode = get_telegram_ai_mode()
         logger.exception(
-            "Failed to analyze Jira ticket. issue_key=%s",
+            "Failed to analyze Jira ticket. issue_key=%s ai_mode=%s",
             issue_key,
+            ai_mode,
         )
 
         await message.reply_text(
-            f"Failed to analyze Jira ticket:\n{error}"
+            "Failed to analyze Jira ticket:\n"
+            f"{format_ai_provider_error(error, ai_mode)}"
         )
 
 
@@ -2016,6 +2369,10 @@ def main():
     )
 
     app.add_handler(
+        CommandHandler("generate_jira", generate_jira)
+    )
+
+    app.add_handler(
         CommandHandler("generate_text", generate_text)
     )
 
@@ -2069,6 +2426,13 @@ def main():
         MessageHandler(
             filters.Document.ALL,
             handle_requirement_file
+        )
+    )
+
+    app.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            handle_requirement_photo
         )
     )
 

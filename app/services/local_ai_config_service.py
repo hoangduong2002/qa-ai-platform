@@ -1,7 +1,10 @@
 import os
 
+from app.config.env_loader import load_project_env
 from app.services.portal_ai_mode_service import is_local_ai_allowed_for_request
 
+
+load_project_env()
 
 TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "no", "n", "off"}

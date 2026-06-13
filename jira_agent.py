@@ -1,16 +1,16 @@
 import os
 import re
 import sys
-import pandas as pd
 from typing import Annotated, Any, List
 from typing_extensions import TypedDict
-from dotenv import load_dotenv
 from jira import JIRA
 from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import StateGraph, START, END
 
+from app.config.env_loader import load_project_env
+
 # 1. Load environment configurations from .env
-load_dotenv()
+load_project_env()
 
 # 2. Initialize DeepSeek LLM
 llm = ChatDeepSeek(

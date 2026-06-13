@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
-from dotenv import load_dotenv
 
+from app.config.env_loader import load_project_env
 from app.services.portal_ai_mode_service import (
     assert_deepseek_allowed,
     assert_local_ai_allowed,
@@ -19,7 +19,7 @@ from app.services.portal_job_service import (
 )
 
 
-load_dotenv()
+load_project_env()
 
 logger = logging.getLogger(__name__)
 

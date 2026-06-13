@@ -1,7 +1,9 @@
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
+from app.config.env_loader import load_project_env
+
+
+load_project_env()
 
 
 class Settings:

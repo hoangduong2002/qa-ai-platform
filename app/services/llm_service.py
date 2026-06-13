@@ -2,10 +2,9 @@ import os
 import time
 import logging
 
-from dotenv import load_dotenv
-
 from langchain_deepseek import ChatDeepSeek
 
+from app.config.env_loader import load_project_env
 from app.services.local_llm import LocalLLM
 from app.services.local_ai_config_service import (
     get_LOCAL_base_url,
@@ -16,7 +15,7 @@ from app.services.portal_job_service import get_current_job_id, limit_llm_call
 from app.utils.ai_usage_logger import log_ai_usage
 
 
-load_dotenv()
+load_project_env()
 logger = logging.getLogger(__name__)
 
 

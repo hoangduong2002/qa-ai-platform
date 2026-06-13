@@ -84,7 +84,10 @@ def _build_structure_message(
     )
 
 
-def build_structured_generation_state(ticket_id: str) -> dict:
+def build_structured_generation_state(
+    ticket_id: str,
+    ai_mode: str | None = None,
+) -> dict:
     """
     Build the state required by the structured test generation graph.
 
@@ -105,6 +108,9 @@ def build_structured_generation_state(ticket_id: str) -> dict:
     artifacts["ticket_id"] = ticket_id
     artifacts["generation_mode"] = "STRUCTURED_FUNCTION_BASED"
     artifacts["approved_test_case_structure"] = approved_structure
+
+    if ai_mode:
+        artifacts["ai_mode"] = ai_mode
 
     return artifacts
 

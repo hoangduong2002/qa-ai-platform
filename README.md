@@ -30,16 +30,34 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Create `.env`
+Create local configuration from the safe template:
+
+```powershell
+copy .env.example .env
+```
+
+Put real API keys and tokens in `.env.secrets`:
 
 ```env
-LLM_PROVIDER=DEEPSEEK
+DEEPSEEK_API_KEY=
+TELEGRAM_BOT_TOKEN=
+JIRA_PAT=
+FIGMA_ACCESS_TOKEN=
+```
 
-DEEPSEEK_API_KEY=xxxxx
+Environment files are loaded in this order:
 
-DEEPSEEK_MODEL=deepseek-v4-flash
+1. `.env`
+2. `.env.secrets`
 
-TELEGRAM_BOT_TOKEN=xxxxx
+`.env.secrets` is loaded last and can override `.env`.
+
+Do not commit `.env` or `.env.secrets`. If either file was already tracked,
+remove it from Git tracking without deleting your local copy:
+
+```powershell
+git rm --cached .env
+git rm --cached .env.secrets
 ```
 
 ---
@@ -49,6 +67,16 @@ TELEGRAM_BOT_TOKEN=xxxxx
 ```powershell
 python -m bot.telegram_bot
 ```
+
+Use `python -m bot.telegram_bot`. Root-level `telegram_bot.py` is legacy.
+
+Telegram LLM tasks default to:
+
+```env
+TELEGRAM_AI_MODE=PRODUCTION_HYBRID
+```
+
+Supported Telegram modes: `PRODUCTION_HYBRID`, `TEST_LOCAL_ONLY`, `DEEPSEEK_ONLY`.
 
 ---
 
@@ -76,7 +104,17 @@ Create requirement from text.
 /generate <ticket_id>
 ```
 
-Create requirement from Jira ticket.
+Generate test cases from an existing requirement. If the ID looks like a Jira
+issue key and no local requirement exists, the bot creates the requirement from
+Jira first.
+
+---
+
+```text
+/generate_jira <issue_key>
+```
+
+Create requirement from Jira, analyze clarifications, then continue generation.
 
 ---
 
