@@ -124,6 +124,13 @@ def run_initial_structure_flow(
 
     state = load_ticket_artifacts(ticket_id)
     state["ticket_id"] = ticket_id
+
+    if (source_channel or "").strip().lower() == "telegram" and not ai_mode:
+        raise RuntimeError(
+            "Telegram structure generation missing ai_mode. "
+            "This is a propagation bug."
+        )
+
     _apply_ai_state(state, ai_mode, source_channel)
 
     structure_result = generate_test_case_structure(state)

@@ -499,7 +499,11 @@ async def continue_generation_with_structure_gate(
         f"Checking approved test case structure for {ticket_id}..."
     )
 
-    generation_gate_result = prepare_structure_gate(ticket_id)
+    generation_gate_result = prepare_structure_gate(
+        ticket_id,
+        ai_mode=ai_mode,
+        source_channel="telegram",
+    )
 
     if generation_gate_result.status != "READY_TO_GENERATE":
         set_pending_generation_after_approval(
@@ -581,8 +585,12 @@ async def self_review_structure(update, context):
         f"Running AI review and improvement for structure: {ticket_id}"
     )
 
+    ai_mode = get_telegram_ai_mode()
+
     state = run_initial_structure_flow(
-        ticket_id
+        ticket_id,
+        ai_mode=ai_mode,
+        source_channel="telegram",
     )
 
     message = get_message(update)
@@ -1007,6 +1015,7 @@ async def generate_jira(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     message = get_message(update)
+    ai_mode = get_telegram_ai_mode()
 
     if not context.args:
         await message.reply_text(
@@ -1035,10 +1044,9 @@ async def generate_jira(
             "Analyzing clarifications before generation..."
         )
 
-        await process_ticket(update, ticket_id)
+        await process_ticket(update, ticket_id, ai_mode=ai_mode)
 
     except Exception as error:
-        ai_mode = get_telegram_ai_mode()
         logger.exception(
             "Failed to generate from Jira ticket. issue_key=%s ai_mode=%s",
             issue_key,
@@ -1085,7 +1093,8 @@ async def generate_text(
     try:
         await process_ticket(
             update,
-            ticket_id
+            ticket_id,
+            ai_mode=ai_mode,
         )
     except Exception as error:
         logger.exception(

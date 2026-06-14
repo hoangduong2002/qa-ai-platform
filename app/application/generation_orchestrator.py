@@ -1,3 +1,5 @@
+import logging
+
 from app.application.response_models import AppAction, AppResult
 from app.utils.artifact_loader import load_ticket_artifacts
 from app.utils.test_structure_store import (
@@ -10,6 +12,9 @@ from app.services.test_structure_service import (
     run_initial_structure_flow,
     resume_structure_review,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _structure_actions(ticket_id: str) -> list[AppAction]:
@@ -118,7 +123,11 @@ def build_structured_generation_state(
     return artifacts
 
 
-def prepare_generation(ticket_id: str) -> AppResult:
+def prepare_generation(
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
+) -> AppResult:
     """
     Structure-first generation gate.
 
@@ -166,7 +175,18 @@ def prepare_generation(ticket_id: str) -> AppResult:
             data=state,
         )
 
-    state = run_initial_structure_flow(ticket_id)
+    logger.info(
+        "Preparing structure gate. ticket_id=%s ai_mode=%s source_channel=%s",
+        ticket_id,
+        ai_mode,
+        source_channel,
+    )
+
+    state = run_initial_structure_flow(
+        ticket_id,
+        ai_mode=ai_mode,
+        source_channel=source_channel,
+    )
 
     return AppResult(
         status="WAITING_STRUCTURE_APPROVAL",

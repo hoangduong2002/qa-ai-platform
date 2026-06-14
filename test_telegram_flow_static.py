@@ -6,6 +6,7 @@ from pathlib import Path
 BOT_FILE = Path("bot/telegram_bot.py")
 WORKFLOW_FILE = Path("app/services/requirement_workflow_service.py")
 GENERATION_FILE = Path("app/application/generation_orchestrator.py")
+AI_MODE_CONTEXT_FILE = Path("app/services/ai_mode_context_service.py")
 
 
 def _source(path: Path) -> str:
@@ -61,9 +62,14 @@ def test_generate_text_can_create_requirement_state():
 def test_requirement_questions_and_summary_receive_ai_mode():
     bot_source = _source(BOT_FILE)
     workflow_source = _source(WORKFLOW_FILE)
+    ai_mode_context_source = _source(AI_MODE_CONTEXT_FILE)
 
-    assert "TELEGRAM_AI_MODE" in bot_source
-    assert "TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID" in bot_source
+    assert "get_telegram_ai_mode" in bot_source
+    assert "TELEGRAM_AI_MODE" in ai_mode_context_source
+    assert (
+        "TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID"
+        in ai_mode_context_source
+    )
     assert "run_requirement_questions(" in bot_source
     assert "ai_mode=ai_mode" in bot_source
 
@@ -84,7 +90,7 @@ def test_generation_state_includes_ai_mode():
     bot_source = _source(BOT_FILE)
     generation_source = _source(GENERATION_FILE)
 
-    assert "build_structured_generation_state(" in bot_source
+    assert "build_generation_state(" in bot_source
     assert "ai_mode=ai_mode" in bot_source
     assert 'artifacts["ai_mode"] = ai_mode' in generation_source
     assert 'generation_state["ai_mode"] = ai_mode' in bot_source
@@ -97,10 +103,10 @@ def test_generate_has_jira_fallback_behavior():
     assert "is_jira_issue_key(raw_id)" in generate_source
     assert "Requirement not found locally. Creating from Jira first..." in generate_source
     assert "create_requirement_from_jira(raw_id)" in generate_source
-    assert "process_ticket(update, ticket_id)" in generate_source
+    assert "process_ticket(update, ticket_id, ai_mode=ai_mode)" in generate_source
 
     assert "create_requirement_from_jira(issue_key)" in generate_jira_source
-    assert "process_ticket(update, ticket_id)" in generate_jira_source
+    assert "process_ticket(update, ticket_id, ai_mode=ai_mode)" in generate_jira_source
 
 
 def test_document_and_photo_handlers_exist():

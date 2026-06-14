@@ -167,8 +167,16 @@ def _apply_ai_state(
     return state
 
 
-def prepare_structure_gate(ticket_id: str) -> AppResult:
-    return prepare_generation(ticket_id)
+def prepare_structure_gate(
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
+) -> AppResult:
+    return prepare_generation(
+        ticket_id,
+        ai_mode=ai_mode,
+        source_channel=source_channel,
+    )
 
 
 def build_generation_state(

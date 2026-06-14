@@ -9,6 +9,7 @@ from app.application.structure_review_orchestrator import (
     approve_structure as approve_structure_app,
 )
 from app.services.requirement_resolver import resolve_requirement_id
+from app.services.ai_mode_context_service import get_telegram_ai_mode
 from app.utils.test_structure_store import (
     has_pending_generation_after_approval,
     set_pending_generation_after_approval,
@@ -68,7 +69,12 @@ async def structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        result = prepare_generation(ticket_id)
+        ai_mode = get_telegram_ai_mode()
+        result = prepare_generation(
+            ticket_id,
+            ai_mode=ai_mode,
+            source_channel="telegram",
+        )
         await send_app_result(message, ticket_id, result)
     except Exception as error:
         await message.reply_text(
