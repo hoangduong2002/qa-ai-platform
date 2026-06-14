@@ -55,6 +55,7 @@ def generate_test_scope(state):
         TASK_SCENARIO_GENERATION,
         final_prompt,
         ai_mode=_resolve_ai_mode(state),
+        source_channel=(state or {}).get("source_channel"),
     )
 
     try:

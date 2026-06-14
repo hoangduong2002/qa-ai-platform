@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from app.services.llm_router_service import (
-    TASK_TESTCASE_GENERATION,
+    TASK_TESTCASE_IMPROVEMENT,
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
@@ -669,6 +669,7 @@ def repair_json_with_llm(
     malformed_json_text: str,
     original_error: Exception,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     """
     Ask LLM to repair malformed JSON output once.
@@ -709,9 +710,10 @@ Malformed JSON:
 """
 
     response_content = call_text_llm(
-        TASK_TESTCASE_GENERATION,
+        TASK_TESTCASE_IMPROVEMENT,
         repair_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     repaired_raw_file = save_raw_response(
@@ -1142,6 +1144,7 @@ def _generate_improve_patch_for_function(
     function_coverage_review: dict,
     review_comments: list,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     logger.info(
         "Starting function-level improve. ticket_id=%s, function_id=%s, testcase_count=%s",
@@ -1185,9 +1188,10 @@ def _generate_improve_patch_for_function(
     )
 
     response_content = call_text_llm(
-        TASK_TESTCASE_GENERATION,
+        TASK_TESTCASE_IMPROVEMENT,
         final_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     raw_file = save_raw_response(
@@ -1206,6 +1210,7 @@ def _generate_improve_patch_for_function(
                     malformed_json_text=response_content,
                     original_error=parse_error,
                     ai_mode=ai_mode,
+                    source_channel=source_channel,
                 )
             else:
                 raise
@@ -1375,6 +1380,7 @@ def _deduplicate_function_results(
 def improve_testcases(state):
     ticket_id = state["ticket_id"]
     ai_mode = _resolve_ai_mode(state)
+    source_channel = state.get("source_channel")
 
     original_testcases = state.get("testcases", [])
     improve_version = state.get("improve_version", "latest")
@@ -1513,6 +1519,7 @@ def improve_testcases(state):
                 function_coverage_review,
                 review_comments,
                 ai_mode,
+                source_channel,
             )
 
             future_map[future] = function_id

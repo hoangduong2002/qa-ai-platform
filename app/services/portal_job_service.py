@@ -14,6 +14,7 @@ from app.services.portal_ai_mode_service import (
     reset_portal_ai_mode,
     set_portal_ai_mode_context,
 )
+from app.services.ai_provider_error_service import format_provider_error
 
 
 logger = logging.getLogger(__name__)
@@ -470,12 +471,17 @@ async def run_portal_ticket_job(
 
         return result
     except Exception as error:
+        formatted_error = format_provider_error(
+            error=error,
+            ai_mode=context.get("ai_mode"),
+            source_channel="portal",
+        )
         context["status"] = "FAILED"
-        context["error"] = str(error)
+        context["error"] = formatted_error
         context["current_step"] = "Failed"
         context["step_label"] = "Failed"
-        context["message"] = str(error)
-        context["detail"] = str(error)
+        context["message"] = formatted_error
+        context["detail"] = formatted_error
         logger.exception(
             "Portal job failed job_id=%s ticket_id=%s action=%s",
             job_id,

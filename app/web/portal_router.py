@@ -48,8 +48,6 @@ from app.services.web_test_design_artifact_service import (
     approve_scenarios,
     approve_testcases,
     export_testcases_excel,
-    generate_scope_and_scenarios,
-    generate_testcases_from_approved_scenarios,
     get_coverage_review,
     get_coverage_review_json,
     get_final_review,
@@ -70,6 +68,10 @@ from app.services.web_test_design_artifact_service import (
     export_scenarios_excel,
     export_incremental_testcases_excel,
 )
+from app.services.test_design_workflow_service import (
+    generate_scope_and_scenarios,
+    generate_testcases_from_approved_scenarios,
+)
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
 from app.services.portal_ai_mode_service import (
@@ -77,6 +79,7 @@ from app.services.portal_ai_mode_service import (
     get_default_ai_mode,
     portal_ai_mode_dependency,
 )
+from app.services.ai_provider_error_service import format_provider_error
 from app.services.portal_job_service import (
     PortalConcurrencyError,
     PortalJobBusyError,
@@ -637,10 +640,15 @@ async def generate_scenarios_for_web(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="generate_scenarios",
-        job_callable=lambda: generate_scope_and_scenarios(ticket_id),
+        job_callable=lambda: generate_scope_and_scenarios(
+            ticket_id,
+            ai_mode=ai_mode,
+            source_channel="web",
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
 
@@ -651,10 +659,15 @@ async def coverage_review_for_web(
     scenario_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="coverage_review",
-        job_callable=lambda: run_scenario_coverage_review(ticket_id, scenario_version),
+        job_callable=lambda: run_scenario_coverage_review(
+            ticket_id,
+            scenario_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(
         ticket_id,
@@ -669,10 +682,15 @@ async def improve_scenarios_ai(
     scenario_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_scenarios_ai",
-        job_callable=lambda: improve_scenarios_from_ai_review(ticket_id, scenario_version),
+        job_callable=lambda: improve_scenarios_from_ai_review(
+            ticket_id,
+            scenario_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
 
@@ -684,6 +702,7 @@ async def improve_scenarios_human(
     human_review_comment: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_scenarios_human",
@@ -691,6 +710,7 @@ async def improve_scenarios_human(
             ticket_id,
             scenario_version,
             human_review_comment,
+            ai_mode=ai_mode,
         ),
     )
     return _redirect_detail(ticket_id, tab="design", scenario_version=version)
@@ -710,11 +730,16 @@ async def generate_testcases_for_web(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
         version = await _run_ticket_job(
             ticket_id=ticket_id,
             action="generate_testcases",
-            job_callable=lambda: generate_testcases_from_approved_scenarios(ticket_id),
+            job_callable=lambda: generate_testcases_from_approved_scenarios(
+                ticket_id,
+                ai_mode=ai_mode,
+                source_channel="web",
+            ),
         )
     except ValueError as error:
         return _redirect_detail(
@@ -736,10 +761,15 @@ async def final_review_for_web(
     testcase_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="final_review",
-        job_callable=lambda: run_final_review(ticket_id, testcase_version),
+        job_callable=lambda: run_final_review(
+            ticket_id,
+            testcase_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(
         ticket_id,
@@ -754,10 +784,15 @@ async def improve_testcases_ai(
     testcase_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_testcases_ai",
-        job_callable=lambda: improve_testcases_from_ai_review(ticket_id, testcase_version),
+        job_callable=lambda: improve_testcases_from_ai_review(
+            ticket_id,
+            testcase_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", testcase_version=version)
 
@@ -769,6 +804,7 @@ async def improve_testcases_human(
     human_review_comment: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_testcases_human",
@@ -776,6 +812,7 @@ async def improve_testcases_human(
             ticket_id,
             testcase_version,
             human_review_comment,
+            ai_mode=ai_mode,
         ),
     )
     return _redirect_detail(ticket_id, tab="design", testcase_version=version)
@@ -904,9 +941,20 @@ def _check_incremental_safety(ticket_id: str) -> None:
 
 async def _run_ticket_job(ticket_id: str, action: str, job_callable):
     ai_mode_context = get_current_portal_ai_mode()
+    ai_mode = (ai_mode_context or {}).get("ai_mode")
 
     # Provider safety check handles NO_LLM, TEST_LOCAL_ONLY unavailable, etc.
-    check_provider_safety(ai_mode_context)
+    try:
+        check_provider_safety(ai_mode_context)
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=format_provider_error(
+                error=error,
+                ai_mode=ai_mode,
+                source_channel="portal",
+            ),
+        ) from error
 
     try:
         return await run_portal_ticket_job(
@@ -918,4 +966,11 @@ async def _run_ticket_job(ticket_id: str, action: str, job_callable):
     except (PortalConcurrencyError, PortalJobBusyError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except (RuntimeError, ValueError) as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise HTTPException(
+            status_code=400,
+            detail=format_provider_error(
+                error=error,
+                ai_mode=ai_mode,
+                source_channel="portal",
+            ),
+        ) from error

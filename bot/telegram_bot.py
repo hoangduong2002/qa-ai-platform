@@ -1,5 +1,4 @@
 import os
-import shutil
 import asyncio
 import logging
 import re
@@ -28,11 +27,6 @@ from telegram.ext import (
     filters,
     CallbackQueryHandler
 )
-
-from graph.test_generation_graph import (
-    test_generation_graph
-)
-
 
 from app.utils.requirement_intelligence_exporter import (
     export_requirement_intelligence_to_excel
@@ -104,16 +98,6 @@ from app.utils.test_structure_store import (
     load_approved_test_case_structure
 )
 
-from app.application.generation_orchestrator import (
-    prepare_generation,
-    build_structured_generation_state,
-)
-
-from app.application.export_orchestrator import (
-    export_generation_result_to_excel,
-    save_generation_history,
-)
-
 from app.application.structure_review_orchestrator import (
     self_review_structure as self_review_structure_app,
     comment_improve_structure as comment_improve_structure_app,
@@ -158,10 +142,6 @@ from bot.handlers.structure_handlers import (
     handle_structure_comment_text
 )
 
-from app.exporters.function_based_excel_exporter import (
-    export_function_based_testcases_to_excel,
-)
-
 from app.services.testcase_review_service import run_testcase_ai_review
 from bot.renderers.testcase_review_text_renderer import (
     render_testcase_review_chat_summary,
@@ -175,11 +155,13 @@ from app.services.requirement_workflow_service import (
     run_requirement_questions,
     run_requirement_summary,
 )
-from app.services.llm_router_service import (
-    AI_MODE_DEEPSEEK_ONLY,
-    AI_MODE_NO_LLM,
-    AI_MODE_PRODUCTION_HYBRID,
-    AI_MODE_TEST_LOCAL_ONLY,
+from app.services.ai_mode_context_service import get_telegram_ai_mode
+from app.services.ai_provider_error_service import format_provider_error
+from app.services.test_design_workflow_service import (
+    build_generation_state,
+    export_generated_testcases_excel as workflow_export_generated_testcases_excel,
+    prepare_structure_gate,
+    run_structured_generation,
 )
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -196,32 +178,6 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADD_TEXT_STATE = "add_text"
 ADD_FILE_STATE = "add_file"
 
-TELEGRAM_VALID_AI_MODES = {
-    AI_MODE_PRODUCTION_HYBRID,
-    AI_MODE_TEST_LOCAL_ONLY,
-    AI_MODE_DEEPSEEK_ONLY,
-    AI_MODE_NO_LLM,
-}
-
-TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID
-
-
-def get_telegram_ai_mode() -> str:
-    ai_mode = os.getenv(
-        "TELEGRAM_AI_MODE",
-        TELEGRAM_DEFAULT_AI_MODE,
-    ).strip().upper()
-
-    if ai_mode not in TELEGRAM_VALID_AI_MODES:
-        raise ValueError(
-            "Unsupported TELEGRAM_AI_MODE="
-            f"{ai_mode or '[empty]'}. "
-            "Use PRODUCTION_HYBRID, DEEPSEEK_ONLY, TEST_LOCAL_ONLY, or NO_LLM."
-        )
-
-    return ai_mode
-
-
 def is_jira_issue_key(value: str) -> bool:
     return bool(
         re.fullmatch(
@@ -232,34 +188,11 @@ def is_jira_issue_key(value: str) -> bool:
 
 
 def format_ai_provider_error(error: Exception, ai_mode: str | None = None) -> str:
-    message = str(error).strip() or "Unknown provider error."
-    lowered = message.lower()
-
-    if any(
-        marker in lowered
-        for marker in [
-            "provider",
-            "deepseek",
-            "local ai",
-            "LOCAL",
-            "no_llm",
-            "requires llm",
-            "blocked",
-            "unavailable",
-            "not available",
-        ]
-    ):
-        mode = ai_mode or os.getenv(
-            "TELEGRAM_AI_MODE",
-            TELEGRAM_DEFAULT_AI_MODE,
-        ).strip().upper()
-
-        return (
-            f"AI provider is not available for TELEGRAM_AI_MODE={mode}.\n"
-            f"{message}"
-        )
-
-    return message
+    return format_provider_error(
+        error=error,
+        ai_mode=ai_mode or get_telegram_ai_mode(),
+        source_channel="telegram",
+    )
 
 
 def get_message(update):
@@ -566,7 +499,7 @@ async def continue_generation_with_structure_gate(
         f"Checking approved test case structure for {ticket_id}..."
     )
 
-    generation_gate_result = prepare_generation(ticket_id)
+    generation_gate_result = prepare_structure_gate(ticket_id)
 
     if generation_gate_result.status != "READY_TO_GENERATE":
         set_pending_generation_after_approval(
@@ -583,7 +516,7 @@ async def continue_generation_with_structure_gate(
 
     await message.reply_text(generation_gate_result.message)
 
-    generation_state = build_structured_generation_state(
+    generation_state = build_generation_state(
         ticket_id,
         ai_mode=ai_mode,
         source_channel="telegram",
@@ -623,58 +556,11 @@ def export_generated_testcases_excel(
     This wrapper creates a versioned copy only when needed.
     """
 
-    artifacts = load_ticket_artifacts(ticket_id)
-
-    testcases = (
-        result.get("improved_testcases")
-        or result.get("testcases")
-        or artifacts.get("improved_testcases")
-        or artifacts.get("testcases")
-        or []
-    )
-
-    coverage_review = (
-        result.get("coverage_review")
-        or artifacts.get("coverage_review")
-        or {}
-    )
-
-    final_coverage_review = (
-        result.get("final_coverage_review")
-        or artifacts.get("final_coverage_review")
-        or {}
-    )
-
-    approved_structure = (
-        result.get("approved_test_case_structure")
-        or artifacts.get("approved_test_case_structure")
-        or {}
-    )
-
-    excel_file = export_function_based_testcases_to_excel(
+    return workflow_export_generated_testcases_excel(
         ticket_id=ticket_id,
-        testcases=testcases,
-        coverage_review=coverage_review,
-        final_coverage_review=final_coverage_review,
-        approved_structure=approved_structure,
+        result=result,
+        version=version,
     )
-
-    if not version:
-        return excel_file
-
-    source_file = Path(excel_file)
-
-    versioned_file = (
-        source_file.parent
-        / f"{ticket_id}_function_based_testcases_{version}.xlsx"
-    )
-
-    if source_file.resolve() == versioned_file.resolve():
-        return str(source_file)
-
-    shutil.copyfile(source_file, versioned_file)
-
-    return str(versioned_file)
 
 
 async def self_review_structure(update, context):
@@ -734,27 +620,15 @@ async def run_generation(
         or "telegram"
     )
 
-    logger.info(
-        "Invoking generation graph source_channel=%s ai_mode=%s ticket_id=%s",
-        generation_state.get("source_channel"),
-        generation_state.get("ai_mode"),
-        ticket_id,
+    result = run_structured_generation(
+        ticket_id=ticket_id,
+        generation_state=generation_state,
+        ai_mode=ai_mode,
+        source_channel="telegram",
     )
-
-    result = test_generation_graph.invoke(generation_state)
 
     await message.reply_text(
         f"Test case generation completed for {ticket_id}."
-    )
-
-    save_review_session(
-        ticket_id,
-        {
-            "review_iterations": 0,
-            "improve_iterations": 0,
-            "max_iterations": 3,
-            "accepted": False,
-        }
     )
 
     scenarios = result.get("scenarios", [])

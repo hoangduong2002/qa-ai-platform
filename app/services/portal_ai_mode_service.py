@@ -5,25 +5,25 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
+from app.services.ai_mode_context_service import (
+    AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_NO_LLM,
+    AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_PRODUCTION_REMOTE_ONLY,
+    AI_MODE_TEST_LOCAL_ONLY,
+    VALID_AI_MODES,
+    get_portal_ai_mode_from_headers,
+    normalize_ai_mode,
+)
+
 
 logger = logging.getLogger(__name__)
 
-TEST_LOCAL_ONLY = "TEST_LOCAL_ONLY"
-PRODUCTION_HYBRID = "PRODUCTION_HYBRID"
-PRODUCTION_REMOTE_ONLY = "PRODUCTION_REMOTE_ONLY"
-DEEPSEEK_ONLY = "DEEPSEEK_ONLY"
-NO_LLM = "NO_LLM"
-
-VALID_AI_MODES = {
-    TEST_LOCAL_ONLY,
-    PRODUCTION_HYBRID,
-    DEEPSEEK_ONLY,
-    NO_LLM,
-}
-
-BACKWARD_COMPATIBLE_AI_MODE_ALIASES = {
-    PRODUCTION_REMOTE_ONLY: DEEPSEEK_ONLY,
-}
+TEST_LOCAL_ONLY = AI_MODE_TEST_LOCAL_ONLY
+PRODUCTION_HYBRID = AI_MODE_PRODUCTION_HYBRID
+PRODUCTION_REMOTE_ONLY = AI_MODE_PRODUCTION_REMOTE_ONLY
+DEEPSEEK_ONLY = AI_MODE_DEEPSEEK_ONLY
+NO_LLM = AI_MODE_NO_LLM
 
 _portal_ai_mode: ContextVar[dict[str, Any] | None] = ContextVar(
     "portal_ai_mode",
@@ -59,8 +59,7 @@ def _local_ai_available() -> bool:
 
 
 def _default_ai_mode() -> str:
-    configured = os.getenv("PORTAL_DEFAULT_AI_MODE", NO_LLM).strip().upper()
-    configured = BACKWARD_COMPATIBLE_AI_MODE_ALIASES.get(configured, configured)
+    configured = normalize_ai_mode(os.getenv("PORTAL_DEFAULT_AI_MODE", NO_LLM))
 
     if configured in VALID_AI_MODES:
         return configured
@@ -78,29 +77,7 @@ def get_default_ai_mode() -> str:
 
 
 def resolve_ai_mode_from_headers(headers: Any) -> dict[str, Any]:
-    requested_ai_mode = str(headers.get("X-AI-Mode") or "").strip().upper()
-
-    if not requested_ai_mode:
-        requested_ai_mode = _default_ai_mode()
-
-    requested_ai_mode = BACKWARD_COMPATIBLE_AI_MODE_ALIASES.get(
-        requested_ai_mode,
-        requested_ai_mode,
-    )
-
-    if requested_ai_mode not in VALID_AI_MODES:
-        raise ValueError(f"Invalid AI mode: {requested_ai_mode}")
-
-    return {
-        "ai_mode": requested_ai_mode,
-        "production_mode": requested_ai_mode
-        in {PRODUCTION_HYBRID, DEEPSEEK_ONLY},
-        "local_ai_enabled": requested_ai_mode
-        in {PRODUCTION_HYBRID, TEST_LOCAL_ONLY},
-        "deepseek_enabled": _deepseek_available(),
-        "server_local_ai_enabled": _local_ai_available(),
-        "source": "portal",
-    }
+    return get_portal_ai_mode_from_headers(headers)
 
 
 def set_portal_ai_mode_for_request(headers: Any):

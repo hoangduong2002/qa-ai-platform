@@ -8,18 +8,19 @@ from app.exporters.function_based_excel_exporter import (
     export_function_based_testcases_to_excel,
 )
 from app.services.llm_router_service import (
-    TASK_COVERAGE_REVIEW,
-    TASK_SCENARIO_GENERATION,
+    TASK_SCENARIO_COVERAGE_REVIEW,
+    TASK_SCENARIO_IMPROVEMENT,
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
+from app.services.test_design_workflow_service import (
+    generate_scope_and_scenarios as workflow_generate_scope_and_scenarios,
+    generate_testcases_from_approved_scenarios as workflow_generate_testcases_from_approved_scenarios,
+)
 from app.utils.artifact_loader import load_ticket_artifacts
 from app.utils.llm_json import parse_json
 from app.utils.test_structure_store import load_approved_test_case_structure
 from graph.nodes.final_review_coverage import final_coverage_review
-from graph.nodes.generate_scenarios import generate_scenarios
-from graph.nodes.generate_test_scope import generate_test_scope
-from graph.nodes.generate_testcases import generate_testcases
 from graph.nodes.improve_testcases import improve_testcases
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -31,6 +32,20 @@ def _current_ai_mode() -> str | None:
         return portal_ai_mode.get("ai_mode")
 
     return None
+
+
+def _resolve_ai_mode(ai_mode: str | None = None) -> str | None:
+    return ai_mode or _current_ai_mode()
+
+
+def _apply_web_ai_state(state: dict, ai_mode: str | None = None) -> dict:
+    resolved_ai_mode = _resolve_ai_mode(ai_mode)
+
+    if resolved_ai_mode:
+        state["ai_mode"] = resolved_ai_mode
+
+    state["source_channel"] = "web"
+    return state
 
 
 def _read_json(file_path: Path, default: Any):
@@ -254,46 +269,15 @@ def get_final_review_json(ticket_id: str, version: str = "latest") -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) if data else ""
 
 
-def generate_scope_and_scenarios(ticket_id: str) -> str:
-    approved_structure = load_approved_test_case_structure(ticket_id)
-    if not approved_structure:
-        raise ValueError("Approved test case structure is required.")
-
-    state = load_ticket_artifacts(ticket_id)
-    state["ticket_id"] = ticket_id
-    state["approved_test_case_structure"] = approved_structure
-    state["ai_mode"] = _current_ai_mode()
-
-    state.update(generate_test_scope(state))
-    state.update(generate_scenarios(state))
-
-    scenarios = state.get("scenarios", [])
-    test_scope = state.get("test_scope", {})
-
-    if not scenarios:
-        raise ValueError("No scenarios generated.")
-
-    existing = [
-        item["version"]
-        for item in list_scenario_versions(ticket_id)
-        if re.match(r"v\d+$", item["version"])
-    ]
-    version = _next_version(existing)
-
-    _write_json(_test_scope_path(ticket_id, version), test_scope)
-    _write_json(_test_scope_path(ticket_id, "latest"), test_scope)
-    _write_json(_scenario_path(ticket_id, version), scenarios)
-    _write_json(_scenario_path(ticket_id, "latest"), scenarios)
-
-    _write_json(_root(ticket_id) / "analysis" / "test_scope.json", test_scope)
-    _write_json(_root(ticket_id) / "analysis" / "scenarios.json", scenarios)
-
-    session = load_scenario_session(ticket_id)
-    session["current_version"] = version
-    session["approved"] = False
-    save_scenario_session(ticket_id, session)
-
-    return version
+def generate_scope_and_scenarios(
+    ticket_id: str,
+    ai_mode: str | None = None,
+) -> str:
+    return workflow_generate_scope_and_scenarios(
+        ticket_id=ticket_id,
+        ai_mode=ai_mode,
+        source_channel="web",
+    )
 
 
 def _coverage_prompt(state: dict, scenarios: list, test_scope: dict) -> str:
@@ -328,19 +312,24 @@ Scenarios:
 """
 
 
-def run_scenario_coverage_review(ticket_id: str, version: str) -> dict:
+def run_scenario_coverage_review(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> dict:
     scenarios = get_scenarios(ticket_id, version)
     if not scenarios:
         raise ValueError("Scenarios are required before coverage review.")
 
     test_scope = get_test_scope(ticket_id, version)
     state = load_ticket_artifacts(ticket_id)
-    ai_mode = _current_ai_mode()
+    ai_mode = _resolve_ai_mode(ai_mode)
 
     response_content = call_text_llm(
-        TASK_COVERAGE_REVIEW,
+        TASK_SCENARIO_COVERAGE_REVIEW,
         _coverage_prompt(state, scenarios, test_scope),
         ai_mode=ai_mode,
+        source_channel="web",
     )
 
     review = parse_json(response_content)
@@ -383,6 +372,7 @@ def _improve_scenarios(
     ticket_id: str,
     version: str,
     comment: str,
+    ai_mode: str | None = None,
 ) -> str:
     comment = (comment or "").strip()
     if not comment:
@@ -411,9 +401,10 @@ Current scenarios:
 """
 
     response_content = call_text_llm(
-        TASK_SCENARIO_GENERATION,
+        TASK_SCENARIO_IMPROVEMENT,
         prompt,
-        ai_mode=_current_ai_mode(),
+        ai_mode=_resolve_ai_mode(ai_mode),
+        source_channel="web",
     )
 
     improved_scenarios = _normalize_scenarios(parse_json(response_content))
@@ -437,20 +428,30 @@ Current scenarios:
     return new_version
 
 
-def improve_scenarios_from_ai_review(ticket_id: str, version: str) -> str:
+def improve_scenarios_from_ai_review(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> str:
     review = get_coverage_review(ticket_id, version)
     if not review:
         raise ValueError("No scenario coverage review found.")
 
-    return _improve_scenarios(ticket_id, version, _review_to_comment(review))
+    return _improve_scenarios(
+        ticket_id,
+        version,
+        _review_to_comment(review),
+        ai_mode=ai_mode,
+    )
 
 
 def improve_scenarios_from_human_review(
     ticket_id: str,
     version: str,
     comment: str,
+    ai_mode: str | None = None,
 ) -> str:
-    return _improve_scenarios(ticket_id, version, comment)
+    return _improve_scenarios(ticket_id, version, comment, ai_mode=ai_mode)
 
 
 def approve_scenarios(ticket_id: str, version: str) -> list:
@@ -468,49 +469,22 @@ def approve_scenarios(ticket_id: str, version: str) -> list:
     return scenarios
 
 
-def generate_testcases_from_approved_scenarios(ticket_id: str) -> str:
-    approved_structure = load_approved_test_case_structure(ticket_id)
-    approved_scenarios = get_scenarios(ticket_id, "approved")
-
-    if not approved_structure:
-        raise ValueError("Approved structure is required.")
-
-    if not approved_scenarios:
-        raise ValueError("Approved scenarios are required.")
-
-    state = load_ticket_artifacts(ticket_id)
-    state["ticket_id"] = ticket_id
-    state["approved_test_case_structure"] = approved_structure
-    state["test_scope"] = get_test_scope(ticket_id, "latest")
-    state["scenarios"] = approved_scenarios
-    state["ai_mode"] = _current_ai_mode()
-
-    result = generate_testcases(state)
-    state.update(result)
-
-    testcases = state.get("testcases", [])
-    if not testcases:
-        raise ValueError("No test cases generated.")
-
-    existing = [
-        item["version"]
-        for item in list_testcase_versions(ticket_id)
-        if re.match(r"v\d+$", item["version"])
-    ]
-    version = _next_version(existing)
-
-    _write_json(_testcase_path(ticket_id, version), testcases)
-    _write_json(_testcase_path(ticket_id, "latest"), testcases)
-
-    session = load_testcase_session(ticket_id)
-    session["current_version"] = version
-    session["approved"] = False
-    save_testcase_session(ticket_id, session)
-
-    return version
+def generate_testcases_from_approved_scenarios(
+    ticket_id: str,
+    ai_mode: str | None = None,
+) -> str:
+    return workflow_generate_testcases_from_approved_scenarios(
+        ticket_id=ticket_id,
+        ai_mode=ai_mode,
+        source_channel="web",
+    )
 
 
-def run_final_review(ticket_id: str, version: str) -> dict:
+def run_final_review(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> dict:
     testcases = get_testcases(ticket_id, version)
     scenarios = get_scenarios(ticket_id, "approved")
 
@@ -523,7 +497,7 @@ def run_final_review(ticket_id: str, version: str) -> dict:
     state["scenarios"] = scenarios
     state["testcases"] = testcases
     state["coverage_review"] = get_coverage_review(ticket_id, "latest")
-    state["ai_mode"] = _current_ai_mode()
+    _apply_web_ai_state(state, ai_mode)
 
     result = final_coverage_review(state)
     review = result.get("final_coverage_review", {})
@@ -548,6 +522,7 @@ def _improve_testcases(
     ticket_id: str,
     version: str,
     comment: str,
+    ai_mode: str | None = None,
 ) -> str:
     comment = (comment or "").strip()
     if not comment:
@@ -567,7 +542,7 @@ def _improve_testcases(
     state["coverage_review"] = get_final_review(ticket_id, version) or {}
     state["review_comments"] = [comment]
     state["improve_version"] = "web"
-    state["ai_mode"] = _current_ai_mode()
+    _apply_web_ai_state(state, ai_mode)
 
     result = improve_testcases(state)
     improved = result.get("improved_testcases") or result.get("testcases")
@@ -593,20 +568,30 @@ def _improve_testcases(
     return new_version
 
 
-def improve_testcases_from_ai_review(ticket_id: str, version: str) -> str:
+def improve_testcases_from_ai_review(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> str:
     review = get_final_review(ticket_id, version)
     if not review:
         raise ValueError("No final review found.")
 
-    return _improve_testcases(ticket_id, version, _review_to_comment(review))
+    return _improve_testcases(
+        ticket_id,
+        version,
+        _review_to_comment(review),
+        ai_mode=ai_mode,
+    )
 
 
 def improve_testcases_from_human_review(
     ticket_id: str,
     version: str,
     comment: str,
+    ai_mode: str | None = None,
 ) -> str:
-    return _improve_testcases(ticket_id, version, comment)
+    return _improve_testcases(ticket_id, version, comment, ai_mode=ai_mode)
 
 
 def approve_testcases(ticket_id: str, version: str) -> list:

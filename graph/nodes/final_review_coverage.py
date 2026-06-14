@@ -374,6 +374,7 @@ def repair_json_with_llm(
     malformed_json_text: str,
     original_error: Exception,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     logger.warning(
         "Attempting to repair malformed final coverage JSON. "
@@ -417,6 +418,7 @@ Malformed JSON:
         TASK_FINAL_REVIEW,
         repair_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     repaired_raw_file = save_raw_response(
@@ -636,6 +638,7 @@ def _generate_final_review_for_function(
     function_testcases: list,
     function_coverage_review: dict,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     logger.info(
         "Starting function final coverage review. "
@@ -713,6 +716,7 @@ def _generate_final_review_for_function(
         TASK_FINAL_REVIEW,
         final_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     raw_file = save_raw_response(
@@ -731,6 +735,7 @@ def _generate_final_review_for_function(
                 malformed_json_text=response_content,
                 original_error=parse_error,
                 ai_mode=ai_mode,
+                source_channel=source_channel,
             )
 
         review = _normalize_final_review(parsed)
@@ -990,6 +995,7 @@ def _merge_function_final_reviews(
 def final_coverage_review(state):
     ticket_id = state["ticket_id"]
     ai_mode = _resolve_ai_mode(state)
+    source_channel = state.get("source_channel")
 
     logger.info(
         "Starting function-based final coverage review. ticket_id=%s, task_type=%s, ai_mode=%s",
@@ -1122,6 +1128,7 @@ def final_coverage_review(state):
                 group["testcases"],
                 function_coverage_review,
                 ai_mode,
+                source_channel,
             )
 
             future_map[future] = function_id
