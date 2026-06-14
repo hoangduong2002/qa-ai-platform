@@ -93,27 +93,36 @@ async def run_requirement_questions(
 
 
 async def run_incremental_requirement_questions(
-    ticket_id: str
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     return run_incremental_requirement_analysis(
         ticket_id=ticket_id,
-        ai_mode=_current_ai_mode(),
+        ai_mode=ai_mode or _current_ai_mode(),
+        source_channel=source_channel,
     )
 
 
 async def run_incremental_scenarios(
-    ticket_id: str
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     return run_incremental_scenario_generation(
         ticket_id=ticket_id,
-        ai_mode=_current_ai_mode(),
+        ai_mode=ai_mode or _current_ai_mode(),
+        source_channel=source_channel,
     )
 
 
 async def run_incremental_testcases(
-    ticket_id: str
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     return run_incremental_testcase_generation(
         ticket_id=ticket_id,
-        ai_mode=_current_ai_mode(),
+        ai_mode=ai_mode or _current_ai_mode(),
+        source_channel=source_channel,
     )

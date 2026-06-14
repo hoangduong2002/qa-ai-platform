@@ -439,6 +439,7 @@ def analyze_changed_sources(
     ticket_id: str,
     changed_sources: list[dict],
     ai_mode: str | None,
+    source_channel: str | None = None,
 ) -> dict:
     effective_ai_mode = (ai_mode or _current_ai_mode() or "").strip().upper()
 
@@ -466,6 +467,7 @@ def analyze_changed_sources(
             task_type=TASK_REQUIREMENT_ANALYSIS,
             prompt=prompt,
             ai_mode=effective_ai_mode,
+            source_channel=source_channel,
         )
     except Exception as error:
         if LLM_REQUIRED_MESSAGE in str(error):
@@ -632,13 +634,19 @@ def save_incremental_requirement_analysis(
 def run_incremental_requirement_analysis(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     regeneration_plan = load_latest_regeneration_plan(ticket_id)
     if not regeneration_plan:
         raise ValueError("No regeneration plan found. Build regeneration plan first.")
 
     changed_sources = extract_changed_source_context(ticket_id, regeneration_plan)
-    incremental_result = analyze_changed_sources(ticket_id, changed_sources, ai_mode)
+    incremental_result = analyze_changed_sources(
+        ticket_id,
+        changed_sources,
+        ai_mode,
+        source_channel=source_channel,
+    )
     old_items = _load_old_requirement_items(ticket_id)
     merged_items = merge_requirement_items(
         old_items,

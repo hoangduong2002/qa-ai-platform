@@ -80,6 +80,7 @@ def generate_test_case_structure(state):
         task_type=TASK_TEST_STRUCTURE,
         prompt=final_prompt,
         ai_mode=ai_mode,
+        source_channel=state.get("source_channel"),
     )
 
     try:

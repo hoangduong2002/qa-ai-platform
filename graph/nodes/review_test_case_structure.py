@@ -65,6 +65,7 @@ def review_test_case_structure(state):
         task_type=TASK_COVERAGE_REVIEW,
         prompt=final_prompt,
         ai_mode=_resolve_ai_mode(state),
+        source_channel=(state or {}).get("source_channel"),
     )
 
     try:

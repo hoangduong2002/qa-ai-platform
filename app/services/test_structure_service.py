@@ -85,7 +85,30 @@ def _export_structure(ticket_id: str, state: dict):
     return state
 
 
-def run_initial_structure_flow(ticket_id: str):
+def _apply_ai_state(
+    state: dict,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
+) -> dict:
+    if ai_mode:
+        state["ai_mode"] = ai_mode
+    else:
+        portal_ai_mode = get_current_portal_ai_mode()
+
+        if portal_ai_mode and portal_ai_mode.get("ai_mode"):
+            state["ai_mode"] = portal_ai_mode["ai_mode"]
+
+    if source_channel:
+        state["source_channel"] = source_channel
+
+    return state
+
+
+def run_initial_structure_flow(
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
+):
     """
     Initial structure generation flow.
 
@@ -101,10 +124,7 @@ def run_initial_structure_flow(ticket_id: str):
 
     state = load_ticket_artifacts(ticket_id)
     state["ticket_id"] = ticket_id
-    portal_ai_mode = get_current_portal_ai_mode()
-
-    if portal_ai_mode and portal_ai_mode.get("ai_mode"):
-        state["ai_mode"] = portal_ai_mode["ai_mode"]
+    _apply_ai_state(state, ai_mode, source_channel)
 
     structure_result = generate_test_case_structure(state)
     state.update(structure_result)
@@ -163,7 +183,11 @@ def run_initial_structure_flow(ticket_id: str):
     return _export_structure(ticket_id, state)
 
 
-def run_structure_self_review(ticket_id: str):
+def run_structure_self_review(
+    ticket_id: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
+):
     session = load_structure_session(ticket_id)
 
     if session.get("approved"):
@@ -179,6 +203,7 @@ def run_structure_self_review(ticket_id: str):
     state["ticket_id"] = ticket_id
     state["test_case_structure"] = load_latest_test_case_structure(ticket_id)
     state["structure_review_comments"] = []
+    _apply_ai_state(state, ai_mode, source_channel)
 
     if not state["test_case_structure"]:
         raise ValueError(
@@ -231,6 +256,8 @@ def _next_structure_version(
 def run_structure_comment_improve(
     ticket_id: str,
     comment: str,
+    ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     state = load_ticket_artifacts(ticket_id)
 
@@ -257,6 +284,7 @@ def run_structure_comment_improve(
     state["structure_review_comments"] = [
         comment,
     ]
+    _apply_ai_state(state, ai_mode, source_channel)
 
     improve_result = improve_test_case_structure(
         state

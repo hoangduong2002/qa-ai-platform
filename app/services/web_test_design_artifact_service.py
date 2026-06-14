@@ -13,10 +13,6 @@ from app.services.llm_router_service import (
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
-from app.services.test_design_workflow_service import (
-    generate_scope_and_scenarios as workflow_generate_scope_and_scenarios,
-    generate_testcases_from_approved_scenarios as workflow_generate_testcases_from_approved_scenarios,
-)
 from app.utils.artifact_loader import load_ticket_artifacts
 from app.utils.llm_json import parse_json
 from app.utils.test_structure_store import load_approved_test_case_structure
@@ -269,17 +265,6 @@ def get_final_review_json(ticket_id: str, version: str = "latest") -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) if data else ""
 
 
-def generate_scope_and_scenarios(
-    ticket_id: str,
-    ai_mode: str | None = None,
-) -> str:
-    return workflow_generate_scope_and_scenarios(
-        ticket_id=ticket_id,
-        ai_mode=ai_mode,
-        source_channel="web",
-    )
-
-
 def _coverage_prompt(state: dict, scenarios: list, test_scope: dict) -> str:
     return f"""
 Review scenario coverage. Return ONLY JSON object.
@@ -467,17 +452,6 @@ def approve_scenarios(ticket_id: str, version: str) -> list:
     save_scenario_session(ticket_id, session)
 
     return scenarios
-
-
-def generate_testcases_from_approved_scenarios(
-    ticket_id: str,
-    ai_mode: str | None = None,
-) -> str:
-    return workflow_generate_testcases_from_approved_scenarios(
-        ticket_id=ticket_id,
-        ai_mode=ai_mode,
-        source_channel="web",
-    )
 
 
 def run_final_review(

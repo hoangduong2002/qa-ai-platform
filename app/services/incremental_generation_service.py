@@ -491,6 +491,7 @@ def regenerate_impacted_scenarios(
     regeneration_plan: dict,
     incremental_requirement_items: list[dict],
     ai_mode: str | None,
+    source_channel: str | None = None,
 ) -> list[dict]:
     check_regeneration_safety(regeneration_plan)
 
@@ -522,6 +523,7 @@ def regenerate_impacted_scenarios(
             task_type=TASK_SCENARIO_GENERATION,
             prompt=prompt,
             ai_mode=ai_mode,
+            source_channel=source_channel,
             format="json",
             response_format={"type": "json_object"},
             temperature=0,
@@ -686,6 +688,7 @@ def save_incremental_scenarios(
 def run_incremental_scenario_generation(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     regeneration_plan = load_latest_regeneration_plan(ticket_id)
     if not regeneration_plan:
@@ -701,6 +704,7 @@ def run_incremental_scenario_generation(
         regeneration_plan=regeneration_plan,
         incremental_requirement_items=incremental_requirement_items,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
     merged_scenarios = merge_scenarios(
         old_scenarios=old_scenarios,
@@ -889,6 +893,7 @@ def regenerate_impacted_testcases(
     regeneration_plan: dict,
     incremental_scenarios: list[dict],
     ai_mode: str | None,
+    source_channel: str | None = None,
 ) -> list[dict]:
     check_regeneration_safety(regeneration_plan)
 
@@ -917,6 +922,7 @@ def regenerate_impacted_testcases(
             task_type=TASK_TESTCASE_GENERATION,
             prompt=prompt,
             ai_mode=ai_mode,
+            source_channel=source_channel,
             format="json",
             response_format={"type": "json_object"},
             temperature=0,
@@ -1105,6 +1111,7 @@ def save_incremental_testcase_version(
 def run_incremental_testcase_generation(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     regeneration_plan = load_latest_regeneration_plan(ticket_id)
     if not regeneration_plan:
@@ -1120,6 +1127,7 @@ def run_incremental_testcase_generation(
         regeneration_plan=regeneration_plan,
         incremental_scenarios=incremental_scenarios,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
     merged_testcases = merge_testcases(
         old_testcases=old_testcases,

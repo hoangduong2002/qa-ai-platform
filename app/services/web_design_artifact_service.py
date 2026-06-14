@@ -122,8 +122,26 @@ def get_structure_version_json(ticket_id: str, version: str = "latest") -> str:
     return json.dumps(structure, indent=2, ensure_ascii=False)
 
 
-def generate_structure_for_web(ticket_id: str) -> dict:
-    return run_initial_structure_flow(ticket_id)
+def _apply_web_ai_state(
+    state: dict,
+    ai_mode: str | None = None,
+) -> dict:
+    if ai_mode:
+        state["ai_mode"] = ai_mode
+
+    state["source_channel"] = "web"
+    return state
+
+
+def generate_structure_for_web(
+    ticket_id: str,
+    ai_mode: str | None = None,
+) -> dict:
+    return run_initial_structure_flow(
+        ticket_id,
+        ai_mode=ai_mode,
+        source_channel="web",
+    )
 
 
 def save_structure_json_as_new_version(
@@ -203,7 +221,11 @@ def get_structure_review_json(ticket_id: str, version: str = "latest") -> str:
     return json.dumps(review, indent=2, ensure_ascii=False)
 
 
-def self_review_structure_version(ticket_id: str, version: str) -> dict:
+def self_review_structure_version(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> dict:
     structure = get_structure_version(ticket_id, version)
     if not structure:
         raise ValueError(f"No structure found for version: {version}")
@@ -214,6 +236,7 @@ def self_review_structure_version(ticket_id: str, version: str) -> dict:
     state["ticket_id"] = ticket_id
     state["test_case_structure"] = structure
     state["structure_review_comments"] = []
+    _apply_web_ai_state(state, ai_mode)
 
     review_result = review_test_case_structure(state)
     state.update(review_result)
@@ -257,6 +280,7 @@ def improve_structure_from_comment(
     ticket_id: str,
     version: str,
     comment: str,
+    ai_mode: str | None = None,
 ) -> str:
     comment = (comment or "").strip()
     if not comment:
@@ -270,6 +294,7 @@ def improve_structure_from_comment(
     state["ticket_id"] = ticket_id
     state["test_case_structure"] = structure
     state["structure_review_comments"] = [comment]
+    _apply_web_ai_state(state, ai_mode)
 
     improve_result = improve_test_case_structure(state)
     state.update(improve_result)
@@ -299,7 +324,11 @@ def improve_structure_from_comment(
     return new_version
 
 
-def improve_structure_from_ai_review(ticket_id: str, version: str) -> str:
+def improve_structure_from_ai_review(
+    ticket_id: str,
+    version: str,
+    ai_mode: str | None = None,
+) -> str:
     review = get_structure_review(ticket_id, version)
     if not review:
         raise ValueError("No AI structure review found.")
@@ -308,6 +337,7 @@ def improve_structure_from_ai_review(ticket_id: str, version: str) -> str:
         ticket_id=ticket_id,
         version=version,
         comment=_review_to_comment(review),
+        ai_mode=ai_mode,
     )
 
 

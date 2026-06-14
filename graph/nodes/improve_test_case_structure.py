@@ -81,6 +81,7 @@ def improve_test_case_structure(state):
         task_type=TASK_TEST_STRUCTURE,
         prompt=final_prompt,
         ai_mode=_resolve_ai_mode(state),
+        source_channel=(state or {}).get("source_channel"),
     )
 
     try:

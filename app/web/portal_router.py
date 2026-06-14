@@ -408,13 +408,18 @@ async def analyze_incremental_requirement(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
             ticket_id=ticket_id,
             action="analyze_incremental_requirement",
-            job_callable=lambda: run_incremental_requirement_questions(ticket_id=ticket_id),
+            job_callable=lambda: run_incremental_requirement_questions(
+                ticket_id=ticket_id,
+                ai_mode=ai_mode,
+                source_channel="web",
+            ),
         )
     except (RuntimeError, ValueError, HTTPException) as error:
         detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
@@ -428,13 +433,18 @@ async def generate_incremental_scenarios_for_web(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
             ticket_id=ticket_id,
             action="generate_incremental_scenarios",
-            job_callable=lambda: run_incremental_scenarios(ticket_id=ticket_id),
+            job_callable=lambda: run_incremental_scenarios(
+                ticket_id=ticket_id,
+                ai_mode=ai_mode,
+                source_channel="web",
+            ),
         )
     except (RuntimeError, ValueError, HTTPException) as error:
         detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
@@ -448,13 +458,18 @@ async def generate_incremental_testcases_for_web(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
             ticket_id=ticket_id,
             action="generate_incremental_testcases",
-            job_callable=lambda: run_incremental_testcases(ticket_id=ticket_id),
+            job_callable=lambda: run_incremental_testcases(
+                ticket_id=ticket_id,
+                ai_mode=ai_mode,
+                source_channel="web",
+            ),
         )
     except (RuntimeError, ValueError, HTTPException) as error:
         detail = str(error.detail) if isinstance(error, HTTPException) else str(error)
@@ -545,10 +560,14 @@ async def generate_structure(
     ticket_id: str,
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="generate_structure",
-        job_callable=lambda: generate_structure_for_web(ticket_id),
+        job_callable=lambda: generate_structure_for_web(
+            ticket_id,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", structure_version="latest")
 
@@ -559,10 +578,15 @@ async def self_review_structure(
     structure_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     await _run_ticket_job(
         ticket_id=ticket_id,
         action="self_review_structure",
-        job_callable=lambda: self_review_structure_version(ticket_id, structure_version),
+        job_callable=lambda: self_review_structure_version(
+            ticket_id,
+            structure_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(
         ticket_id,
@@ -577,10 +601,15 @@ async def improve_structure_ai(
     structure_version: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     new_version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_structure_ai",
-        job_callable=lambda: improve_structure_from_ai_review(ticket_id, structure_version),
+        job_callable=lambda: improve_structure_from_ai_review(
+            ticket_id,
+            structure_version,
+            ai_mode=ai_mode,
+        ),
     )
     return _redirect_detail(ticket_id, tab="design", structure_version=new_version)
 
@@ -592,6 +621,7 @@ async def improve_structure_human(
     human_review_comment: str = Form(...),
     _: None = Depends(portal_ai_mode_dependency),
 ):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     new_version = await _run_ticket_job(
         ticket_id=ticket_id,
         action="improve_structure_human",
@@ -599,6 +629,7 @@ async def improve_structure_human(
             ticket_id=ticket_id,
             version=structure_version,
             comment=human_review_comment,
+            ai_mode=ai_mode,
         ),
     )
     return _redirect_detail(ticket_id, tab="design", structure_version=new_version)
