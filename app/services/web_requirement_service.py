@@ -14,11 +14,13 @@ from app.services.jira_requirement_service import (
     create_requirement_from_jira,
 )
 from app.services.jira_delta_service import (
+    build_and_save_latest_stored_jira_snapshot,
     load_latest_change_impact_report,
 )
 from app.services.impact_mapping_service import (
     load_latest_regeneration_plan,
 )
+from app.services.requirement_source_service import has_jira_snapshot
 from app.services.portal_job_service import update_job_progress
 
 from app.services.requirement_sanitization_service import (
@@ -115,6 +117,51 @@ def _analysis_dir(ticket_id: str) -> Path:
 
 def _ticket_json_file(ticket_id: str) -> Path:
     return _requirement_dir(ticket_id) / "ticket.json"
+
+
+def _write_source_metadata(ticket_id: str, values: dict) -> None:
+    metadata_file = _requirement_dir(ticket_id) / "metadata.json"
+    metadata = _read_json(metadata_file) or {}
+    metadata.update(values)
+    metadata_file.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def _mark_web_jira_requirement(ticket_id: str, jira_key: str) -> None:
+    now = _now_iso()
+
+    ticket_file = _ticket_json_file(ticket_id)
+    ticket_data = _read_json(ticket_file) or {}
+    ticket_data.update(
+        {
+            "ticket_id": ticket_id,
+            "source": "jira",
+            "source_type": "jira",
+            "source_channel": "web",
+            "imported_from_jira": True,
+            "jira_key": jira_key,
+            "updated_at": now,
+        }
+    )
+    ticket_file.write_text(
+        json.dumps(ticket_data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    _write_source_metadata(
+        ticket_id,
+        {
+            "ticket_id": ticket_id,
+            "source": f"jira:{jira_key}",
+            "source_type": "jira",
+            "source_channel": "web",
+            "imported_from_jira": True,
+            "jira_key": jira_key,
+            "updated_at": now,
+        },
+    )
 
 
 def list_requirements() -> list[dict]:
@@ -236,12 +283,32 @@ async def create_manual_requirement(
         "ticket_id": ticket_id,
         "summary": requirement_name.strip(),
         "source": "web_manual",
+        "source_type": "manual",
+        "source_channel": "web",
+        "imported_from_jira": False,
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
     }
 
     _ticket_json_file(ticket_id).write_text(
         json.dumps(ticket_data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    (base_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "ticket_id": ticket_id,
+                "source": "web_manual",
+                "source_type": "manual",
+                "source_channel": "web",
+                "imported_from_jira": False,
+                "created_at": ticket_data["created_at"],
+                "updated_at": ticket_data["updated_at"],
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
@@ -263,6 +330,16 @@ def create_requirement_from_jira_and_sanitize(
             "Requirement exists and is complete, skipping Jira load. ticket_id=%s",
             ticket_id,
         )
+        _mark_web_jira_requirement(ticket_id, ticket_id)
+        if not has_jira_snapshot(ticket_id):
+            try:
+                build_and_save_latest_stored_jira_snapshot(ticket_id)
+            except Exception as error:
+                logger.warning(
+                    "Could not build Jira snapshot for existing requirement. ticket_id=%s error=%s",
+                    ticket_id,
+                    error,
+                )
         return ticket_id
 
     if _requirement_dir(ticket_id).exists() and not requirement_is_complete(ticket_id):
@@ -276,7 +353,9 @@ def create_requirement_from_jira_and_sanitize(
         issue_key.strip(),
         jira_pat=jira_pat.strip(),
         refresh_existing=refresh_existing,
+        source_channel="web",
     )
+    _mark_web_jira_requirement(ticket_id, ticket_id)
 
     update_job_progress(
         current_step="Sanitizing requirement",
@@ -284,6 +363,8 @@ def create_requirement_from_jira_and_sanitize(
     )
 
     sanitize_existing_requirement(ticket_id)
+
+    build_and_save_latest_stored_jira_snapshot(ticket_id)
 
     return ticket_id
 

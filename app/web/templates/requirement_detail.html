@@ -18,33 +18,35 @@
                 <button class="side-action" type="submit">Run Sanitizer</button>
             </form>
 
-            <form id="syncJiraForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/sync-jira" data-loading="true" data-loading-title="Syncing Jira changes..." data-loading-message="Fetching Jira source and building deterministic change report.">
-                <input type="hidden" name="jira_pat" id="syncJiraPatField" value="">
-                <button class="side-action" type="submit">Sync Jira Changes</button>
-            </form>
+            {% if can_sync_jira %}
+                <form id="syncJiraForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/sync-jira" data-loading="true" data-loading-title="Syncing Jira changes..." data-loading-message="Fetching Jira source and building deterministic change report.">
+                    <input type="hidden" name="jira_pat" id="syncJiraPatField" value="">
+                    <button class="side-action" type="submit">Sync Jira Changes</button>
+                </form>
 
-            <form id="buildRegenerationPlanForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/build-regeneration-plan" data-loading="true" data-loading-title="Building regeneration plan..." data-loading-message="Mapping changed sources to requirements, scenarios, and test cases.">
-                <button class="side-action" type="submit">Build Regeneration Plan</button>
-            </form>
+                <form id="buildRegenerationPlanForm" class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/build-regeneration-plan" data-loading="true" data-loading-title="Building regeneration plan..." data-loading-message="Mapping changed sources to requirements, scenarios, and test cases.">
+                    <button class="side-action" type="submit">Build Regeneration Plan</button>
+                </form>
 
-            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze-incremental" data-loading="true" data-ai-action="true" data-loading-title="Analyzing changed sources..." data-loading-message="AI is analyzing only new or changed source entities.">
-                <button class="side-action" type="submit">Analyze Changed Sources</button>
-            </form>
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze-incremental" data-loading="true" data-ai-action="true" data-loading-title="Analyzing changed sources..." data-loading-message="AI is analyzing only new or changed source entities.">
+                    <button class="side-action" type="submit">Analyze Changed Sources</button>
+                </form>
 
-            {% set partial_safe = regeneration_plan and regeneration_plan.can_partial_regenerate %}
-            {% set partial_reason = regeneration_plan.reason_if_full_regenerate_required if regeneration_plan else "Build regeneration plan first." %}
-            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to changed requirement items.">
-                <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Scenarios</button>
-            </form>
+                {% set partial_safe = regeneration_plan and regeneration_plan.can_partial_regenerate %}
+                {% set partial_reason = regeneration_plan.reason_if_full_regenerate_required if regeneration_plan else "Build regeneration plan first." %}
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to changed requirement items.">
+                    <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Scenarios</button>
+                </form>
 
-            <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
-                <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Test Cases</button>
-            </form>
+                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Regenerating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
+                    <button class="side-action" type="submit" {% if not partial_safe %}disabled data-partial-blocked="true" title="{{ partial_reason }}"{% endif %}>Regenerate Impacted Test Cases</button>
+                </form>
 
-            <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Export Incremental Excel</a>
+                <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Export Incremental Excel</a>
 
-            {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}
-                <div class="ai-mode-status">{{ regeneration_plan.reason_if_full_regenerate_required or "Partial regeneration is not safe. Run full regeneration." }}</div>
+                {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}
+                    <div class="ai-mode-status">{{ regeneration_plan.reason_if_full_regenerate_required or "Partial regeneration is not safe. Run full regeneration." }}</div>
+                {% endif %}
             {% endif %}
 
             <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/analyze" data-loading="true" data-ai-action="true" data-loading-title="Analyzing requirement..." data-loading-message="AI is extracting requirement items and clarification questions.">
@@ -115,9 +117,11 @@
                 <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating scope and scenarios..." data-loading-message="Generate only. No auto coverage review.">
                     <button class="side-action" type="submit">Generate Scope & Scenarios</button>
                 </form>
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to new or updated requirement items.">
-                    <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Scenarios</button>
-                </form>
+                {% if can_sync_jira %}
+                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/scenarios/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted scenarios..." data-loading-message="AI is regenerating only scenarios linked to new or updated requirement items.">
+                        <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Scenarios</button>
+                    </form>
+                {% endif %}
             {% endif %}
 
             {% if selected_scenarios_json %}
@@ -147,10 +151,12 @@
                 <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate" data-loading="true" data-ai-action="true" data-loading-title="Generating test cases..." data-loading-message="Generate only. No auto final review.">
                     <button class="side-action" type="submit">Generate Test Cases</button>
                 </form>
-                <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
-                    <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Test Cases</button>
-                </form>
-                <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Download Incremental Excel</a>
+                {% if can_sync_jira %}
+                    <form class="side-form" method="post" action="/portal/requirements/{{ ticket_id }}/testcases/generate-incremental" data-loading="true" data-ai-action="true" data-loading-title="Generating impacted test cases..." data-loading-message="AI is regenerating only test cases linked to impacted scenarios.">
+                        <button class="side-action" type="submit" {% if regeneration_plan and not regeneration_plan.can_partial_regenerate %}disabled data-partial-blocked="true" title="{{ regeneration_plan.reason_if_full_regenerate_required }}"{% endif %}>Generate Impacted Test Cases</button>
+                    </form>
+                    <a class="side-action" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Download Incremental Excel</a>
+                {% endif %}
             {% endif %}
 
             {% if selected_testcases_json %}
@@ -204,6 +210,7 @@
                 {% if has_summary %}<span class="status ok">Summary Ready</span>{% else %}<span class="status missing">No Summary</span>{% endif %}
             </div>
 
+            {% if can_sync_jira %}
             <div id="change-impact-report" class="card">
                 <div class="section-header">
                     <h3>Latest Change Impact Report</h3>
@@ -359,6 +366,7 @@
                     <p>No incremental test suite found yet.</p>
                 {% endif %}
             </div>
+            {% endif %}
 
             {% if error or analysis_error %}
                 <div class="card alert error">

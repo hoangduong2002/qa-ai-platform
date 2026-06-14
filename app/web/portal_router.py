@@ -92,6 +92,10 @@ from app.services.jira_delta_service import (
     build_and_save_latest_stored_jira_snapshot,
     sync_jira_changes_for_requirement,
 )
+from app.services.requirement_source_service import (
+    has_jira_snapshot as requirement_has_jira_snapshot,
+    is_jira_requirement as requirement_is_jira,
+)
 from app.services.impact_mapping_service import (
     SAFETY_FULL_RECOMMENDED,
     SAFETY_MANUAL_REVIEW,
@@ -108,6 +112,10 @@ router = APIRouter(prefix="/portal", tags=["Web Portal"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 templates.env.globals["portal_default_ai_mode"] = get_default_ai_mode()
+
+JIRA_SYNC_NOT_AVAILABLE = (
+    "This requirement was not imported from Jira. Jira sync is not available."
+)
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
@@ -248,6 +256,9 @@ async def requirement_detail(
     error: str = "",
 ):
     detail = get_requirement_detail(ticket_id)
+    is_jira_source = requirement_is_jira(ticket_id)
+    has_jira_snapshot = requirement_has_jira_snapshot(ticket_id)
+    can_sync_jira = is_jira_source and has_jira_snapshot
 
     structure_session = get_structure_session_for_web(ticket_id)
     scenario_session = load_scenario_session(ticket_id)
@@ -305,6 +316,9 @@ async def requirement_detail(
             "has_approved_scenarios": bool(scenario_session.get("approved")),
             "has_testcases": bool(selected_testcases_json),
             "has_approved_testcases": bool(testcase_session.get("approved")),
+            "is_jira_requirement": is_jira_source,
+            "has_jira_snapshot": has_jira_snapshot,
+            "can_sync_jira": can_sync_jira,
             "error": error,
         }
     )
@@ -352,9 +366,11 @@ async def sanitize_requirement(ticket_id: str):
 @router.post("/requirements/{ticket_id}/snapshot-jira")
 async def snapshot_jira_requirement(ticket_id: str):
     try:
+        _ensure_jira_requirement(ticket_id)
         result = build_and_save_latest_stored_jira_snapshot(ticket_id)
     except ValueError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        status_code = 400 if str(error) == JIRA_SYNC_NOT_AVAILABLE else 404
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
 
     return JSONResponse(result)
 
@@ -365,9 +381,11 @@ async def sync_jira_requirement(
     jira_pat: str = Form(""),
 ):
     try:
+        _ensure_jira_requirement(ticket_id)
         result = sync_jira_changes_for_requirement(
             ticket_id=ticket_id,
             jira_pat=jira_pat,
+            source_channel="web",
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -378,6 +396,7 @@ async def sync_jira_requirement(
 @router.post("/requirements/{ticket_id}/build-regeneration-plan")
 async def build_regeneration_plan_for_requirement(ticket_id: str):
     try:
+        _ensure_jira_requirement(ticket_id)
         result = build_and_save_regeneration_plan(ticket_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -410,6 +429,7 @@ async def analyze_incremental_requirement(
 ):
     ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
+        _ensure_jira_requirement(ticket_id)
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
@@ -435,6 +455,7 @@ async def generate_incremental_scenarios_for_web(
 ):
     ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
+        _ensure_jira_requirement(ticket_id)
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
@@ -460,6 +481,7 @@ async def generate_incremental_testcases_for_web(
 ):
     ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
     try:
+        _ensure_jira_requirement(ticket_id)
         # Safety gate before dispatching
         _check_incremental_safety(ticket_id)
         await _run_ticket_job(
@@ -883,6 +905,7 @@ async def download_testcases_excel(
 @router.get("/requirements/{ticket_id}/testcases/incremental-excel")
 async def download_incremental_testcases_excel(ticket_id: str):
     try:
+        _ensure_jira_requirement(ticket_id)
         excel_file = export_incremental_testcases_excel(ticket_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -968,6 +991,11 @@ def _check_incremental_safety(ticket_id: str) -> None:
             msg += "Reasons:\n" + "\n".join(f"  - {r}" for r in reasons)
         msg += "\n\nManual review is required before proceeding."
         raise HTTPException(status_code=400, detail=msg)
+
+
+def _ensure_jira_requirement(ticket_id: str) -> None:
+    if not requirement_is_jira(ticket_id):
+        raise ValueError(JIRA_SYNC_NOT_AVAILABLE)
 
 
 async def _run_ticket_job(ticket_id: str, action: str, job_callable):

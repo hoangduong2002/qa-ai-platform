@@ -567,6 +567,7 @@ def _write_refresh_metadata(
     ticket_id: str,
     issue_key: str,
     refresh_existing: bool,
+    source_channel: str | None = None,
 ) -> None:
     requirement_dir = REQUIREMENTS_ROOT / ticket_id
     metadata_file = requirement_dir / "metadata.json"
@@ -575,6 +576,10 @@ def _write_refresh_metadata(
 
     metadata["ticket_id"] = ticket_id
     metadata["source"] = f"jira:{issue_key}"
+    metadata["source_type"] = "jira"
+    metadata["jira_key"] = issue_key
+    metadata["source_channel"] = source_channel or metadata.get("source_channel") or "unknown"
+    metadata["imported_from_jira"] = True
 
     if refresh_existing:
         metadata["source_refreshed_at"] = _utc_now()
@@ -972,6 +977,7 @@ def _write_ticket_snapshot(
     issue_key: str,
     issue: dict,
     refresh_existing: bool,
+    source_channel: str | None = None,
 ) -> None:
     requirement_dir = REQUIREMENTS_ROOT / ticket_id
     ticket_file = requirement_dir / "ticket.json"
@@ -984,6 +990,9 @@ def _write_ticket_snapshot(
         **existing,
         "ticket_id": ticket_id,
         "source": "jira",
+        "source_type": "jira",
+        "source_channel": source_channel or existing.get("source_channel") or "unknown",
+        "imported_from_jira": True,
         "jira_key": issue_key,
         "summary": fields.get("summary") or issue_key,
         "status": (
@@ -1054,6 +1063,7 @@ def create_requirement_from_jira(
     issue_key: str,
     jira_pat: str = "",
     refresh_existing: bool = False,
+    source_channel: str | None = None,
 ) -> str:
     issue_key = issue_key.strip().upper()
     ticket_id = _safe_requirement_id(issue_key)
@@ -1265,12 +1275,14 @@ def create_requirement_from_jira(
         issue_key=issue_key,
         issue=main_issue,
         refresh_existing=refresh_existing,
+        source_channel=source_channel,
     )
 
     _write_refresh_metadata(
         ticket_id=ticket_id,
         issue_key=issue_key,
         refresh_existing=refresh_existing,
+        source_channel=source_channel,
     )
 
     return ticket_id

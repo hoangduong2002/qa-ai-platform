@@ -1517,6 +1517,55 @@ def load_latest_change_impact_report(ticket_id: str) -> dict | None:
     return _read_json(_latest_change_report_file(ticket_id), None)
 
 
+def _write_jira_source_metadata(
+    ticket_id: str,
+    issue_key: str,
+    source_channel: str | None = None,
+) -> None:
+    root = REQUIREMENTS_ROOT / ticket_id
+    metadata_file = root / "metadata.json"
+    ticket_file = root / "ticket.json"
+    now = _utc_now()
+
+    metadata = _read_json(metadata_file, {}) or {}
+    metadata.update(
+        {
+            "ticket_id": ticket_id,
+            "source": f"jira:{issue_key}",
+            "source_type": "jira",
+            "jira_key": issue_key,
+            "source_channel": (
+                source_channel
+                or metadata.get("source_channel")
+                or "unknown"
+            ),
+            "imported_from_jira": True,
+            "updated_at": now,
+            "source_refreshed_at": now,
+        }
+    )
+    _write_json(metadata_file, metadata)
+
+    ticket = _read_json(ticket_file, {}) or {}
+    ticket.update(
+        {
+            "ticket_id": ticket_id,
+            "source": "jira",
+            "source_type": "jira",
+            "source_channel": (
+                source_channel
+                or ticket.get("source_channel")
+                or "unknown"
+            ),
+            "imported_from_jira": True,
+            "jira_key": issue_key,
+            "updated_at": now,
+            "source_refreshed_at": now,
+        }
+    )
+    _write_json(ticket_file, ticket)
+
+
 def fetch_latest_jira_payload_for_snapshot(
     ticket_id: str,
     jira_pat: str = "",
@@ -1556,13 +1605,21 @@ def fetch_latest_jira_payload_for_snapshot(
 def sync_jira_changes_for_requirement(
     ticket_id: str,
     jira_pat: str = "",
+    source_channel: str | None = None,
 ) -> dict:
     previous_snapshot = load_latest_jira_snapshot(ticket_id)
     root = REQUIREMENTS_ROOT / ticket_id
+    ticket = _read_json(root / "ticket.json", {}) or {}
+    issue_key = str(ticket.get("jira_key") or ticket_id).strip().upper()
     normalized_text = _read_text(root / "analysis" / "sanitized_requirement.md")
     latest_payload = fetch_latest_jira_payload_for_snapshot(
         ticket_id=ticket_id,
         jira_pat=jira_pat,
+    )
+    _write_jira_source_metadata(
+        ticket_id=ticket_id,
+        issue_key=issue_key,
+        source_channel=source_channel,
     )
     new_snapshot = build_jira_snapshot(
         ticket_id=ticket_id,
