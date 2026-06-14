@@ -306,12 +306,12 @@ def _include_subtasks() -> bool:
 def _get_jira_client(
     jira_pat: str = "",
 ) -> Jira:
-    jira_url = os.getenv("JIRA_SERVER_URL") or os.getenv("JIRA_URL")
+    jira_url = os.getenv("JIRA_SERVER_URL")
     auth_mode = os.getenv("JIRA_AUTH_MODE", "PAT").upper()
     verify_ssl = _verify_ssl()
 
     if not jira_url:
-        raise ValueError("JIRA_SERVER_URL or JIRA_URL is missing in .env")
+        raise ValueError("JIRA_SERVER_URL is missing in .env")
 
     jira_url = jira_url.rstrip("/")
     jira_pat = (jira_pat or "").strip()
