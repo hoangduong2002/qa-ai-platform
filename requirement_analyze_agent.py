@@ -1,34 +1,39 @@
 import os
+from types import SimpleNamespace
 from typing import Any
 from typing_extensions import TypedDict
-from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import StateGraph, START, END
 from app.config.env_loader import load_project_env
+from app.services.ai_mode_context_service import get_non_portal_ai_mode
+from app.services.llm_router_service import (
+    TASK_REQUIREMENT_ANALYSIS,
+    TASK_REQUIREMENT_SUMMARY,
+    call_text_llm,
+)
 
 
 load_project_env()
 
 
-def _deepseek_model() -> str:
-    model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+def _task_type_for_prompt(prompt: str) -> str:
+    if "summarized requirements" in (prompt or "").lower():
+        return TASK_REQUIREMENT_SUMMARY
 
-    if "v4-pro" in model.strip().lower() and os.getenv(
-        "ALLOW_DEEPSEEK_PRO",
-        "",
-    ).strip().lower() not in {"1", "true", "yes", "y", "on"}:
-        raise RuntimeError(
-            "deepseek-v4-pro is disabled by cost guard. "
-            "Set ALLOW_DEEPSEEK_PRO=true only if you intentionally want to use Pro."
-        )
-
-    return model
+    return TASK_REQUIREMENT_ANALYSIS
 
 # Khởi tạo mô hình DeepSeek nội bộ cho Agent
-llm = ChatDeepSeek(
-    model=_deepseek_model(),
-    temperature=0.1,
-    timeout=120
-)
+class RouterLLMProxy:
+    def invoke(self, prompt: str):
+        content = call_text_llm(
+            task_type=_task_type_for_prompt(prompt),
+            prompt=prompt,
+            ai_mode=get_non_portal_ai_mode(),
+            source_channel="legacy_requirement_agent",
+        )
+        return SimpleNamespace(content=content)
+
+
+llm = RouterLLMProxy()
 
 class AnalystState(TypedDict):
     ticket_id: str

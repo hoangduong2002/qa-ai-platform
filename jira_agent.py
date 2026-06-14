@@ -1,40 +1,34 @@
 import os
 import re
 import sys
+from types import SimpleNamespace
 from typing import Annotated, Any, List
 from typing_extensions import TypedDict
 from jira import JIRA
-from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import StateGraph, START, END
 
 from app.config.env_loader import load_project_env
+from app.services.ai_mode_context_service import get_non_portal_ai_mode
+from app.services.llm_router_service import (
+    TASK_REQUIREMENT_ANALYSIS,
+    call_text_llm,
+)
 
 # 1. Load environment configurations from .env
 load_project_env()
 
-
-def _deepseek_model() -> str:
-    model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
-
-    if "v4-pro" in model.strip().lower() and os.getenv(
-        "ALLOW_DEEPSEEK_PRO",
-        "",
-    ).strip().lower() not in {"1", "true", "yes", "y", "on"}:
-        raise RuntimeError(
-            "deepseek-v4-pro is disabled by cost guard. "
-            "Set ALLOW_DEEPSEEK_PRO=true only if you intentionally want to use Pro."
+class RouterLLMProxy:
+    def invoke(self, prompt: str):
+        content = call_text_llm(
+            task_type=TASK_REQUIREMENT_ANALYSIS,
+            prompt=prompt,
+            ai_mode=get_non_portal_ai_mode(),
+            source_channel="legacy_jira_agent",
         )
+        return SimpleNamespace(content=content)
 
-    return model
 
-
-# 2. Initialize DeepSeek LLM
-llm = ChatDeepSeek(
-    model=_deepseek_model(),
-    temperature=0.1,
-    timeout=120,
-    max_retries=3
-)
+llm = RouterLLMProxy()
 
 # 3. Define the Graph State with a subtask queue
 class JiraLoopingState(TypedDict):
