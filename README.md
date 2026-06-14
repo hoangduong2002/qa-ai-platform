@@ -337,7 +337,7 @@ AI Mode controls routing. Provider config only defines endpoints and models.
 PORTAL_DEFAULT_AI_MODE=NO_LLM
 TELEGRAM_AI_MODE=PRODUCTION_HYBRID
 
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 LOCAL_AI_PROVIDER=OLLAMA

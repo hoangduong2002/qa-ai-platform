@@ -212,6 +212,17 @@ def _provider_model(provider: str) -> str:
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+def _assert_deepseek_model_allowed(model: str) -> None:
+    if "v4-pro" in (model or "").strip().lower() and not _env_bool(
+        "ALLOW_DEEPSEEK_PRO",
+        False,
+    ):
+        raise RuntimeError(
+            "deepseek-v4-pro is disabled by cost guard. "
+            "Set ALLOW_DEEPSEEK_PRO=true only if you intentionally want to use Pro."
+        )
+
+
 def _provider_timeout(provider: str) -> float:
     if provider == PROVIDER_DEEPSEEK:
         return _env_float("DEEPSEEK_TIMEOUT", 120)
@@ -418,6 +429,8 @@ def _call_deepseek(
         raise RuntimeError("DeepSeek is disabled by FORCE_DISABLE_DEEPSEEK=true.")
 
     model = _provider_model(PROVIDER_DEEPSEEK)
+    _assert_deepseek_model_allowed(model)
+
     payload: dict[str, Any] = {
         "model": model,
         "messages": _messages(prompt, system_prompt),

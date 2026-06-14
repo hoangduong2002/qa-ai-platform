@@ -12,9 +12,25 @@ from app.config.env_loader import load_project_env
 # 1. Load environment configurations from .env
 load_project_env()
 
+
+def _deepseek_model() -> str:
+    model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+
+    if "v4-pro" in model.strip().lower() and os.getenv(
+        "ALLOW_DEEPSEEK_PRO",
+        "",
+    ).strip().lower() not in {"1", "true", "yes", "y", "on"}:
+        raise RuntimeError(
+            "deepseek-v4-pro is disabled by cost guard. "
+            "Set ALLOW_DEEPSEEK_PRO=true only if you intentionally want to use Pro."
+        )
+
+    return model
+
+
 # 2. Initialize DeepSeek LLM
 llm = ChatDeepSeek(
-    model="deepseek-chat",
+    model=_deepseek_model(),
     temperature=0.1,
     timeout=120,
     max_retries=3

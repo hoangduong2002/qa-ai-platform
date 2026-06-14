@@ -26,6 +26,29 @@ load_project_env()
 logger = logging.getLogger(__name__)
 
 
+DEEPSEEK_PRO_COST_GUARD_MESSAGE = (
+    "deepseek-v4-pro is disabled by cost guard. "
+    "Set ALLOW_DEEPSEEK_PRO=true only if you intentionally want to use Pro."
+)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name, "").strip()
+
+    if not value:
+        return default
+
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _assert_deepseek_model_allowed(model: str) -> None:
+    if "v4-pro" in (model or "").strip().lower() and not _env_bool(
+        "ALLOW_DEEPSEEK_PRO",
+        False,
+    ):
+        raise RuntimeError(DEEPSEEK_PRO_COST_GUARD_MESSAGE)
+
+
 class LoggedLLM:
 
     def __init__(
@@ -138,7 +161,8 @@ def get_llm():
     if ai_mode in {PRODUCTION_HYBRID, DEEPSEEK_ONLY}:
         assert_deepseek_allowed()
 
-        model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+        _assert_deepseek_model_allowed(model)
 
         deepseek_llm = ChatDeepSeek(
             model=model,
