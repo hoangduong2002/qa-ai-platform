@@ -45,7 +45,8 @@ from app.services.portal_job_service import update_job_progress
 REQUIREMENTS_ROOT = Path("requirements")
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 VISION_ANALYSIS_SKIPPED_MESSAGE = (
-    "Vision analysis skipped because local vision analysis is disabled."
+    "Image vision analysis skipped because local vision is not available "
+    "for the selected AI mode."
 )
 
 
@@ -60,6 +61,9 @@ def _current_ai_mode() -> str:
 
 def _can_run_local_vision() -> bool:
     if not is_local_vision_enabled():
+        return False
+
+    if not os.getenv("LOCAL_VISION_MODEL", "").strip():
         return False
 
     resolution = resolve_provider_for_task(

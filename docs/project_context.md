@@ -146,41 +146,33 @@ testcases/
     improved_testcases.json
     improved_testcases_v1.json
     improved_testcases_v2.json
-OCR
+Image Analysis
 
-Current OCR:
+Current image analysis:
 
-Tesseract OCR
+Local Vision via Ollama/Qwen-VL.
 
-Languages:
+Configured with:
 
-eng
-fra
+LOCAL_AI_PROVIDER=OLLAMA
+LOCAL_BASE_URL=http://<LAN_OLLAMA_IP>:11434
+LOCAL_VISION_MODEL=qwen2.5vl:7b
 
-Configured:
-
-OCR_LANGUAGE="eng+fra"
-
-OCR used for:
+Image analysis is used for:
 
 PNG
 JPG
 WebP
 Images extracted from PPTX
+Jira image attachments
+Figma exported frame images
 
-Known issue:
-
-LLM OCR normalization may hallucinate Chinese text.
-
-Mitigation:
-
-NO_RELIABLE_TEXT_FOUND
-
-fallback mechanism added.
+If Local Vision is not allowed by the selected AI mode or is unavailable,
+image vision is skipped gracefully.
 
 Future Roadmap
 MVP1 Remaining
-Better OCR pipeline
+Better image analysis pipeline
 Requirement Traceability
 Test Case Version Diff
 Download Excel from Status

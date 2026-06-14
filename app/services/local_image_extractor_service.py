@@ -9,7 +9,6 @@ from PIL import Image
 
 from app.services.local_ai_config_service import (
     get_LOCAL_base_url,
-    get_LOCAL_vision_model,
 )
 from app.services.portal_ai_mode_service import assert_local_ai_allowed
 from app.services.portal_job_service import limit_llm_call, limit_LOCAL_call
@@ -78,7 +77,7 @@ def _get_LOCAL_base_url() -> str:
 
     if not base_url:
         raise ValueError(
-            "LOCAL_BASE_URL is missing. "
+            "Local Vision is not available because LOCAL_BASE_URL is missing. "
             "Example: LOCAL_BASE_URL=http://localhost:11434"
         )
 
@@ -86,12 +85,13 @@ def _get_LOCAL_base_url() -> str:
 
 
 def _get_LOCAL_model() -> str:
-    model = get_LOCAL_vision_model()
+    model = os.getenv("LOCAL_VISION_MODEL", "").strip()
 
     if not model:
         raise ValueError(
-            "LOCAL_VISION_MODEL is missing. "
-            "Set it to the model name shown by `LOCAL list`."
+            "Local Vision is not available because LOCAL_VISION_MODEL is missing. "
+            "Set it to the model name shown by `ollama list`, for example "
+            "LOCAL_VISION_MODEL=qwen2.5vl:7b."
         )
 
     return model

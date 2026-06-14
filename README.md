@@ -341,13 +341,19 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 LOCAL_AI_PROVIDER=OLLAMA
-LOCAL_BASE_URL=http://localhost:11434
+LOCAL_BASE_URL=http://<LAN_OLLAMA_IP>:11434
 LOCAL_TEXT_MODEL=qwen2.5:14b
 LOCAL_COMPACT_MODEL=
 LOCAL_VISION_MODEL=qwen2.5vl:7b
 ```
 
 Supported modes: `PRODUCTION_HYBRID`, `DEEPSEEK_ONLY`, `TEST_LOCAL_ONLY`, `NO_LLM`.
+
+Image analysis uses Local Vision via Ollama/Qwen-VL only when the selected AI
+mode allows local vision. Configure `LOCAL_AI_PROVIDER=OLLAMA`,
+`LOCAL_BASE_URL=http://<LAN_OLLAMA_IP>:11434`, and
+`LOCAL_VISION_MODEL=qwen2.5vl:7b`. If local vision is not allowed or
+unavailable, image vision is skipped without falling back to another provider.
 
 Emergency kill switches:
 

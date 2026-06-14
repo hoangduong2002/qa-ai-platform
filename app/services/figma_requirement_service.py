@@ -34,7 +34,8 @@ FIGMA_IMAGE_EXPORT_SKIPPED_MESSAGE = (
     "Figma image export skipped or unavailable for this screen."
 )
 VISION_ANALYSIS_SKIPPED_MESSAGE = (
-    "Vision analysis skipped because local vision analysis is disabled."
+    "Image vision analysis skipped because local vision is not available "
+    "for the selected AI mode."
 )
 
 
@@ -54,13 +55,10 @@ def _current_ai_mode() -> str | None:
 
 def _vision_skip_message(ai_mode: str | None) -> str:
     if ai_mode == AI_MODE_DEEPSEEK_ONLY:
-        return (
-            "Vision analysis skipped because AI mode is DEEPSEEK_ONLY. "
-            "Local/LOCAL vision is disabled for this mode."
-        )
+        return VISION_ANALYSIS_SKIPPED_MESSAGE
 
     if ai_mode == AI_MODE_NO_LLM:
-        return "Vision analysis skipped because AI mode is NO_LLM."
+        return VISION_ANALYSIS_SKIPPED_MESSAGE
 
     return VISION_ANALYSIS_SKIPPED_MESSAGE
 
@@ -1513,7 +1511,10 @@ def export_figma_page_scope(
             frame_file = screen_dir / "frame.png"
             image_export_status = "not_attempted"
             vision_analysis_status = "not_attempted"
-            local_vision_enabled = is_local_vision_enabled()
+            local_vision_enabled = (
+                is_local_vision_enabled()
+                and bool(os.getenv("LOCAL_VISION_MODEL", "").strip())
+            )
             image_url = image_urls.get(screen.node_id)
 
             if not image_export_enabled:

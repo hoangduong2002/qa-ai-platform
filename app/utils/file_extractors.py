@@ -3,20 +3,14 @@ from pathlib import Path
 from docx import Document
 from pptx import Presentation
 
-from app.services.ocr_service import (
-    extract_text_from_image
-)
-from app.utils.ocr_normalizer import normalize_ocr_requirement
-
-import os
-from pathlib import Path
-
 from app.services.local_image_extractor_service import extract_image_with_LOCAL
 from app.services.llm_router_service import (
+    AI_MODE_TEST_LOCAL_ONLY,
     PROVIDER_SKIP,
     TASK_VISION_EXTRACT,
     resolve_provider_for_task,
 )
+from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 
 IMAGE_EXTENSIONS = {
     ".png",
@@ -26,6 +20,11 @@ IMAGE_EXTENSIONS = {
     ".bmp",
     ".gif",
 }
+
+IMAGE_VISION_SKIPPED_MESSAGE = (
+    "Image vision analysis skipped because local vision is not available "
+    "for the selected AI mode."
+)
 
 
 def extract_txt_text(
@@ -55,48 +54,40 @@ def _is_image_file(file_path: str | Path) -> bool:
 
 
 
-def _extract_image_text_with_tesseract(
-    file_path: Path
-) -> str:
+def _current_ai_mode() -> str:
+    portal_ai_mode = get_current_portal_ai_mode()
 
-    raw_text = extract_text_from_image(
-        file_path
-    )
+    if portal_ai_mode and portal_ai_mode.get("ai_mode"):
+        return str(portal_ai_mode["ai_mode"]).strip().upper()
 
-    normalized_text = normalize_ocr_requirement(
-        raw_text
-    )
+    import os
 
-    return normalized_text
+    return (
+        os.getenv("NON_PORTAL_AI_MODE")
+        or os.getenv("TELEGRAM_AI_MODE")
+        or os.getenv("PORTAL_DEFAULT_AI_MODE")
+        or "NO_LLM"
+    ).strip().upper()
 
 
 def _extract_image_text(file_path: str | Path) -> str:
-    extractor = os.getenv("IMAGE_EXTRACTOR", "LOCAL").strip().upper()
-
-    if extractor in {"LOCAL", "LOCAL", "QWEN"}:
-        ai_mode = (
-            os.getenv("NON_PORTAL_AI_MODE")
-            or os.getenv("TELEGRAM_AI_MODE")
-            or os.getenv("PORTAL_DEFAULT_AI_MODE")
-            or "NO_LLM"
-        ).strip().upper()
-        provider = resolve_provider_for_task(
-            TASK_VISION_EXTRACT,
-            ai_mode,
-        )
-
-        if provider.get("provider") == PROVIDER_SKIP:
-            return ""
-
-        return extract_image_with_LOCAL(file_path)
-
-    if extractor == "TESSERACT":
-        return _extract_image_text_with_tesseract(file_path)
-
-    raise ValueError(
-        f"Unsupported IMAGE_EXTRACTOR={extractor}. "
-        "Use LOCAL or TESSERACT."
+    ai_mode = _current_ai_mode()
+    provider = resolve_provider_for_task(
+        TASK_VISION_EXTRACT,
+        ai_mode,
     )
+
+    if provider.get("provider") == PROVIDER_SKIP:
+        if ai_mode == AI_MODE_TEST_LOCAL_ONLY:
+            raise RuntimeError(
+                "Local Vision is required in TEST_LOCAL_ONLY mode but is "
+                "not available. Set LOCAL_BASE_URL and LOCAL_VISION_MODEL "
+                "for your Ollama/Qwen-VL server."
+            )
+
+        return IMAGE_VISION_SKIPPED_MESSAGE
+
+    return extract_image_with_LOCAL(file_path)
 
 
 def extract_pptx_text(
