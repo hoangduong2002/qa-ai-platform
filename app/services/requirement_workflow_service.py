@@ -50,6 +50,7 @@ def _resolve_ai_mode(ai_mode: str | None = None) -> str | None:
 async def run_requirement_summary(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     state = {
         "ticket_id": ticket_id,
@@ -58,6 +59,8 @@ async def run_requirement_summary(
 
     if ai_mode:
         state["ai_mode"] = ai_mode
+    if source_channel:
+        state["source_channel"] = source_channel
 
     requirement_summary_graph.invoke(state)
 
@@ -67,6 +70,7 @@ async def run_requirement_summary(
 async def run_requirement_questions(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     state = {
         "ticket_id": ticket_id,
@@ -75,6 +79,8 @@ async def run_requirement_questions(
 
     if ai_mode:
         state["ai_mode"] = ai_mode
+    if source_channel:
+        state["source_channel"] = source_channel
 
     result = requirement_question_graph.invoke(state)
 

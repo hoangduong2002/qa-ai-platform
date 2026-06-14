@@ -51,6 +51,7 @@ def repair_json_with_llm(
     malformed_json_text: str,
     original_error: Exception,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     """
     Ask LLM to repair malformed scenario JSON once.
@@ -100,6 +101,7 @@ Malformed JSON:
         TASK_SCENARIO_GENERATION,
         repair_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     repaired_raw_file = save_raw_response(
@@ -758,6 +760,7 @@ def _generate_scenarios_for_structure_batch(
     approved_structure: dict,
     structure_batch: dict,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     batch_id = structure_batch["batch_id"]
 
@@ -809,6 +812,7 @@ def _generate_scenarios_for_structure_batch(
         TASK_SCENARIO_GENERATION,
         final_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     raw_file = save_raw_response(
@@ -826,6 +830,7 @@ def _generate_scenarios_for_structure_batch(
                 malformed_json_text=response_content,
                 original_error=parse_error,
                 ai_mode=ai_mode,
+                source_channel=source_channel,
             )
 
         scenarios = normalize_scenarios(parsed)
@@ -885,6 +890,7 @@ def generate_scenarios(state):
     ticket_id = state["ticket_id"]
     metadata = state.get("requirement_context_metadata") or {}
     ai_mode = _resolve_ai_mode(state)
+    source_channel = state.get("source_channel")
 
     if metadata:
         print(
@@ -944,6 +950,7 @@ def generate_scenarios(state):
                 approved_structure,
                 structure_batch,
                 ai_mode,
+                source_channel,
             )
 
             future_map[future] = structure_batch["batch_id"]

@@ -87,6 +87,7 @@ def _build_structure_message(
 def build_structured_generation_state(
     ticket_id: str,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     """
     Build the state required by the structured test generation graph.
@@ -111,6 +112,8 @@ def build_structured_generation_state(
 
     if ai_mode:
         artifacts["ai_mode"] = ai_mode
+    if source_channel:
+        artifacts["source_channel"] = source_channel
 
     return artifacts
 

@@ -292,6 +292,7 @@ Clarification Answers:
         task_type=TASK_REQUIREMENT_SUMMARY,
         prompt=prompt,
         ai_mode=ai_mode,
+        source_channel=state.get("source_channel"),
     )
 
     content = content.strip()

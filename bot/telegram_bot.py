@@ -177,6 +177,7 @@ from app.services.requirement_workflow_service import (
 )
 from app.services.llm_router_service import (
     AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_NO_LLM,
     AI_MODE_PRODUCTION_HYBRID,
     AI_MODE_TEST_LOCAL_ONLY,
 )
@@ -199,6 +200,7 @@ TELEGRAM_VALID_AI_MODES = {
     AI_MODE_PRODUCTION_HYBRID,
     AI_MODE_TEST_LOCAL_ONLY,
     AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_NO_LLM,
 }
 
 TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID
@@ -214,7 +216,7 @@ def get_telegram_ai_mode() -> str:
         raise ValueError(
             "Unsupported TELEGRAM_AI_MODE="
             f"{ai_mode or '[empty]'}. "
-            "Use PRODUCTION_HYBRID, TEST_LOCAL_ONLY, or DEEPSEEK_ONLY."
+            "Use PRODUCTION_HYBRID, DEEPSEEK_ONLY, TEST_LOCAL_ONLY, or NO_LLM."
         )
 
     return ai_mode
@@ -554,7 +556,11 @@ async def continue_generation_with_structure_gate(
             f"Preparing requirement summary and generation context for {ticket_id}..."
         )
 
-        await run_requirement_summary(ticket_id, ai_mode=ai_mode)
+        await run_requirement_summary(
+            ticket_id,
+            ai_mode=ai_mode,
+            source_channel="telegram",
+        )
 
     await message.reply_text(
         f"Checking approved test case structure for {ticket_id}..."
@@ -580,6 +586,7 @@ async def continue_generation_with_structure_gate(
     generation_state = build_structured_generation_state(
         ticket_id,
         ai_mode=ai_mode,
+        source_channel="telegram",
     )
 
     if not generation_state.get("approved_test_case_structure"):
@@ -722,6 +729,17 @@ async def run_generation(
 
     ai_mode = generation_state.get("ai_mode") or get_telegram_ai_mode()
     generation_state["ai_mode"] = ai_mode
+    generation_state["source_channel"] = (
+        generation_state.get("source_channel")
+        or "telegram"
+    )
+
+    logger.info(
+        "Invoking generation graph source_channel=%s ai_mode=%s ticket_id=%s",
+        generation_state.get("source_channel"),
+        generation_state.get("ai_mode"),
+        ticket_id,
+    )
 
     result = test_generation_graph.invoke(generation_state)
 
@@ -812,9 +830,13 @@ async def ask_clarifications(
     )
     
 
-async def process_ticket(update: Update, ticket_id: str):
+async def process_ticket(
+    update: Update,
+    ticket_id: str,
+    ai_mode: str | None = None,
+):
     message = get_message(update)
-    ai_mode = get_telegram_ai_mode()
+    ai_mode = ai_mode or get_telegram_ai_mode()
 
     artifacts = load_ticket_artifacts(ticket_id)
 
@@ -849,6 +871,7 @@ async def process_ticket(update: Update, ticket_id: str):
         result = await run_requirement_questions(
             ticket_id,
             ai_mode=ai_mode,
+            source_channel="telegram",
         )
         questions = extract_clarification_questions(result)
 
@@ -880,6 +903,7 @@ async def analyze_existing_ticket(
     result = await run_requirement_questions(
         ticket_id,
         ai_mode=ai_mode,
+        source_channel="telegram",
     )
 
     analysis = result.get(
@@ -938,6 +962,7 @@ async def analyze_existing_ticket(
     await run_requirement_summary(
         ticket_id,
         ai_mode=ai_mode,
+        source_channel="telegram",
     )
 
     await export_requirement_intelligence(
@@ -1090,7 +1115,7 @@ async def generate(
     )
 
     try:
-        await process_ticket(update, ticket_id)
+        await process_ticket(update, ticket_id, ai_mode=ai_mode)
     except Exception as error:
         logger.exception(
             "Failed during structured generation. ticket_id=%s ai_mode=%s",
@@ -1766,7 +1791,11 @@ async def handle_text_message(
     ai_mode = get_telegram_ai_mode()
 
     if next_action == "analyze":
-        await run_requirement_summary(ticket_id, ai_mode=ai_mode)
+        await run_requirement_summary(
+            ticket_id,
+            ai_mode=ai_mode,
+            source_channel="telegram",
+        )
         await export_requirement_intelligence(
             message,
             ticket_id,
@@ -1925,7 +1954,11 @@ async def handle_review_action(
             ai_mode = get_telegram_ai_mode()
 
             if mode == "analyze":
-                await run_requirement_summary(ticket_id, ai_mode=ai_mode)
+                await run_requirement_summary(
+                    ticket_id,
+                    ai_mode=ai_mode,
+                    source_channel="telegram",
+                )
                 await export_requirement_intelligence(
                     query.message,
                     ticket_id,

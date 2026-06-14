@@ -55,6 +55,7 @@ def repair_json_with_llm(
     malformed_json_text: str,
     original_error: Exception,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ):
     """
     Repair malformed JSON returned by function-level test case generation.
@@ -112,6 +113,7 @@ Malformed JSON:
         TASK_TESTCASE_GENERATION,
         repair_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     repaired_raw_file = save_raw_response(
@@ -743,6 +745,7 @@ def _generate_testcases_for_scenario_batch(
     batch_index: int,
     function_scenarios_batch: list,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     logger.info(
         "Generating test cases for function batch. "
@@ -764,6 +767,7 @@ def _generate_testcases_for_scenario_batch(
         TASK_TESTCASE_GENERATION,
         final_prompt,
         ai_mode=ai_mode,
+        source_channel=source_channel,
     )
 
     raw_file = save_raw_response(
@@ -782,6 +786,7 @@ def _generate_testcases_for_scenario_batch(
                 malformed_json_text=response_content,
                 original_error=parse_error,
                 ai_mode=ai_mode,
+                source_channel=source_channel,
             )
 
         raw_testcases = normalize_testcases(parsed)
@@ -852,6 +857,7 @@ def _generate_testcases_for_function(
     function_item: dict,
     function_scenarios: list,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> dict:
     """
     Generate test cases for one main function.
@@ -908,6 +914,7 @@ def _generate_testcases_for_function(
                 batch_index,
                 scenario_batch,
                 ai_mode,
+                source_channel,
             )
 
             future_map[future] = batch_index
@@ -1034,6 +1041,7 @@ def generate_testcases(state):
     ticket_id = state["ticket_id"]
     metadata = state.get("requirement_context_metadata") or {}
     ai_mode = _resolve_ai_mode(state)
+    source_channel = state.get("source_channel")
 
     if metadata:
         print(
@@ -1158,6 +1166,7 @@ def generate_testcases(state):
                 group["function"],
                 group["scenarios"],
                 ai_mode,
+                source_channel,
             )
 
             future_map[future] = function_id

@@ -124,11 +124,17 @@ def _normalize_ai_mode(ai_mode: str | None) -> str:
     return normalized
 
 
-def _resolve_effective_ai_mode(ai_mode: str | None) -> str:
+def _resolve_effective_ai_mode(
+    ai_mode: str | None,
+    source_channel: str | None = None,
+) -> str:
     normalized = _normalize_ai_mode(ai_mode)
 
     if normalized:
         return normalized
+
+    if (source_channel or "").strip().lower() == "telegram":
+        raise RuntimeError("Telegram ai_mode was not passed into generation state.")
 
     portal_mode = get_current_portal_ai_mode()
 
@@ -189,7 +195,7 @@ def _local_unavailable_reason(ai_mode: str) -> str:
 
 def _provider_model(provider: str) -> str:
     if provider == PROVIDER_DEEPSEEK:
-        return _env_str("DEEPSEEK_MODEL", "deepseek-chat")
+        return _env_str("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
     if provider == PROVIDER_LOCAL_TEXT:
         return get_LOCAL_text_model()
@@ -538,9 +544,13 @@ def call_text_llm(
     prompt: str,
     system_prompt: str | None = None,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
     **kwargs,
 ) -> str:
-    effective_ai_mode = _resolve_effective_ai_mode(ai_mode)
+    effective_ai_mode = _resolve_effective_ai_mode(
+        ai_mode,
+        source_channel=source_channel,
+    )
     resolution = resolve_provider_for_task(task_type, effective_ai_mode)
     provider = resolution["provider"]
     model = resolution.get("model", "")
@@ -616,8 +626,12 @@ def call_llm_with_fallback(
     system_prompt: str | None = None,
     response_format: Any | None = None,
     ai_mode: str | None = None,
+    source_channel: str | None = None,
 ) -> LLMRouterResponse:
-    effective_ai_mode = _resolve_effective_ai_mode(ai_mode)
+    effective_ai_mode = _resolve_effective_ai_mode(
+        ai_mode,
+        source_channel=source_channel,
+    )
     resolution = resolve_provider_for_task(task_type, effective_ai_mode)
     provider = resolution["provider"]
     model = resolution.get("model", "")
