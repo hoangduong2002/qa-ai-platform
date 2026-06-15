@@ -757,6 +757,7 @@ def _load_clarifications_for_export(ticket_id: str) -> dict:
     analysis_dir = root / "analysis"
 
     candidates = [
+        analysis_dir / "clarification_questions_snapshot.json",
         analysis_dir / "clarifications.json",
         analysis_dir / "requirement_clarifications.json",
     ]

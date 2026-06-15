@@ -119,13 +119,15 @@ JIRA_SYNC_NOT_AVAILABLE = (
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
+    anchor = params.pop("anchor", None)
     query_params = {"tab": tab}
     for key, value in params.items():
         if value is not None:
             query_params[key] = value
+    fragment = f"#{anchor}" if anchor else ""
 
     return RedirectResponse(
-        url=f"/portal/requirements/{ticket_id}?{urlencode(query_params)}",
+        url=f"/portal/requirements/{ticket_id}?{urlencode(query_params)}{fragment}",
         status_code=303,
     )
 
@@ -254,6 +256,7 @@ async def requirement_detail(
     scenario_version: str = "latest",
     testcase_version: str = "latest",
     error: str = "",
+    success: str = "",
 ):
     detail = get_requirement_detail(ticket_id)
     is_jira_source = requirement_is_jira(ticket_id)
@@ -264,7 +267,9 @@ async def requirement_detail(
     scenario_session = load_scenario_session(ticket_id)
     testcase_session = load_testcase_session(ticket_id)
 
-    if tab not in ["analysis", "design"]:
+    if tab == "clarifications":
+        tab = "analysis"
+    elif tab not in ["analysis", "design"]:
         tab = (
             "design"
             if structure_session.get("current_version")
@@ -320,6 +325,7 @@ async def requirement_detail(
             "has_jira_snapshot": has_jira_snapshot,
             "can_sync_jira": can_sync_jira,
             "error": error,
+            "success": success,
         }
     )
 
@@ -574,7 +580,12 @@ async def submit_clarification_answers(request: Request, ticket_id: str):
             answers.setdefault(question_id, {})["custom_answer"] = str(value)
 
     save_clarification_answers(ticket_id=ticket_id, answers=answers)
-    return _redirect_detail(ticket_id)
+    return _redirect_detail(
+        ticket_id,
+        tab="clarifications",
+        success="Clarification answers saved.",
+        anchor="clarifications",
+    )
 
 
 @router.post("/requirements/{ticket_id}/structure/generate")

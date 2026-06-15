@@ -148,6 +148,7 @@
                                         type="radio"
                                         name="option__{{ question_id }}"
                                         value="{{ option.key }}"
+                                        {% if item.selected_option_key == option.key %}checked{% endif %}
                                     >
                                     {{ option.key }}. {{ option.label }}
                                 </label>
@@ -167,7 +168,7 @@
                             name="custom_answer__{{ question_id }}"
                             rows="5"
                             placeholder="Enter custom answer, or leave blank to use the selected option..."
-                        ></textarea>
+                        >{{ item.custom_answer or item.answer or "" }}</textarea>
                     {% else %}
                         <label>
                             <b>Your Answer</b>
@@ -177,7 +178,7 @@
                             name="answer__{{ question_id }}"
                             rows="5"
                             placeholder="Enter clarification answer..."
-                        ></textarea>
+                        >{{ item.answer or item.final_answer or "" }}</textarea>
                     {% endif %}
                 </div>
 

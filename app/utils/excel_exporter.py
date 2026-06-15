@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -8,6 +9,17 @@ from openpyxl.styles import (
     Border,
     Side
 )
+
+from app.utils.clarification_answers import (
+    get_clarification_answer_text,
+    get_clarification_id,
+    get_clarification_question,
+    normalize_clarification_answers,
+    normalize_question_text,
+)
+
+
+logger = logging.getLogger(__name__)
 
 def _to_text(value):
 
@@ -274,9 +286,13 @@ def export_testcases_to_excel(
         [
             "Question ID",
             "Question",
-            "Impact",
             "Answer",
-            "Status"
+            "Answer Status",
+            "Answered At",
+            "Impact / Reason",
+            "Priority",
+            "Related Requirement",
+            "Category",
         ]
     )
 
@@ -288,60 +304,110 @@ def export_testcases_to_excel(
         []
     )
 
-    answers_raw = clarification_answers.get(
-        "answers",
-        {}
-    )
+    answered = normalize_clarification_answers(clarification_answers)
+    answers_by_id = {}
+    answers_by_question = {}
 
-    answers = {}
+    for item in answered:
+        question_id = get_clarification_id(item)
+        question_text = normalize_question_text(get_clarification_question(item))
 
-    if isinstance(answers_raw, dict):
-        answers = answers_raw
-    elif isinstance(answers_raw, list):
-        for item in answers_raw:
-            if not isinstance(item, dict):
-                continue
+        if question_id:
+            answers_by_id[question_id] = item
+        if question_text:
+            answers_by_question[question_text] = item
 
-            question_id = item.get("question_id", "")
-
-            if question_id:
-                answers[question_id] = (
-                    item.get("final_answer")
-                    or item.get("answer")
-                    or ""
-                )
+    matched_answer_keys = set()
+    matched_answer_indexes = set()
 
     for question in questions:
 
-        question_id = question.get(
-            "question_id",
-            ""
-        )
+        question_id = get_clarification_id(question)
+        question_text = get_clarification_question(question)
+        answer_info = answers_by_id.get(question_id, {})
 
-        answer = answers.get(
-            question_id,
-            ""
-        )
+        if not answer_info:
+            answer_info = answers_by_question.get(
+                normalize_question_text(question_text),
+                {},
+            )
+
+        answer = get_clarification_answer_text(answer_info) if answer_info else ""
+
+        if answer_info:
+            matched_answer_indexes.add(id(answer_info))
+            answer_id = get_clarification_id(answer_info)
+            answer_question = normalize_question_text(
+                get_clarification_question(answer_info)
+            )
+            if answer_id:
+                matched_answer_keys.add(("id", answer_id))
+            if answer_question:
+                matched_answer_keys.add(("question", answer_question))
 
         ws_clarifications.append(
             [
                 question_id,
-                question.get(
-                    "question",
-                    ""
-                ),
-                question.get(
-                    "impact",
-                    ""
-                ),
+                question_text,
                 answer,
                 (
                     "Answered"
                     if answer
-                    else "Open"
-                )
+                    else "Unanswered"
+                ),
+                answer_info.get("answered_at", "") if answer_info else "",
+                question.get("impact") or question.get("reason", ""),
+                question.get("priority", ""),
+                _to_text(
+                    question.get("related_requirement")
+                    or question.get("related_requirement_id")
+                    or question.get("related_requirement_ids")
+                    or question.get("requirement_id")
+                    or ""
+                ),
+                question.get("category", ""),
             ]
         )
+
+    for item in answered:
+        question_id = get_clarification_id(item)
+        question_text = get_clarification_question(item)
+        normalized_question = normalize_question_text(question_text)
+
+        if (
+            question_id
+            and ("id", question_id) in matched_answer_keys
+        ) or (
+            normalized_question
+            and ("question", normalized_question) in matched_answer_keys
+        ):
+            continue
+
+        ws_clarifications.append(
+            [
+                question_id,
+                question_text,
+                get_clarification_answer_text(item),
+                "Answered",
+                item.get("answered_at", ""),
+                item.get("impact") or item.get("reason", ""),
+                item.get("priority", ""),
+                _to_text(
+                    item.get("related_requirement")
+                    or item.get("related_requirement_id")
+                    or item.get("related_requirement_ids")
+                    or item.get("requirement_id")
+                    or ""
+                ),
+                item.get("category", ""),
+            ]
+        )
+
+    clarification_export_stats = {
+        "clarification_count": len(questions),
+        "answer_count": len(answered),
+        "matched_answer_count": len(matched_answer_indexes),
+    }
         
     # Sheet 3: Requirement Coverage Matrix
     ws_matrix = wb.create_sheet(
@@ -661,5 +727,13 @@ def export_testcases_to_excel(
     _apply_styles(wb)
 
     wb.save(output_file)
+    logger.debug(
+        "Exported Clarifications sheet",
+        extra={
+            "ticket_id": ticket_id,
+            **clarification_export_stats,
+            "export_path": str(output_file),
+        },
+    )
 
     return str(output_file)

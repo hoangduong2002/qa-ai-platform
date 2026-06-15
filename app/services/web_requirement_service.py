@@ -26,6 +26,15 @@ from app.services.portal_job_service import update_job_progress
 from app.services.requirement_sanitization_service import (
     sanitize_requirement_for_analysis,
 )
+from app.utils.clarification_answers import (
+    count_matched_clarification_answers,
+    get_clarification_answer_text,
+    get_clarification_id,
+    get_clarification_question,
+    merge_clarifications_with_answers,
+    normalize_clarification_answers,
+    normalize_question_text,
+)
 
 from graph.nodes.load_requirement import (
     load_requirement,
@@ -406,6 +415,8 @@ def get_requirement_detail(
     requirement_analysis_file = analysis_dir / "requirement_analysis.json"
     requirement_items_file = analysis_dir / "requirement_items.json"
     clarifications_file = analysis_dir / "clarifications.json"
+    clarification_snapshot_file = analysis_dir / "clarification_questions_snapshot.json"
+    clarification_answers_file = analysis_dir / "clarification_answers.json"
     requirement_summary_file = analysis_dir / "requirement_summary.json"
 
     if not base_dir.exists():
@@ -430,12 +441,25 @@ def get_requirement_detail(
         requirement_items_file
     )
 
-    clarifications_raw = _read_json(
-        clarifications_file
+    clarifications_raw = (
+        _read_json(clarification_snapshot_file)
+        or _read_json(clarifications_file)
     )
 
     clarifications = _normalize_clarifications(
         clarifications_raw
+    )
+    clarification_answers = normalize_clarification_answers(
+        _read_json(clarification_answers_file)
+    )
+    clarifications_with_answers = merge_clarifications_with_answers(
+        clarifications,
+        clarification_answers,
+    )
+    answered_clarification_count = sum(
+        1
+        for item in clarifications_with_answers
+        if item.get("answer")
     )
 
     requirement_summary = _read_json(
@@ -476,7 +500,14 @@ def get_requirement_detail(
 
         "requirement_analysis": requirement_analysis,
         "requirement_items": requirement_items,
-        "clarifications": clarifications,
+        "clarifications": clarifications_with_answers,
+        "clarification_answers": clarification_answers,
+        "clarifications_with_answers": clarifications_with_answers,
+        "answered_clarification_count": answered_clarification_count,
+        "unanswered_clarification_count": max(
+            len(clarifications_with_answers) - answered_clarification_count,
+            0,
+        ),
         "requirement_summary": requirement_summary,
         "change_impact_report": load_latest_change_impact_report(ticket_id),
         "regeneration_plan": load_latest_regeneration_plan(ticket_id),
@@ -489,7 +520,7 @@ def get_requirement_detail(
         "has_analysis": requirement_analysis_file.exists(),
         "has_items": requirement_items_file.exists(),
         "has_summary": requirement_summary_file.exists(),
-        "has_clarifications": len(clarifications) > 0,
+        "has_clarifications": len(clarifications_with_answers) > 0,
         "has_incremental_testcases": has_incremental_testcases,
     }
 
@@ -637,37 +668,56 @@ def get_clarification_questions(
     clarification_file = (
         analysis_dir / "clarifications.json"
     )
+    clarification_snapshot_file = (
+        analysis_dir / "clarification_questions_snapshot.json"
+    )
+    clarification_answers_file = (
+        analysis_dir / "clarification_answers.json"
+    )
 
     data = _read_json(
-        clarification_file
+        clarification_snapshot_file
     )
+    if not data:
+        data = _read_json(
+            clarification_file
+        )
 
     if not data:
         return []
 
-    if isinstance(data, list):
-        return [_normalize_clarification_question(item) for item in data]
+    questions = []
 
-    if isinstance(data, dict):
+    if isinstance(data, list):
+        questions = [_normalize_clarification_question(item) for item in data]
+    elif isinstance(data, dict):
         if isinstance(data.get("clarification_questions"), list):
-            return [
+            questions = [
                 _normalize_clarification_question(item)
                 for item in data["clarification_questions"]
             ]
-
-        if isinstance(data.get("questions"), list):
-            return [
+        elif isinstance(data.get("questions"), list):
+            questions = [
                 _normalize_clarification_question(item)
                 for item in data["questions"]
             ]
-
-        if isinstance(data.get("clarifications"), list):
-            return [
+        elif isinstance(data.get("clarifications"), list):
+            questions = [
                 _normalize_clarification_question(item)
                 for item in data["clarifications"]
             ]
 
-    return []
+    if not questions:
+        return []
+
+    answers = normalize_clarification_answers(
+        _read_json(clarification_answers_file)
+    )
+
+    return merge_clarifications_with_answers(
+        questions,
+        answers,
+    )
 
 
 def _normalize_clarification_question(item: dict) -> dict:
@@ -732,6 +782,9 @@ def save_clarification_answers(
     )
 
     answer_items = []
+    submitted_answer_count = len(answers)
+    answered_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    used_question_ids = set()
 
     for question in questions:
         question_id = (
@@ -739,6 +792,7 @@ def save_clarification_answers(
             or question.get("id")
             or ""
         )
+        used_question_ids.add(question_id)
 
         answer_payload = answers.get(question_id, {})
 
@@ -773,28 +827,67 @@ def save_clarification_answers(
 
         answer_items.append(
             {
-                "question_id": question_id,
                 "id": question.get("id") or question_id,
+                "question_id": question_id,
                 "question": question.get("question", ""),
+                "answer": final_answer,
+                "answered_at": answered_at if final_answer else "",
                 "category": question.get("category", "Other"),
                 "impact": question.get("impact", "Medium"),
                 "reason": question.get("reason", ""),
+                "priority": question.get("priority", ""),
+                "related_requirement": question.get("related_requirement", ""),
                 "free_text_allowed": question.get("free_text_allowed", True),
                 "selected_option_key": selected_option_key,
                 "selected_option_label": selected_option_label,
                 "custom_answer": custom_answer,
                 "final_answer": final_answer,
+            }
+        )
+
+    for question_id, answer_payload in answers.items():
+        if question_id in used_question_ids:
+            continue
+
+        if isinstance(answer_payload, str):
+            answer_payload = {"answer": answer_payload}
+
+        if not isinstance(answer_payload, dict):
+            answer_payload = {}
+
+        final_answer = str(
+            answer_payload.get("custom_answer")
+            or answer_payload.get("answer")
+            or ""
+        ).strip()
+
+        answer_items.append(
+            {
+                "id": question_id,
+                "question_id": question_id,
+                "question": "",
                 "answer": final_answer,
+                "answered_at": answered_at if final_answer else "",
+                "selected_option_key": str(
+                    answer_payload.get("selected_option_key") or ""
+                ).strip(),
+                "selected_option_label": "",
+                "custom_answer": final_answer,
+                "final_answer": final_answer,
             }
         )
 
     answers_file = (
         analysis_dir / "clarification_answers.json"
     )
+    output = {
+        "ticket_id": ticket_id,
+        "answers": answer_items,
+    }
 
     answers_file.write_text(
         json.dumps(
-            answer_items,
+            output,
             indent=2,
             ensure_ascii=False,
         ),
@@ -812,6 +905,25 @@ def save_clarification_answers(
     notes_file.write_text(
         notes,
         encoding="utf-8",
+    )
+
+    summary_file = analysis_dir / "requirement_summary.json"
+    if summary_file.exists():
+        summary_file.unlink()
+
+    matched_answer_count = count_matched_clarification_answers(
+        questions,
+        answer_items,
+    )
+    logger.debug(
+        "Saved clarification answers",
+        extra={
+            "ticket_id": ticket_id,
+            "submitted_answer_count": submitted_answer_count,
+            "saved_answer_count": len(answer_items),
+            "matched_answer_count": matched_answer_count,
+            "saved_answer_file_path": str(answers_file),
+        },
     )
 
 
@@ -1069,6 +1181,8 @@ def export_requirement_analysis_to_excel(
     requirement_analysis_file = analysis_dir / "requirement_analysis.json"
     requirement_items_file = analysis_dir / "requirement_items.json"
     clarifications_file = analysis_dir / "clarifications.json"
+    clarification_snapshot_file = analysis_dir / "clarification_questions_snapshot.json"
+    clarification_answers_file = analysis_dir / "clarification_answers.json"
     requirement_summary_file = analysis_dir / "requirement_summary.json"
     sanitized_requirement_file = analysis_dir / "sanitized_requirement.md"
 
@@ -1079,12 +1193,16 @@ def export_requirement_analysis_to_excel(
 
     requirement_analysis = _read_json(requirement_analysis_file) or {}
     requirement_items = _read_json(requirement_items_file) or []
-    clarifications_raw = _read_json(
-        clarifications_file
+    clarifications_raw = (
+        _read_json(clarification_snapshot_file)
+        or _read_json(clarifications_file)
     )
 
     clarifications = _normalize_clarifications(
         clarifications_raw
+    )
+    clarification_answers = normalize_clarification_answers(
+        _read_json(clarification_answers_file)
     )
     requirement_summary = _read_json(requirement_summary_file) or {}
     sanitized_requirement = _read_text(sanitized_requirement_file)
@@ -1345,76 +1463,151 @@ def export_requirement_analysis_to_excel(
     )
 
     # Sheet 4: Clarifications
-    def build_clarification_row(
-        item,
-        index: int,
-    ):
+    answers_by_id = {}
+    answers_by_question = {}
+
+    for item in clarification_answers:
+        question_id = get_clarification_id(item)
+        question_text = normalize_question_text(get_clarification_question(item))
+
+        if question_id:
+            answers_by_id[question_id] = item
+        if question_text:
+            answers_by_question[question_text] = item
+
+    matched_answer_keys = set()
+    matched_answer_indexes = set()
+    merged_clarifications = []
+
+    def format_cell_value(value):
+        if isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False)
+        return value or ""
+
+    for index, item in enumerate(clarifications, start=1):
+        if not isinstance(item, dict):
+            merged_clarifications.append(
+                {
+                    "question_id": f"Q{index:03d}",
+                    "question": str(item),
+                    "answer": "",
+                    "answer_status": "Unanswered",
+                }
+            )
+            continue
+
+        question_id = get_clarification_id(item) or f"Q{index:03d}"
+        question_text = get_clarification_question(item)
+        answer_info = answers_by_id.get(question_id, {})
+
+        if not answer_info:
+            answer_info = answers_by_question.get(
+                normalize_question_text(question_text),
+                {},
+            )
+
+        answer = get_clarification_answer_text(answer_info) if answer_info else ""
+
+        if answer_info:
+            matched_answer_indexes.add(id(answer_info))
+            answer_id = get_clarification_id(answer_info)
+            answer_question = normalize_question_text(
+                get_clarification_question(answer_info)
+            )
+            if answer_id:
+                matched_answer_keys.add(("id", answer_id))
+            if answer_question:
+                matched_answer_keys.add(("question", answer_question))
+
+        merged_clarifications.append(
+            {
+                "question_id": question_id,
+                "question": question_text,
+                "answer": answer,
+                "answer_status": "Answered" if answer else "Unanswered",
+                "answered_at": answer_info.get("answered_at", "") if answer_info else "",
+                "impact": item.get("impact") or item.get("reason", ""),
+                "priority": item.get("priority") or item.get("severity", ""),
+                "related_requirement": format_cell_value(
+                    item.get("related_requirement")
+                    or item.get("related_requirement_id")
+                    or item.get("related_requirement_ids")
+                    or item.get("requirement_id")
+                    or ""
+                ),
+                "category": item.get("category") or item.get("type", ""),
+            }
+        )
+
+    for item in clarification_answers:
+        question_id = get_clarification_id(item)
+        question_text = get_clarification_question(item)
+        normalized_question = normalize_question_text(question_text)
+
+        if (
+            question_id
+            and ("id", question_id) in matched_answer_keys
+        ) or (
+            normalized_question
+            and ("question", normalized_question) in matched_answer_keys
+        ):
+            continue
+
+        merged_clarifications.append(
+            {
+                "question_id": question_id,
+                "question": question_text,
+                "answer": get_clarification_answer_text(item),
+                "answer_status": "Answered",
+                "answered_at": item.get("answered_at", ""),
+                "impact": item.get("impact") or item.get("reason", ""),
+                "priority": item.get("priority") or item.get("severity", ""),
+                "related_requirement": format_cell_value(
+                    item.get("related_requirement")
+                    or item.get("related_requirement_id")
+                    or item.get("related_requirement_ids")
+                    or item.get("requirement_id")
+                    or ""
+                ),
+                "category": item.get("category") or item.get("type", ""),
+            }
+        )
+
+    def build_clarification_row(item, index: int):
         if not isinstance(item, dict):
             return [
                 f"Q{index:03d}",
                 str(item),
+                "",
+                "Unanswered",
+                "",
                 "",
                 "",
                 "",
                 "",
             ]
 
-        question_id = (
-            item.get("question_id")
-            or item.get("id")
-            or item.get("clarification_id")
-            or f"Q{index:03d}"
-        )
-
-        question = (
-            item.get("question")
-            or item.get("text")
-            or item.get("description")
-            or item.get("title")
-            or ""
-        )
-
-        impact = (
-            item.get("impact")
-            or item.get("reason")
-            or ""
-        )
-
-        priority = (
-            item.get("priority")
-            or item.get("severity")
-            or ""
-        )
-
-        related_requirement = (
-            item.get("related_requirement")
-            or item.get("related_requirement_id")
-            or item.get("requirement_id")
-            or ""
-        )
-
-        category = (
-            item.get("category")
-            or item.get("type")
-            or ""
-        )
-
         return [
-            question_id,
-            question,
-            impact,
-            priority,
-            related_requirement,
-            category,
+            item.get("question_id", ""),
+            item.get("question", ""),
+            item.get("answer", ""),
+            item.get("answer_status", ""),
+            item.get("answered_at", ""),
+            item.get("impact", ""),
+            item.get("priority", ""),
+            item.get("related_requirement", ""),
+            item.get("category", ""),
         ]
-
 
     append_items_sheet(
         "Clarifications",
-        clarifications,
+        merged_clarifications,
         [
             "Question ID",
             "Question",
+            "Answer",
+            "Answer Status",
+            "Answered At",
             "Impact / Reason",
             "Priority",
             "Related Requirement",
@@ -1422,6 +1615,12 @@ def export_requirement_analysis_to_excel(
         ],
         build_clarification_row,
     )
+
+    clarification_export_stats = {
+        "clarification_count": len(clarifications),
+        "answer_count": len(clarification_answers),
+        "matched_answer_count": len(matched_answer_indexes),
+    }
 
     # Sheet 5: Requirement Summary, if available
     if requirement_summary:
@@ -1549,6 +1748,14 @@ def export_requirement_analysis_to_excel(
     )
 
     workbook.save(output_file)
+    logger.debug(
+        "Exported Clarifications sheet",
+        extra={
+            "ticket_id": ticket_id,
+            **clarification_export_stats,
+            "export_path": str(output_file),
+        },
+    )
 
     return output_file
 

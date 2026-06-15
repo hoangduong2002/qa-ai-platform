@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,16 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 from app.utils.test_structure_store import load_approved_test_case_structure
+from app.utils.clarification_answers import (
+    get_clarification_answer_text,
+    get_clarification_id,
+    get_clarification_question,
+    normalize_clarification_answers,
+    normalize_question_text,
+)
 
+
+logger = logging.getLogger(__name__)
 
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
@@ -878,113 +888,136 @@ def _extract_clarification_questions(clarifications: dict) -> list:
     return []
 
 
-def _extract_answered_clarifications(clarification_answers: dict) -> list:
-    if not isinstance(clarification_answers, dict):
-        return []
-
-    answered = (
-        clarification_answers.get("answered_clarifications")
-        or clarification_answers.get("answers")
-        or []
-    )
-
-    if isinstance(answered, list):
-        return answered
-
-    return []
-
-
 def _create_clarifications_sheet(
     wb: Workbook,
     clarifications: dict,
     clarification_answers: dict,
-) -> None:
+) -> dict:
     ws = wb.create_sheet("Clarifications")
 
     ws.append(
         [
             "Question ID",
-            "Category",
-            "Priority",
-            "Impact Area",
-            "Blocking",
             "Question",
             "Answer",
-            "Status",
-            "Related Requirement IDs",
-            "Reason",
+            "Answer Status",
+            "Answered At",
+            "Impact / Reason",
+            "Priority",
+            "Related Requirement",
+            "Category",
         ]
     )
 
     questions = _extract_clarification_questions(clarifications)
-    answered = _extract_answered_clarifications(clarification_answers)
+    answered = normalize_clarification_answers(clarification_answers)
 
     answer_by_id = {}
+    answer_by_question = {}
 
     for item in answered:
         if not isinstance(item, dict):
             continue
 
-        question_id = item.get("question_id", "")
+        question_id = get_clarification_id(item)
+        question_text = normalize_question_text(get_clarification_question(item))
 
         if question_id:
             answer_by_id[question_id] = item
+        if question_text:
+            answer_by_question[question_text] = item
+
+    matched_answer_keys = set()
+    matched_answer_indexes = set()
 
     for item in questions:
         if not isinstance(item, dict):
             continue
 
-        question_id = item.get("question_id", "")
+        question_id = get_clarification_id(item)
+        question_text = get_clarification_question(item)
         answer = answer_by_id.get(question_id, {})
+
+        if not answer:
+            answer = answer_by_question.get(normalize_question_text(question_text), {})
+
+        answer_text = get_clarification_answer_text(answer) if answer else ""
+        answer_id = get_clarification_id(answer) if answer else ""
+        answer_question = normalize_question_text(
+            get_clarification_question(answer)
+        ) if answer else ""
+
+        if answer:
+            matched_answer_indexes.add(id(answer))
+            if answer_id:
+                matched_answer_keys.add(("id", answer_id))
+            if answer_question:
+                matched_answer_keys.add(("question", answer_question))
 
         ws.append(
             [
                 question_id,
+                question_text,
+                answer_text,
+                "Answered" if answer_text else "Unanswered",
+                answer.get("answered_at", "") if answer else "",
+                item.get("impact") or item.get("reason", ""),
+                item.get("priority", ""),
+                _to_text(
+                    item.get("related_requirement")
+                    or item.get("related_requirement_id")
+                    or item.get("related_requirement_ids")
+                    or item.get("requirement_id")
+                    or ""
+                ),
                 item.get("category", ""),
-                item.get("priority", item.get("impact", "")),
-                item.get("impact_area", ""),
-                item.get("blocking", ""),
-                item.get("question", ""),
-                answer.get("final_answer") or answer.get("answer", ""),
-                "Answered" if answer else "Open",
-                _to_text(item.get("related_requirement_ids", [])),
-                item.get("reason", ""),
             ]
         )
-
-    # Also include answered clarifications that no longer exist in current open questions.
-    existing_question_ids = {
-        item.get("question_id", "")
-        for item in questions
-        if isinstance(item, dict)
-    }
 
     for item in answered:
         if not isinstance(item, dict):
             continue
 
-        question_id = item.get("question_id", "")
+        question_id = get_clarification_id(item)
+        question_text = get_clarification_question(item)
+        normalized_question = normalize_question_text(question_text)
 
-        if question_id in existing_question_ids:
+        if (
+            question_id
+            and ("id", question_id) in matched_answer_keys
+        ) or (
+            normalized_question
+            and ("question", normalized_question) in matched_answer_keys
+        ):
             continue
 
         ws.append(
             [
                 question_id,
-                item.get("category", ""),
-                item.get("priority", ""),
-                item.get("impact_area", ""),
-                item.get("blocking", ""),
-                item.get("question", ""),
-                item.get("final_answer") or item.get("answer", ""),
+                question_text,
+                get_clarification_answer_text(item),
                 "Answered",
-                _to_text(item.get("related_requirement_ids", [])),
-                item.get("reason", ""),
+                item.get("answered_at", ""),
+                item.get("impact") or item.get("reason", ""),
+                item.get("priority", ""),
+                _to_text(
+                    item.get("related_requirement")
+                    or item.get("related_requirement_id")
+                    or item.get("related_requirement_ids")
+                    or item.get("requirement_id")
+                    or ""
+                ),
+                item.get("category", ""),
             ]
         )
 
     _apply_table_style(ws)
     _auto_width(ws)
+    return {
+        "clarification_count": len(questions),
+        "answer_count": len(answered),
+        "matched_answer_count": len(matched_answer_indexes),
+    }
     
     
 def _create_requirement_summary_sheet(
@@ -1364,7 +1397,7 @@ def export_function_based_testcases_to_excel(
         testcases=testcases,
     )
 
-    _create_clarifications_sheet(
+    clarification_export_stats = _create_clarifications_sheet(
         wb=wb,
         clarifications=clarifications,
         clarification_answers=clarification_answers,
@@ -1409,6 +1442,14 @@ def export_function_based_testcases_to_excel(
     export_file = exports_dir / f"{ticket_id}_function_based_testcases.xlsx"
 
     wb.save(export_file)
+    logger.debug(
+        "Exported Clarifications sheet",
+        extra={
+            "ticket_id": ticket_id,
+            **clarification_export_stats,
+            "export_path": str(export_file),
+        },
+    )
 
     return str(export_file)
 
@@ -1469,7 +1510,7 @@ def export_incremental_testcases_to_excel(
 
     _create_requirements_sheet(wb=wb, analysis=analysis or {})
     _create_requirement_matrix_sheet(wb=wb, analysis=analysis or {}, testcases=testcases)
-    _create_clarifications_sheet(
+    clarification_export_stats = _create_clarifications_sheet(
         wb=wb,
         clarifications=clarifications or {},
         clarification_answers=clarification_answers or {},
@@ -1493,5 +1534,13 @@ def export_incremental_testcases_to_excel(
 
     export_file = _next_incremental_export_file(ticket_id)
     wb.save(export_file)
+    logger.debug(
+        "Exported Clarifications sheet",
+        extra={
+            "ticket_id": ticket_id,
+            **clarification_export_stats,
+            "export_path": str(export_file),
+        },
+    )
 
     return str(export_file)

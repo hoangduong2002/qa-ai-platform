@@ -195,6 +195,12 @@
     </aside>
 
     <section class="content-area">
+        {% if success %}
+            <div class="card alert success">
+                {{ success }}
+            </div>
+        {% endif %}
+
         {% if tab == "analysis" %}
             <div id="requirement-info" class="card">
                 <h2>Requirement: {{ ticket_id }}</h2>
@@ -441,31 +447,85 @@
             </div>
 
             <div id="clarifications" class="card">
-                <h3>Clarification Questions</h3>
-                {% if clarifications and clarifications | length > 0 %}
-                    {% for item in clarifications %}
-                        <div class="question-card">
-                            <div class="question-id">{{ item.question_id or item.clarification_id or item.id or "Q" ~ loop.index }}</div>
-                            {% set question_text = item.question or item.question_text or item.text or item.description or item.title or item.content or item.detail or item.details or item.message %}
-                            <p><b>Question:</b><br>{{ question_text or "No question text found." }}</p>
-                            {% if item.impact %}<p><b>Impact:</b><br>{{ item.impact }}</p>{% endif %}
-                            {% if item.reason %}<p><b>Reason:</b><br>{{ item.reason }}</p>{% endif %}
-                            {% if item.priority %}<p><b>Priority:</b> <span class="badge {{ item.priority | lower }}">{{ item.priority }}</span></p>{% endif %}
-                            {% if item.suggested_options and item.suggested_options | length > 0 %}
-                                <p>
-                                    <b>Suggested Options:</b><br>
-                                    {% for option in item.suggested_options %}
-                                        {{ option.key }}. {{ option.label }}
-                                        {% if option.assumption %}
-                                            <br><small>Assumption if selected: {{ option.assumption }}</small>
-                                        {% endif %}
-                                        <br>
-                                    {% endfor %}
-                                    <small>Options are suggestions only until answered.</small>
-                                </p>
-                            {% endif %}
+                <div class="section-header">
+                    <h3>Clarification Questions</h3>
+                    {% if clarifications and clarifications | length > 0 %}
+                        <div>
+                            <span class="status ok">Answered {{ answered_clarification_count or 0 }}</span>
+                            <span class="status missing">Unanswered {{ unanswered_clarification_count or 0 }}</span>
                         </div>
-                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% set clarification_items = clarifications_with_answers or clarifications %}
+                {% if clarification_items and clarification_items | length > 0 %}
+                    <form
+                        method="post"
+                        action="/portal/requirements/{{ ticket_id }}/clarifications"
+                        data-loading="true"
+                        data-loading-title="Saving clarification answers..."
+                        data-loading-message="Saving answers and updating requirement context."
+                    >
+                        {% for item in clarification_items %}
+                            <div class="question-card">
+                                {% set question_id = item.question_id or item.clarification_id or item.id or "Q" ~ loop.index %}
+                                {% set question_text = item.question or item.question_text or item.text or item.description or item.title or item.content or item.detail or item.details or item.message %}
+                                {% set answer_text = item.answer or item.final_answer or item.custom_answer or "" %}
+
+                                <div class="section-header">
+                                    <div class="question-id">{{ question_id }}</div>
+                                    <span class="status {% if answer_text %}ok{% else %}missing{% endif %}">
+                                        {{ item.answer_status or ("Answered" if answer_text else "Unanswered") }}
+                                    </span>
+                                </div>
+
+                                <p><b>Question:</b><br>{{ question_text or "No question text found." }}</p>
+                                {% if answer_text %}
+                                    <p><b>Saved Answer:</b><br>{{ answer_text }}</p>
+                                    {% if item.answered_at %}<p><small>Answered at: {{ item.answered_at }}</small></p>{% endif %}
+                                {% endif %}
+                                {% if item.impact %}<p><b>Impact:</b><br>{{ item.impact }}</p>{% endif %}
+                                {% if item.reason %}<p><b>Reason:</b><br>{{ item.reason }}</p>{% endif %}
+                                {% if item.priority %}<p><b>Priority:</b> <span class="badge {{ item.priority | lower }}">{{ item.priority }}</span></p>{% endif %}
+                                {% if item.category %}<p><b>Category:</b><br>{{ item.category }}</p>{% endif %}
+                                {% if item.related_requirement %}<p><b>Related Requirement:</b><br>{{ item.related_requirement }}</p>{% endif %}
+                                {% if item.suggested_options and item.suggested_options | length > 0 %}
+                                    <p>
+                                        <b>Suggested Options:</b><br>
+                                        {% for option in item.suggested_options %}
+                                            <label>
+                                                <input
+                                                    type="radio"
+                                                    name="option__{{ question_id }}"
+                                                    value="{{ option.key }}"
+                                                    {% if item.selected_option_key == option.key %}checked{% endif %}
+                                                >
+                                                {{ option.key }}. {{ option.label }}
+                                            </label>
+                                            {% if option.assumption %}
+                                                <br><small>Assumption if selected: {{ option.assumption }}</small>
+                                            {% endif %}
+                                            <br>
+                                        {% endfor %}
+                                        <small>Options are suggestions only until answered.</small>
+                                    </p>
+                                    <label><b>Custom Answer</b></label>
+                                    <textarea
+                                        name="custom_answer__{{ question_id }}"
+                                        rows="4"
+                                        placeholder="Enter custom answer, or leave blank to use the selected option..."
+                                    >{{ item.custom_answer or item.answer or "" }}</textarea>
+                                {% else %}
+                                    <label><b>Your Answer</b></label>
+                                    <textarea
+                                        name="answer__{{ question_id }}"
+                                        rows="4"
+                                        placeholder="Enter clarification answer..."
+                                    >{{ answer_text }}</textarea>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        <button type="submit" class="success">Save Clarification Answers</button>
+                    </form>
                 {% else %}
                     <p>No clarification questions found.</p>
                 {% endif %}

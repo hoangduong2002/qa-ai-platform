@@ -14,6 +14,7 @@ from app.utils.clarification_session import (
     load_clarification_answers,
     load_clarifications,
 )
+from app.utils.clarification_answers import normalize_clarification_answers
 
 
 PRIORITY_ORDER = {
@@ -358,9 +359,8 @@ def generate_clarifications(state):
     max_rounds = _get_max_clarification_rounds()
 
     clarification_answers = load_clarification_answers(ticket_id)
-    answered_clarifications = clarification_answers.get(
-        "answered_clarifications",
-        [],
+    answered_clarifications = normalize_clarification_answers(
+        clarification_answers
     )
 
     previous_clarifications = load_clarifications(ticket_id)
