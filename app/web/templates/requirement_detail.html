@@ -791,12 +791,61 @@
             return localStorage.getItem(storageKey) || "";
         }
 
+        function hidePortalLoading() {
+            const overlay = document.getElementById("loadingOverlay");
+            if (overlay) {
+                overlay.style.display = "none";
+            }
+        }
+
+        function responseMessage(response, text, data) {
+            if (data && (data.detail || data.error || data.message)) {
+                return data.detail || data.error || data.message;
+            }
+
+            if (text && text.trim()) {
+                if (text.trim().startsWith("<")) {
+                    return "The server returned an HTML page instead of a JSON response. Please refresh and try again.";
+                }
+                return text;
+            }
+
+            return response.statusText || `HTTP ${response.status}`;
+        }
+
+        async function fetchJsonSafely(form) {
+            const response = await fetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+                redirect: "follow",
+            });
+            const text = await response.text();
+            let data = null;
+
+            try {
+                data = text ? JSON.parse(text) : null;
+            } catch (_error) {
+                data = null;
+            }
+
+            return { response, text, data };
+        }
+
         async function submitPortalJsonForm(form) {
             const pat = savedPat();
+            const button = form.querySelector("button[type='submit']");
+            const originalText = button ? button.textContent : "";
 
             form.querySelectorAll("input[name='jira_pat']").forEach(input => {
                 input.value = pat;
             });
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = form.id.indexOf("RegenerationPlan") >= 0
+                    ? "Building..."
+                    : "Syncing...";
+            }
 
             if (typeof showLoading === "function") {
                 showLoading(
@@ -805,13 +854,24 @@
                 );
             }
 
-            await portalFetch(form.action, {
-                method: "POST",
-                body: new FormData(form),
-            });
+            try {
+                const { response, text, data } = await fetchJsonSafely(form);
 
-            const target = form.id.indexOf("RegenerationPlan") >= 0 ? "regeneration-plan" : "change-impact-report";
-            window.location.href = "/portal/requirements/{{ ticket_id }}?tab=analysis#" + target;
+                if (!response.ok || (data && data.status === "failed")) {
+                    throw new Error(responseMessage(response, text, data));
+                }
+
+                const isRegenerationPlan = form.id.indexOf("RegenerationPlan") >= 0;
+                const target = isRegenerationPlan ? "regeneration-plan" : "change-impact-report";
+                const tab = isRegenerationPlan ? "changes" : "analysis";
+                window.location.href = "/portal/requirements/{{ ticket_id }}?tab=" + tab + "#" + target;
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+                hidePortalLoading();
+            }
         }
 
         document.addEventListener("DOMContentLoaded", function () {
@@ -832,7 +892,6 @@
                     event.stopImmediatePropagation();
                     submitPortalJsonForm(form).catch(error => {
                         alert(error.message);
-                        window.location.reload();
                     });
                 });
             });

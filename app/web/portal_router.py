@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 import asyncio
+import logging
 import threading
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -116,6 +117,8 @@ templates.env.globals["portal_default_ai_mode"] = get_default_ai_mode()
 JIRA_SYNC_NOT_AVAILABLE = (
     "This requirement was not imported from Jira. Jira sync is not available."
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _redirect_detail(ticket_id: str, tab: str = "analysis", **params):
@@ -267,7 +270,7 @@ async def requirement_detail(
     scenario_session = load_scenario_session(ticket_id)
     testcase_session = load_testcase_session(ticket_id)
 
-    if tab == "clarifications":
+    if tab in ["clarifications", "changes", "incremental"]:
         tab = "analysis"
     elif tab not in ["analysis", "design"]:
         tab = (
@@ -405,9 +408,47 @@ async def build_regeneration_plan_for_requirement(ticket_id: str):
         _ensure_jira_requirement(ticket_id)
         result = build_and_save_regeneration_plan(ticket_id)
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        message = str(error)
+        logger.warning(
+            "Build regeneration plan validation failed. ticket_id=%s error=%s",
+            ticket_id,
+            message,
+        )
+        return JSONResponse(
+            {
+                "status": "failed",
+                "message": message,
+                "detail": message,
+                "result": {},
+            },
+            status_code=400,
+        )
+    except Exception as error:
+        message = (
+            "Build regeneration plan failed. Please check prerequisite artifacts "
+            "and try again."
+        )
+        logger.exception(
+            "Build regeneration plan failed unexpectedly. ticket_id=%s",
+            ticket_id,
+        )
+        return JSONResponse(
+            {
+                "status": "failed",
+                "message": message,
+                "detail": message,
+                "result": {},
+            },
+            status_code=500,
+        )
 
-    return JSONResponse(result)
+    return JSONResponse(
+        {
+            "status": "completed",
+            "message": "Regeneration plan built.",
+            "result": result,
+        }
+    )
 
 
 @router.post("/requirements/{ticket_id}/analyze")

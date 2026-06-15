@@ -1,5 +1,7 @@
 import json
+import logging
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,8 @@ from app.services.jira_delta_service import (
     load_latest_jira_snapshot,
 )
 
+
+logger = logging.getLogger(__name__)
 
 REQUIREMENTS_ROOT = Path("requirements")
 
@@ -790,13 +794,62 @@ def load_latest_regeneration_plan(ticket_id: str) -> dict:
 
 
 def build_and_save_regeneration_plan(ticket_id: str) -> dict:
+    started = time.time()
+    analysis_dir = _analysis_dir(ticket_id)
+    change_report_path = analysis_dir / "latest_change_impact_report.json"
+    plan_path = _latest_plan_file(ticket_id)
+    impacted_requirement_count = 0
+    impacted_scenario_count = 0
+    impacted_testcase_count = 0
+
+    def log_build_event(level: int, message: str) -> None:
+        logger.log(
+            level,
+            message,
+            extra={
+                "ticket_id": ticket_id,
+                "action": "build_regeneration_plan",
+                "change_report_path": str(change_report_path),
+                "plan_path": str(plan_path),
+                "impacted_requirement_count": impacted_requirement_count,
+                "impacted_scenario_count": impacted_scenario_count,
+                "impacted_testcase_count": impacted_testcase_count,
+                "duration_ms": int((time.time() - started) * 1000),
+            },
+        )
+
     change_report = load_latest_change_impact_report(ticket_id)
     if not change_report:
-        raise ValueError("No change impact report found. Sync Jira changes first.")
+        log_build_event(
+            logging.WARNING,
+            "Build regeneration plan missing change impact report",
+        )
+        raise ValueError(
+            "No Jira change impact report found. Please run Sync Jira Changes first."
+        )
 
     traceability = load_latest_source_traceability(ticket_id)
     scenarios = load_latest_scenarios(ticket_id)
     testcases = load_latest_testcases(ticket_id)
+
+    if not scenarios or not testcases:
+        log_build_event(
+            logging.WARNING,
+            "Build regeneration plan missing scenarios or testcases",
+        )
+        raise ValueError(
+            "No existing scenarios/testcases found. Run full generation before incremental regeneration."
+        )
+
+    if not _traceability_entries(traceability):
+        log_build_event(
+            logging.WARNING,
+            "Build regeneration plan missing traceability",
+        )
+        raise ValueError(
+            "No traceability/source references found. Cannot build partial regeneration plan."
+        )
+
     plan = build_regeneration_plan(
         ticket_id=ticket_id,
         change_report=change_report,
@@ -805,13 +858,19 @@ def build_and_save_regeneration_plan(ticket_id: str) -> dict:
         testcases=testcases,
     )
     save_result = save_regeneration_plan(ticket_id, plan)
+    plan_path = Path(save_result.get("latest_plan_path") or plan_path)
+    impacted_requirement_count = len(plan.get("impacted_requirement_ids", []))
+    impacted_scenario_count = len(plan.get("impacted_scenario_ids", []))
+    impacted_testcase_count = len(plan.get("impacted_testcase_ids", []))
+
+    log_build_event(logging.INFO, "Built regeneration plan")
 
     return {
         **save_result,
         "ticket_id": ticket_id,
-        "impacted_requirement_count": len(plan.get("impacted_requirement_ids", [])),
-        "impacted_scenario_count": len(plan.get("impacted_scenario_ids", [])),
-        "impacted_testcase_count": len(plan.get("impacted_testcase_ids", [])),
+        "impacted_requirement_count": impacted_requirement_count,
+        "impacted_scenario_count": impacted_scenario_count,
+        "impacted_testcase_count": impacted_testcase_count,
         "impact_confidence": plan.get("impact_confidence"),
         "can_partial_regenerate": plan.get("can_partial_regenerate"),
         "reason_if_full_regenerate_required": plan.get("reason_if_full_regenerate_required", ""),
