@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -9,6 +10,7 @@ from app.services.llm_router_service import (
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
+from app.services.portal_job_service import PortalConcurrencyError
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import save_testcases, save_raw_response
@@ -714,6 +716,48 @@ def _get_batch_parallel_workers(batch_count: int) -> int:
     return min(batch_count, configured_workers)
 
 
+def _env_int(name: str, default: int) -> int:
+    configured_value = os.getenv(name, str(default))
+
+    try:
+        value = int(configured_value)
+    except ValueError:
+        logger.warning(
+            "Invalid %s value: %s. Falling back to %s.",
+            name,
+            configured_value,
+            default,
+        )
+        value = default
+
+    return max(value, 0)
+
+
+def _env_float(name: str, default: float) -> float:
+    configured_value = os.getenv(name, str(default))
+
+    try:
+        value = float(configured_value)
+    except ValueError:
+        logger.warning(
+            "Invalid %s value: %s. Falling back to %s.",
+            name,
+            configured_value,
+            default,
+        )
+        value = default
+
+    return max(value, 0.0)
+
+
+def _get_concurrency_retry_count() -> int:
+    return _env_int("LLM_CONCURRENCY_RETRY_COUNT", 3)
+
+
+def _get_concurrency_retry_delay_seconds() -> float:
+    return _env_float("LLM_CONCURRENCY_RETRY_DELAY_SECONDS", 10)
+
+
 def _chunk_list(items: list, chunk_size: int) -> list[list]:
     return [
         items[index:index + chunk_size]
@@ -763,72 +807,101 @@ def _generate_testcases_for_scenario_batch(
         function_scenarios=function_scenarios_batch,
     )
 
-    response_content = call_text_llm(
-        TASK_TESTCASE_GENERATION,
-        final_prompt,
-        ai_mode=ai_mode,
-        source_channel=source_channel,
-    )
+    retry_count = _get_concurrency_retry_count()
+    retry_delay_seconds = _get_concurrency_retry_delay_seconds()
+    max_attempts = retry_count + 1
 
-    raw_file = save_raw_response(
-        ticket_id,
-        f"generate_testcases_{function_id}_batch_{batch_index}_raw",
-        response_content,
-    )
-
-    try:
+    for attempt in range(1, max_attempts + 1):
         try:
-            parsed = parse_json(response_content)
-        except Exception as parse_error:
-            parsed = repair_json_with_llm(
-                ticket_id=ticket_id,
-                function_id=f"{function_id}_batch_{batch_index}",
-                malformed_json_text=response_content,
-                original_error=parse_error,
+            response_content = call_text_llm(
+                TASK_TESTCASE_GENERATION,
+                final_prompt,
                 ai_mode=ai_mode,
                 source_channel=source_channel,
             )
 
-        raw_testcases = normalize_testcases(parsed)
+            raw_file = save_raw_response(
+                ticket_id,
+                f"generate_testcases_{function_id}_batch_{batch_index}_raw",
+                response_content,
+            )
 
-        testcases = _normalize_compact_testcases(
-            testcases=raw_testcases,
-            scenarios=function_scenarios_batch,
-        )
+            try:
+                try:
+                    parsed = parse_json(response_content)
+                except Exception as parse_error:
+                    parsed = repair_json_with_llm(
+                        ticket_id=ticket_id,
+                        function_id=f"{function_id}_batch_{batch_index}",
+                        malformed_json_text=response_content,
+                        original_error=parse_error,
+                        ai_mode=ai_mode,
+                        source_channel=source_channel,
+                    )
 
-        expected_scenario_ids = {
-            scenario.get("scenario_id")
-            for scenario in function_scenarios_batch
-            if isinstance(scenario, dict) and scenario.get("scenario_id")
-        }
+                raw_testcases = normalize_testcases(parsed)
 
-        _validate_testcases_for_function(
-            testcases=testcases,
-            function_id=function_id,
-            expected_scenario_ids=expected_scenario_ids,
-        )
+                testcases = _normalize_compact_testcases(
+                    testcases=raw_testcases,
+                    scenarios=function_scenarios_batch,
+                )
 
-    except Exception as error:
-        error_file = save_raw_response(
-            ticket_id,
-            f"generate_testcases_{function_id}_batch_{batch_index}_parse_error",
-            (
-                f"Failed to parse or validate test cases for {function_id}, batch {batch_index}.\n\n"
-                f"Function:\n"
-                f"{json.dumps(function_item, indent=2, ensure_ascii=False)}\n\n"
-                f"Scenarios:\n"
-                f"{json.dumps(function_scenarios_batch, indent=2, ensure_ascii=False)}\n\n"
-                f"Error:\n{error}\n\n"
-                f"Raw response file:\n{raw_file}\n"
-            ),
-        )
+                expected_scenario_ids = {
+                    scenario.get("scenario_id")
+                    for scenario in function_scenarios_batch
+                    if isinstance(scenario, dict) and scenario.get("scenario_id")
+                }
 
-        raise ValueError(
-            f"Failed to generate test cases for {function_id}, batch {batch_index}.\n"
-            f"Raw response saved to: {raw_file}\n"
-            f"Parse debug saved to: {error_file}\n"
-            f"Original error: {error}"
-        ) from error
+                _validate_testcases_for_function(
+                    testcases=testcases,
+                    function_id=function_id,
+                    expected_scenario_ids=expected_scenario_ids,
+                )
+
+            except PortalConcurrencyError:
+                raise
+            except Exception as error:
+                error_file = save_raw_response(
+                    ticket_id,
+                    f"generate_testcases_{function_id}_batch_{batch_index}_parse_error",
+                    (
+                        f"Failed to parse or validate test cases for {function_id}, batch {batch_index}.\n\n"
+                        f"Function:\n"
+                        f"{json.dumps(function_item, indent=2, ensure_ascii=False)}\n\n"
+                        f"Scenarios:\n"
+                        f"{json.dumps(function_scenarios_batch, indent=2, ensure_ascii=False)}\n\n"
+                        f"Error:\n{error}\n\n"
+                        f"Raw response file:\n{raw_file}\n"
+                    ),
+                )
+
+                raise ValueError(
+                    f"Failed to generate test cases for {function_id}, batch {batch_index}.\n"
+                    f"Raw response saved to: {raw_file}\n"
+                    f"Parse debug saved to: {error_file}\n"
+                    f"Original error: {error}"
+                ) from error
+
+            break
+        except PortalConcurrencyError as error:
+            logger.warning(
+                "Testcase batch generation hit transient LLM concurrency limit. "
+                "ticket_id=%s, function_id=%s, batch_index=%s, attempt=%s, error=%s",
+                ticket_id,
+                function_id,
+                batch_index,
+                attempt,
+                error,
+            )
+
+            if attempt >= max_attempts:
+                raise PortalConcurrencyError(
+                    f"Timed out waiting for an available LLM slot while generating "
+                    f"test cases for {function_id}, batch {batch_index}. "
+                    "Please try again shortly."
+                ) from error
+
+            time.sleep(retry_delay_seconds)
 
     logger.info(
         "Generated test cases for function batch. "

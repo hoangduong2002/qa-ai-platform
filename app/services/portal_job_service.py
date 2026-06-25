@@ -49,8 +49,10 @@ _ticket_locks_guard = threading.Lock()
 _ticket_locks: dict[str, threading.Lock] = {}
 _generation_semaphore: threading.BoundedSemaphore | None = None
 _generation_semaphore_size: int | None = None
-_llm_semaphore: threading.BoundedSemaphore | None = None
-_llm_semaphore_size: int | None = None
+_llm_semaphores_guard = threading.Lock()
+_llm_semaphores: dict[str, threading.BoundedSemaphore] = {}
+_llm_semaphore_sizes: dict[str, int] = {}
+_llm_active_calls: dict[str, int] = {}
 _LOCAL_semaphore: threading.BoundedSemaphore | None = None
 _LOCAL_semaphore_size: int | None = None
 
@@ -70,6 +72,15 @@ def _env_int(name: str, default: int) -> int:
         value = default
 
     return max(value, 1)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+
+    return max(value, 0.0)
 
 
 def _get_semaphore(
@@ -99,22 +110,79 @@ def _generation_limit() -> threading.BoundedSemaphore:
 
 
 def _llm_limit() -> threading.BoundedSemaphore:
-    global _llm_semaphore, _llm_semaphore_size
+    semaphore, _ = _provider_llm_limit("")
+    return semaphore
 
-    _llm_semaphore, _llm_semaphore_size = _get_semaphore(
-        "MAX_PARALLEL_LLM_CALLS",
-        3,
-        _llm_semaphore,
-        _llm_semaphore_size,
-    )
-    return _llm_semaphore
+
+def _normalize_provider_key(provider: str = "") -> str:
+    normalized = (provider or "").strip().upper()
+
+    if normalized == "DEEPSEEK":
+        return "DEEPSEEK"
+
+    if normalized.startswith("LOCAL"):
+        return "LOCAL"
+
+    return "GLOBAL"
+
+
+def _provider_llm_env(provider_key: str) -> tuple[str, int]:
+    if provider_key == "DEEPSEEK":
+        return "MAX_CONCURRENT_DEEPSEEK_CALLS", 2
+
+    if provider_key == "LOCAL":
+        return "MAX_CONCURRENT_LOCAL_CALLS", 1
+
+    return "MAX_CONCURRENT_LLM_CALLS", 2
+
+
+def _provider_llm_limit(provider: str) -> tuple[threading.BoundedSemaphore, int]:
+    provider_key = _normalize_provider_key(provider)
+    env_name, default = _provider_llm_env(provider_key)
+    size = _env_int(env_name, default)
+
+    with _llm_semaphores_guard:
+        semaphore = _llm_semaphores.get(provider_key)
+
+        if semaphore is None or _llm_semaphore_sizes.get(provider_key) != size:
+            semaphore = threading.BoundedSemaphore(size)
+            _llm_semaphores[provider_key] = semaphore
+            _llm_semaphore_sizes[provider_key] = size
+            _llm_active_calls[provider_key] = 0
+
+        return semaphore, size
+
+
+def _active_llm_calls(provider: str) -> int:
+    provider_key = _normalize_provider_key(provider)
+
+    with _llm_semaphores_guard:
+        return _llm_active_calls.get(provider_key, 0)
+
+
+def _increment_active_llm_calls(provider: str) -> int:
+    provider_key = _normalize_provider_key(provider)
+
+    with _llm_semaphores_guard:
+        active = _llm_active_calls.get(provider_key, 0) + 1
+        _llm_active_calls[provider_key] = active
+        return active
+
+
+def _decrement_active_llm_calls(provider: str) -> int:
+    provider_key = _normalize_provider_key(provider)
+
+    with _llm_semaphores_guard:
+        active = max(_llm_active_calls.get(provider_key, 0) - 1, 0)
+        _llm_active_calls[provider_key] = active
+        return active
 
 
 def _LOCAL_limit() -> threading.BoundedSemaphore:
     global _LOCAL_semaphore, _LOCAL_semaphore_size
 
     _LOCAL_semaphore, _LOCAL_semaphore_size = _get_semaphore(
-        "MAX_PARALLEL_LOCAL_CALLS",
+        "MAX_CONCURRENT_LOCAL_CALLS",
         1,
         _LOCAL_semaphore,
         _LOCAL_semaphore_size,
@@ -509,20 +577,59 @@ async def run_portal_ticket_job(
 
 @contextmanager
 def limit_llm_call(provider: str = ""):
-    semaphore = _llm_limit()
+    semaphore, max_llm_calls = _provider_llm_limit(provider)
+    wait_timeout = _env_float("LLM_CONCURRENCY_WAIT_TIMEOUT", 300)
+    active_before_wait = _active_llm_calls(provider)
 
-    if not semaphore.acquire(blocking=False):
+    logger.info(
+        "LLM concurrency guard waiting job_id=%s provider=%s active_llm_calls=%s "
+        "max_llm_calls=%s wait_timeout=%s",
+        get_current_job_id(),
+        provider,
+        active_before_wait,
+        max_llm_calls,
+        wait_timeout,
+    )
+
+    if not semaphore.acquire(blocking=True, timeout=wait_timeout):
         logger.warning(
-            "LLM concurrency limit reached job_id=%s provider=%s",
+            "LLM concurrency wait timed out job_id=%s provider=%s active_llm_calls=%s "
+            "max_llm_calls=%s wait_timeout=%s",
             get_current_job_id(),
             provider,
+            _active_llm_calls(provider),
+            max_llm_calls,
+            wait_timeout,
         )
-        raise PortalConcurrencyError(LLM_LIMIT_MESSAGE)
+        raise PortalConcurrencyError(
+            "The portal is still processing the maximum number of LLM calls "
+            f"after waiting {int(wait_timeout)} seconds. Please try again shortly."
+        )
 
     try:
+        active_after_acquire = _increment_active_llm_calls(provider)
+        logger.info(
+            "LLM concurrency slot acquired job_id=%s provider=%s active_llm_calls=%s "
+            "max_llm_calls=%s wait_timeout=%s",
+            get_current_job_id(),
+            provider,
+            active_after_acquire,
+            max_llm_calls,
+            wait_timeout,
+        )
         yield
     finally:
+        active_after_release = _decrement_active_llm_calls(provider)
         semaphore.release()
+        logger.info(
+            "LLM concurrency slot released job_id=%s provider=%s active_llm_calls=%s "
+            "max_llm_calls=%s wait_timeout=%s",
+            get_current_job_id(),
+            provider,
+            active_after_release,
+            max_llm_calls,
+            wait_timeout,
+        )
 
 
 @contextmanager
