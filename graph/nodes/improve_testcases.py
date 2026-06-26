@@ -9,6 +9,9 @@ from app.services.llm_router_service import (
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+)
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import (
@@ -461,7 +464,7 @@ def _normalize_compact_patch_testcase(
         or ""
     )
 
-    return {
+    item = {
         "testcase_id": testcase_id,
         "scenario_id": scenario_id,
         "function_id": (
@@ -513,6 +516,22 @@ def _normalize_compact_patch_testcase(
             or ", ".join(related_requirement_ids)
         ),
     }
+
+    for key in [
+        "execution_type",
+        "automation_candidate",
+        "automation_tool",
+        "automation_priority",
+        "automation_reason",
+        "automation_blockers",
+        "manual_reason",
+    ]:
+        if key in testcase:
+            item[key] = testcase.get(key)
+        elif key in original_testcase:
+            item[key] = original_testcase.get(key)
+
+    return item
 
 
 def _normalize_compact_patch_testcases(
@@ -1275,6 +1294,9 @@ def _generate_improve_patch_for_function(
         original_testcases=function_testcases,
         improved_patch_testcases=patch_testcases,
     )
+    improved_function_testcases = classify_testcases_automation(
+        improved_function_testcases
+    )
 
     validate_merged_testcases(
         original_testcases=function_testcases,
@@ -1613,6 +1635,9 @@ def improve_testcases(state):
         )
 
     merged_testcases = _renumber_master_testcases(
+        merged_testcases
+    )
+    merged_testcases = classify_testcases_automation(
         merged_testcases
     )
 

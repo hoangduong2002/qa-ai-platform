@@ -21,6 +21,8 @@ class QAState(TypedDict):
 
     scenarios: NotRequired[list]
     testcases: NotRequired[list]
+    automation_testcases: NotRequired[list]
+    manual_testcases: NotRequired[list]
 
     function_testcase_results: NotRequired[list]
     function_generation_manifest_file: NotRequired[str]

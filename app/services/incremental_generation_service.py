@@ -17,6 +17,9 @@ from app.services.llm_router_service import (
     TASK_TESTCASE_GENERATION,
     call_text_llm,
 )
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+)
 from app.utils.llm_json import parse_json
 
 
@@ -747,7 +750,14 @@ JSON schema:
       "change_status": "New | Updated",
       "previous_testcase_id": "TC001 or empty",
       "related_change_ids": ["CHG-001"],
-      "source_snapshot_version": {json.dumps(regeneration_plan.get("source_snapshot_version"))}
+      "source_snapshot_version": {json.dumps(regeneration_plan.get("source_snapshot_version"))},
+      "execution_type": "AUTOMATION | MANUAL | HYBRID",
+      "automation_candidate": true,
+      "automation_tool": "Playwright",
+      "automation_priority": "High | Medium | Low | Not Applicable",
+      "automation_reason": "",
+      "automation_blockers": [],
+      "manual_reason": ""
     }}
   ]
 }}
@@ -762,6 +772,10 @@ Rules:
 - Preserve scenario links using related_scenario_id.
 - Also include scenario_id with the same value as related_scenario_id for compatibility.
 - Include source_refs, related_change_ids, related_requirement_ids, and source_snapshot_version for every item.
+- Classify every test case for Playwright automation.
+- Use AUTOMATION when browser UI execution is reliable and assertions are deterministic.
+- Use MANUAL when the case requires human judgment, subjective UX review, external confirmation, physical device, visual-only validation, unstable data, or manual approval.
+- Use HYBRID when browser steps can be automated but final verification requires manual review.
 
 Ticket ID: {ticket_id}
 
@@ -885,7 +899,7 @@ def _normalize_generated_testcases(
         testcase["traceability"] = ", ".join(related_requirement_ids)
         normalized.append(testcase)
 
-    return normalized
+    return classify_testcases_automation(normalized)
 
 
 def regenerate_impacted_testcases(
@@ -1026,7 +1040,7 @@ def merge_testcases(
         existing_ids.add(testcase_id)
         merged.append(item)
 
-    return merged
+    return classify_testcases_automation(merged)
 
 
 def _testcase_merge_report(

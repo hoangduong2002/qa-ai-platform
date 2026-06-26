@@ -737,15 +737,41 @@
                             {% endif %}
                         </select>
                     </form>
+                    <form method="get" action="/portal/requirements/{{ ticket_id }}">
+                        <input type="hidden" name="tab" value="design">
+                        <input type="hidden" name="structure_version" value="{{ structure_version }}">
+                        <input type="hidden" name="scenario_version" value="{{ scenario_version }}">
+                        <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
+                        <label><b>Execution Type</b></label>
+                        <select name="testcase_execution_type" onchange="this.form.submit()">
+                            <option value="" {% if not testcase_execution_type %}selected{% endif %}>All</option>
+                            <option value="AUTOMATION" {% if testcase_execution_type == "AUTOMATION" %}selected{% endif %}>AUTOMATION</option>
+                            <option value="MANUAL" {% if testcase_execution_type == "MANUAL" %}selected{% endif %}>MANUAL</option>
+                            <option value="HYBRID" {% if testcase_execution_type == "HYBRID" %}selected{% endif %}>HYBRID</option>
+                        </select>
+                    </form>
                     {% if testcase_session.current_version %}<span class="status ok">Current: {{ testcase_session.current_version }}</span>{% endif %}
                     {% if testcase_session.approved_version %}<span class="status ok">Approved: {{ testcase_session.approved_version }}</span>{% endif %}
                 </div>
+                {% if has_testcases %}
+                    <div class="metric-grid compact">
+                        <div class="metric-card"><div class="metric-label">Automation</div><div class="metric-value">{{ testcase_execution_counts.AUTOMATION or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Manual</div><div class="metric-value">{{ testcase_execution_counts.MANUAL or 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Hybrid</div><div class="metric-value">{{ testcase_execution_counts.HYBRID or 0 }}</div></div>
+                    </div>
+                {% endif %}
 
                 {% if selected_testcases_json %}
-                    <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/save" data-loading="true" data-loading-title="Saving testcases..." data-loading-message="Saving as new testcase version.">
-                        <textarea name="testcases_json" class="editor-textarea">{{ selected_testcases_json }}</textarea>
-                        <button type="submit" class="success">Save as New Version</button>
-                    </form>
+                    {% if testcase_execution_type %}
+                        <textarea class="editor-textarea" readonly>{{ selected_testcases_json }}</textarea>
+                    {% else %}
+                        <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/save" data-loading="true" data-loading-title="Saving testcases..." data-loading-message="Saving as new testcase version.">
+                            <textarea name="testcases_json" class="editor-textarea">{{ selected_testcases_json }}</textarea>
+                            <button type="submit" class="success">Save as New Version</button>
+                        </form>
+                    {% endif %}
+                {% elif has_testcases %}
+                    <div class="placeholder-box">No test cases match the selected execution type.</div>
                 {% else %}
                     <div class="placeholder-box">No test cases found.</div>
                 {% endif %}

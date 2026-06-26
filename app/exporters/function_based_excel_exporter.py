@@ -8,6 +8,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+    summarize_automation_classification,
+)
 from app.utils.test_structure_store import load_approved_test_case_structure
 from app.utils.clarification_answers import (
     get_clarification_answer_text,
@@ -342,6 +346,13 @@ def _write_testcase_header(ws) -> None:
         "Preconditions",
         "Test Steps",
         "Expected Results",
+        "Execution Type",
+        "Automation Candidate",
+        "Automation Tool",
+        "Automation Priority",
+        "Automation Reason",
+        "Automation Blockers",
+        "Manual Reason",
         "Traceability",
         "Change Status",
         "Previous Test Case ID",
@@ -367,6 +378,13 @@ def _write_testcase_row(ws, testcase: dict) -> None:
             _to_text(testcase.get("preconditions", [])),
             _to_text(testcase.get("test_steps", [])),
             _to_text(testcase.get("expected_results", [])),
+            testcase.get("execution_type", ""),
+            testcase.get("automation_candidate", ""),
+            testcase.get("automation_tool", ""),
+            testcase.get("automation_priority", ""),
+            testcase.get("automation_reason", ""),
+            _to_text(testcase.get("automation_blockers", [])),
+            testcase.get("manual_reason", ""),
             testcase.get("traceability", ""),
             testcase.get("change_status", ""),
             testcase.get("previous_testcase_id", ""),
@@ -550,6 +568,144 @@ def _create_master_testcases_sheet(wb: Workbook, testcases: list) -> None:
 
     for testcase in testcases:
         _write_testcase_row(ws, testcase)
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_all_testcases_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("All Test Cases")
+    _write_testcase_header(ws)
+
+    for testcase in testcases:
+        _write_testcase_row(ws, testcase)
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_automation_candidates_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("Automation Candidates")
+    ws.append(
+        [
+            "Test Case ID",
+            "Function ID",
+            "Scenario ID",
+            "Title",
+            "Priority",
+            "Automation Tool",
+            "Automation Priority",
+            "Automation Reason",
+            "Preconditions",
+            "Steps",
+            "Expected Result",
+            "Test Data",
+            "Automation Blockers",
+        ]
+    )
+
+    for testcase in testcases:
+        if not testcase.get("automation_candidate"):
+            continue
+
+        ws.append(
+            [
+                testcase.get("testcase_id", ""),
+                testcase.get("function_id", ""),
+                testcase.get("scenario_id", ""),
+                testcase.get("title", ""),
+                testcase.get("priority", ""),
+                testcase.get("automation_tool", ""),
+                testcase.get("automation_priority", ""),
+                testcase.get("automation_reason", ""),
+                _to_text(testcase.get("preconditions", [])),
+                _to_text(testcase.get("test_steps") or testcase.get("steps") or []),
+                _to_text(
+                    testcase.get("expected_results")
+                    or testcase.get("expected")
+                    or testcase.get("expected_result")
+                    or []
+                ),
+                _to_text(testcase.get("test_data", "")),
+                _to_text(testcase.get("automation_blockers", [])),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_manual_testcases_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("Manual Test Cases")
+    ws.append(
+        [
+            "Test Case ID",
+            "Function ID",
+            "Scenario ID",
+            "Title",
+            "Priority",
+            "Manual Reason",
+            "Automation Blockers",
+            "Preconditions",
+            "Steps",
+            "Expected Result",
+            "Tester Notes",
+        ]
+    )
+
+    for testcase in testcases:
+        if testcase.get("execution_type") not in {"MANUAL", "HYBRID"}:
+            continue
+
+        ws.append(
+            [
+                testcase.get("testcase_id", ""),
+                testcase.get("function_id", ""),
+                testcase.get("scenario_id", ""),
+                testcase.get("title", ""),
+                testcase.get("priority", ""),
+                testcase.get("manual_reason", ""),
+                _to_text(testcase.get("automation_blockers", [])),
+                _to_text(testcase.get("preconditions", [])),
+                _to_text(testcase.get("test_steps") or testcase.get("steps") or []),
+                _to_text(
+                    testcase.get("expected_results")
+                    or testcase.get("expected")
+                    or testcase.get("expected_result")
+                    or []
+                ),
+                _to_text(testcase.get("tester_notes", "")),
+            ]
+        )
+
+    _apply_table_style(ws)
+    _auto_width(ws)
+
+
+def _create_automation_summary_sheet(wb: Workbook, testcases: list) -> None:
+    ws = wb.create_sheet("Automation Summary")
+    ws.append(["Metric", "Value"])
+
+    summary = summarize_automation_classification(testcases)
+    _append_kv(ws, "Total test cases", summary["total_testcases"])
+    _append_kv(ws, "Automation candidates", summary["automation_candidates"])
+    _append_kv(ws, "Manual test cases", summary["manual_testcases"])
+    _append_kv(ws, "Hybrid test cases", summary["hybrid_testcases"])
+    _append_kv(
+        ws,
+        "Automation coverage %",
+        summary["automation_coverage_percent"],
+    )
+    _append_kv(
+        ws,
+        "High priority automation count",
+        summary["high_priority_automation_count"],
+    )
+    _append_kv(
+        ws,
+        "Top automation blockers",
+        summary["top_automation_blockers"],
+    )
 
     _apply_table_style(ws)
     _auto_width(ws)
@@ -1361,6 +1517,7 @@ def export_function_based_testcases_to_excel(
 ) -> str:
     coverage_review = coverage_review or {}
     final_coverage_review = final_coverage_review or {}
+    testcases = classify_testcases_automation(testcases or [])
 
     if not approved_structure:
         approved_structure = load_approved_test_case_structure(ticket_id)
@@ -1411,6 +1568,26 @@ def export_function_based_testcases_to_excel(
     _create_test_case_structure_sheet(
         wb=wb,
         approved_structure=approved_structure or {},
+    )
+
+    _create_all_testcases_sheet(
+        wb=wb,
+        testcases=testcases,
+    )
+
+    _create_automation_candidates_sheet(
+        wb=wb,
+        testcases=testcases,
+    )
+
+    _create_manual_testcases_sheet(
+        wb=wb,
+        testcases=testcases,
+    )
+
+    _create_automation_summary_sheet(
+        wb=wb,
+        testcases=testcases,
     )
 
     _create_master_testcases_sheet(
@@ -1486,6 +1663,7 @@ def export_incremental_testcases_to_excel(
     change_impact_report = change_impact_report or {}
     regeneration_plan = regeneration_plan or {}
     merge_report = merge_report or {}
+    testcases = classify_testcases_automation(testcases or [])
 
     if not approved_structure:
         approved_structure = load_approved_test_case_structure(ticket_id)
@@ -1517,6 +1695,10 @@ def export_incremental_testcases_to_excel(
     )
     _create_requirement_summary_sheet(wb=wb, requirement_summary=requirement_summary or {})
     _create_test_case_structure_sheet(wb=wb, approved_structure=approved_structure or {})
+    _create_all_testcases_sheet(wb=wb, testcases=testcases)
+    _create_automation_candidates_sheet(wb=wb, testcases=testcases)
+    _create_manual_testcases_sheet(wb=wb, testcases=testcases)
+    _create_automation_summary_sheet(wb=wb, testcases=testcases)
     _create_incremental_testcases_sheet(wb=wb, testcases=testcases)
     _create_master_testcases_sheet(wb=wb, testcases=testcases)
     _create_function_testcase_sheets(wb=wb, grouped_testcases=grouped_testcases)

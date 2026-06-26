@@ -13,6 +13,9 @@ from app.services.llm_router_service import (
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+)
 from app.utils.artifact_loader import load_ticket_artifacts
 from app.utils.llm_json import parse_json
 from app.utils.test_structure_store import load_approved_test_case_structure
@@ -248,7 +251,9 @@ def get_coverage_review_json(ticket_id: str, version: str = "latest") -> str:
 
 
 def get_testcases(ticket_id: str, version: str = "latest") -> list:
-    return _read_json(_testcase_path(ticket_id, version), [])
+    return classify_testcases_automation(
+        _read_json(_testcase_path(ticket_id, version), [])
+    )
 
 
 def get_testcases_json(ticket_id: str, version: str = "latest") -> str:
@@ -591,6 +596,8 @@ def save_testcases_json_as_new_version(ticket_id: str, testcases_json: str) -> s
 
     if not isinstance(testcases, list):
         raise ValueError("Testcases JSON must be an array.")
+
+    testcases = classify_testcases_automation(testcases)
 
     existing = [
         item["version"]

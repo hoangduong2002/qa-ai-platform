@@ -1,4 +1,3 @@
-````md
 # QA AI Platform
 
 AI-powered Requirement Analysis and Test Case Generation Platform for QA teams.
@@ -420,6 +419,29 @@ Excel Export
 * Test case Excel.
 * Incremental test case Excel.
 * Coverage / traceability information.
+
+### Playwright Automation Classification
+
+Generated test cases include execution metadata:
+
+* `execution_type`: `AUTOMATION`, `MANUAL`, or `HYBRID`.
+* `automation_candidate`: true when the case is suitable for Playwright automation.
+* `automation_tool`: defaults to `Playwright` for automation candidates.
+* `automation_priority`: `High`, `Medium`, `Low`, or `Not Applicable`.
+* `automation_reason`, `automation_blockers`, and `manual_reason` explain the classification.
+
+`AUTOMATION` is used for reliable browser UI flows with deterministic assertions.
+`MANUAL` is used for human judgment, subjective UX review, external confirmation,
+physical device work, visual-only validation, unstable data, or manual approval.
+`HYBRID` is used when Playwright can cover part of the flow but final verification
+still requires manual review.
+
+Test case Excel exports include:
+
+* `All Test Cases`
+* `Automation Candidates`
+* `Manual Test Cases`
+* `Automation Summary`
 
 ### Channels
 

@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 import asyncio
+import json
 import logging
 import threading
 
@@ -54,6 +55,7 @@ from app.services.web_test_design_artifact_service import (
     get_final_review,
     get_final_review_json,
     get_scenarios_json,
+    get_testcases,
     get_testcases_json,
     improve_scenarios_from_ai_review,
     improve_scenarios_from_human_review,
@@ -258,6 +260,7 @@ async def requirement_detail(
     structure_version: str = "latest",
     scenario_version: str = "latest",
     testcase_version: str = "latest",
+    testcase_execution_type: str = "",
     error: str = "",
     success: str = "",
 ):
@@ -285,7 +288,41 @@ async def requirement_detail(
     selected_structure_review = get_structure_review(ticket_id, structure_version)
     selected_scenarios_json = get_scenarios_json(ticket_id, scenario_version)
     selected_coverage_review = get_coverage_review(ticket_id, scenario_version)
+    selected_testcases = get_testcases(ticket_id, testcase_version)
     selected_testcases_json = get_testcases_json(ticket_id, testcase_version)
+    selected_testcase_filter = str(testcase_execution_type or "").upper()
+
+    if selected_testcase_filter in {"AUTOMATION", "MANUAL", "HYBRID"}:
+        filtered_testcases = [
+            testcase
+            for testcase in selected_testcases
+            if testcase.get("execution_type") == selected_testcase_filter
+        ]
+        selected_testcases_json = json.dumps(
+            filtered_testcases,
+            indent=2,
+            ensure_ascii=False,
+        ) if filtered_testcases else ""
+    else:
+        selected_testcase_filter = ""
+
+    testcase_execution_counts = {
+        "AUTOMATION": sum(
+            1
+            for testcase in selected_testcases
+            if testcase.get("execution_type") == "AUTOMATION"
+        ),
+        "MANUAL": sum(
+            1
+            for testcase in selected_testcases
+            if testcase.get("execution_type") == "MANUAL"
+        ),
+        "HYBRID": sum(
+            1
+            for testcase in selected_testcases
+            if testcase.get("execution_type") == "HYBRID"
+        ),
+    }
     selected_final_review = get_final_review(ticket_id, testcase_version)
 
     detail.update(
@@ -294,6 +331,8 @@ async def requirement_detail(
             "structure_version": structure_version,
             "scenario_version": scenario_version,
             "testcase_version": testcase_version,
+            "testcase_execution_type": selected_testcase_filter,
+            "testcase_execution_counts": testcase_execution_counts,
             "structure_versions": list_structure_versions(ticket_id),
             "scenario_versions": list_scenario_versions(ticket_id),
             "testcase_versions": list_testcase_versions(ticket_id),
@@ -322,7 +361,7 @@ async def requirement_detail(
             "has_approved_structure": bool(structure_session.get("approved")),
             "has_scenarios": bool(selected_scenarios_json),
             "has_approved_scenarios": bool(scenario_session.get("approved")),
-            "has_testcases": bool(selected_testcases_json),
+            "has_testcases": bool(selected_testcases),
             "has_approved_testcases": bool(testcase_session.get("approved")),
             "is_jira_requirement": is_jira_source,
             "has_jira_snapshot": has_jira_snapshot,

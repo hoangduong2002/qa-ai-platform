@@ -459,6 +459,15 @@ def _to_slim_testcases(testcases: list) -> list:
                 "type": testcase.get("type", ""),
                 "technique": testcase.get("technique", ""),
                 "priority": testcase.get("priority", ""),
+                "execution_type": testcase.get("execution_type", ""),
+                "automation_candidate": testcase.get(
+                    "automation_candidate",
+                    False,
+                ),
+                "automation_priority": testcase.get(
+                    "automation_priority",
+                    "",
+                ),
                 "related_requirement_ids": testcase.get(
                     "related_requirement_ids",
                     [],

@@ -10,6 +10,10 @@ from openpyxl.styles import (
     Side
 )
 
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+    summarize_automation_classification,
+)
 from app.utils.clarification_answers import (
     get_clarification_answer_text,
     get_clarification_id,
@@ -230,6 +234,7 @@ def export_testcases_to_excel(
     version: str = "latest",
     improvement_history: list | None = None,
 ):
+    testcases = classify_testcases_automation(testcases or [])
 
     output_dir = (
         Path("requirements")
@@ -526,7 +531,14 @@ def export_testcases_to_excel(
             "Priority",
             "Preconditions",
             "Test Steps",
-            "Expected Results"
+            "Expected Results",
+            "Execution Type",
+            "Automation Candidate",
+            "Automation Tool",
+            "Automation Priority",
+            "Automation Reason",
+            "Automation Blockers",
+            "Manual Reason",
         ]
     )
 
@@ -580,9 +592,121 @@ def export_testcases_to_excel(
                         "expected_results",
                         []
                     )
-                )
+                ),
+                testcase.get("execution_type", ""),
+                testcase.get("automation_candidate", ""),
+                testcase.get("automation_tool", ""),
+                testcase.get("automation_priority", ""),
+                testcase.get("automation_reason", ""),
+                _to_text(testcase.get("automation_blockers", [])),
+                testcase.get("manual_reason", ""),
             ]
         )
+
+    ws_all = wb.create_sheet("All Test Cases")
+    for row in ws_tc.iter_rows(values_only=True):
+        ws_all.append(list(row))
+
+    ws_auto = wb.create_sheet("Automation Candidates")
+    ws_auto.append(
+        [
+            "Test Case ID",
+            "Function ID",
+            "Scenario ID",
+            "Title",
+            "Priority",
+            "Automation Tool",
+            "Automation Priority",
+            "Automation Reason",
+            "Preconditions",
+            "Steps",
+            "Expected Result",
+            "Test Data",
+            "Automation Blockers",
+        ]
+    )
+    for testcase in testcases:
+        if not testcase.get("automation_candidate"):
+            continue
+        ws_auto.append(
+            [
+                testcase.get("testcase_id", ""),
+                testcase.get("function_id", ""),
+                testcase.get("scenario_id", ""),
+                testcase.get("title", ""),
+                testcase.get("priority", ""),
+                testcase.get("automation_tool", ""),
+                testcase.get("automation_priority", ""),
+                testcase.get("automation_reason", ""),
+                _to_text(testcase.get("preconditions", [])),
+                _to_text(testcase.get("test_steps") or testcase.get("steps") or []),
+                _to_text(
+                    testcase.get("expected_results")
+                    or testcase.get("expected")
+                    or testcase.get("expected_result")
+                    or []
+                ),
+                _to_text(testcase.get("test_data", "")),
+                _to_text(testcase.get("automation_blockers", [])),
+            ]
+        )
+
+    ws_manual = wb.create_sheet("Manual Test Cases")
+    ws_manual.append(
+        [
+            "Test Case ID",
+            "Function ID",
+            "Scenario ID",
+            "Title",
+            "Priority",
+            "Manual Reason",
+            "Automation Blockers",
+            "Preconditions",
+            "Steps",
+            "Expected Result",
+            "Tester Notes",
+        ]
+    )
+    for testcase in testcases:
+        if testcase.get("execution_type") not in {"MANUAL", "HYBRID"}:
+            continue
+        ws_manual.append(
+            [
+                testcase.get("testcase_id", ""),
+                testcase.get("function_id", ""),
+                testcase.get("scenario_id", ""),
+                testcase.get("title", ""),
+                testcase.get("priority", ""),
+                testcase.get("manual_reason", ""),
+                _to_text(testcase.get("automation_blockers", [])),
+                _to_text(testcase.get("preconditions", [])),
+                _to_text(testcase.get("test_steps") or testcase.get("steps") or []),
+                _to_text(
+                    testcase.get("expected_results")
+                    or testcase.get("expected")
+                    or testcase.get("expected_result")
+                    or []
+                ),
+                _to_text(testcase.get("tester_notes", "")),
+            ]
+        )
+
+    ws_automation_summary = wb.create_sheet("Automation Summary")
+    ws_automation_summary.append(["Metric", "Value"])
+    automation_summary = summarize_automation_classification(testcases)
+    for key, value in [
+        ("Total test cases", automation_summary["total_testcases"]),
+        ("Automation candidates", automation_summary["automation_candidates"]),
+        ("Manual test cases", automation_summary["manual_testcases"]),
+        ("Hybrid test cases", automation_summary["hybrid_testcases"]),
+        ("Automation coverage %", automation_summary["automation_coverage_percent"]),
+        (
+            "High priority automation count",
+            automation_summary["high_priority_automation_count"],
+        ),
+        ("Top automation blockers", automation_summary["top_automation_blockers"]),
+    ]:
+        ws_automation_summary.append([key, _to_text(value)])
 
     # Sheet 6: Coverage Review
     ws_review = wb.create_sheet(

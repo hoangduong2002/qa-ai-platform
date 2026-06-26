@@ -26,6 +26,18 @@ Compact schema rules:
 - The application will derive function_id, sub_function_id, test_area_id, related_requirement_ids, and traceability from scenario_id.
 - Put concrete test data values directly inside steps.
 
+Automation classification rules:
+- Classify every improved or added test case for Playwright automation.
+- execution_type must be "AUTOMATION", "MANUAL", or "HYBRID".
+- automation_candidate must be true for AUTOMATION and HYBRID, false for MANUAL.
+- automation_tool must be "Playwright" for automation candidates and "" for MANUAL.
+- automation_priority must be "High", "Medium", "Low", or "Not Applicable".
+- AUTOMATION means the test can be executed reliably through browser UI and has deterministic assertions.
+- MANUAL means it requires human judgment, subjective UX review, external system confirmation, physical device, visual-only validation, unstable data, or manual approval.
+- HYBRID means some steps can be automated but final verification requires manual review.
+- automation_reason and manual_reason must be concise.
+- automation_blockers must list blockers such as visual review, manual verification, email inbox, sms, phone call, third-party, approval, print, scan, signature, external system, or human judgment.
+
 Test design technique rules:
 - technique is mandatory.
 - technique must be one of:
@@ -103,6 +115,13 @@ Each patch test case must follow this schema:
     "title": "Register with minimum password length",
     "type": "Boundary",
     "priority": "High",
+    "execution_type": "AUTOMATION",
+    "automation_candidate": true,
+    "automation_tool": "Playwright",
+    "automation_priority": "High",
+    "automation_reason": "Boundary registration can be exercised through browser UI with deterministic success assertions.",
+    "automation_blockers": [],
+    "manual_reason": "",
     "preconditions": [
       "User is on the registration page"
     ],

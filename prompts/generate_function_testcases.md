@@ -46,6 +46,18 @@ Test design technique rules:
 - Choose representative values that maximize coverage with minimal test cases.
 - Do not generate many minor variants for the same rule.
 
+Automation classification rules:
+- Classify every test case for Playwright automation.
+- execution_type must be "AUTOMATION", "MANUAL", or "HYBRID".
+- automation_candidate must be true for AUTOMATION and HYBRID, false for MANUAL.
+- automation_tool must be "Playwright" for automation candidates and "" for MANUAL.
+- automation_priority must be "High", "Medium", "Low", or "Not Applicable".
+- AUTOMATION means the test can be executed reliably through browser UI and has deterministic assertions.
+- MANUAL means it requires human judgment, subjective UX review, external system confirmation, physical device, visual-only validation, unstable data, or manual approval.
+- HYBRID means some steps can be automated but final verification requires manual review.
+- automation_reason and manual_reason must be concise.
+- automation_blockers must list blockers such as visual review, manual verification, email inbox, sms, phone call, third-party, approval, print, scan, signature, external system, or human judgment.
+
 Test data rules:
 - Put concrete test data values directly inside steps.
 - Do not create a separate test_data field.
@@ -93,6 +105,13 @@ Each test case must follow this schema:
     "title": "Register with valid data",
     "type": "Positive",
     "priority": "High",
+    "execution_type": "AUTOMATION",
+    "automation_candidate": true,
+    "automation_tool": "Playwright",
+    "automation_priority": "High",
+    "automation_reason": "Registration can be exercised through browser UI with deterministic success assertions.",
+    "automation_blockers": [],
+    "manual_reason": "",
     "preconditions": [
       "User is on the registration page"
     ],

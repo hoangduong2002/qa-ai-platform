@@ -11,6 +11,9 @@ from app.services.llm_router_service import (
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
 from app.services.portal_job_service import PortalConcurrencyError
+from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
+)
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import save_testcases, save_raw_response
@@ -506,7 +509,7 @@ def _normalize_compact_testcase(
         or []
     )
 
-    return {
+    item = {
         "testcase_id": testcase.get("testcase_id", ""),
         "scenario_id": scenario_id,
         "function_id": (
@@ -536,6 +539,20 @@ def _normalize_compact_testcase(
         "related_requirement_ids": related_requirement_ids,
         "traceability": ", ".join(related_requirement_ids),
     }
+
+    for key in [
+        "execution_type",
+        "automation_candidate",
+        "automation_tool",
+        "automation_priority",
+        "automation_reason",
+        "automation_blockers",
+        "manual_reason",
+    ]:
+        if key in testcase:
+            item[key] = testcase.get(key)
+
+    return item
 
 
 def _normalize_compact_testcases(
@@ -1062,6 +1079,7 @@ def _generate_testcases_for_function(
         testcases,
         function_id,
     )
+    testcases = classify_testcases_automation(testcases)
 
     function_file = save_function_testcases(
         ticket_id=ticket_id,
@@ -1307,6 +1325,7 @@ def generate_testcases(state):
         merged_testcases.extend(result["testcases"])
 
     merged_testcases = _renumber_testcases(merged_testcases)
+    merged_testcases = classify_testcases_automation(merged_testcases)
 
     master_file = save_testcases(
         ticket_id,
