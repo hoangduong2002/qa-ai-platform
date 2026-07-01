@@ -7,22 +7,28 @@ logger = logging.getLogger(__name__)
 
 AI_MODE_TEST_LOCAL_ONLY = "TEST_LOCAL_ONLY"
 AI_MODE_PRODUCTION_HYBRID = "PRODUCTION_HYBRID"
+AI_MODE_PRODUCTION_HYBRID_DEEPSEEK = "PRODUCTION_HYBRID_DEEPSEEK"
+AI_MODE_PRODUCTION_HYBRID_COPILOT = "PRODUCTION_HYBRID_COPILOT"
 AI_MODE_PRODUCTION_REMOTE_ONLY = "PRODUCTION_REMOTE_ONLY"
 AI_MODE_DEEPSEEK_ONLY = "DEEPSEEK_ONLY"
+AI_MODE_COPILOT_ONLY = "COPILOT_ONLY"
 AI_MODE_NO_LLM = "NO_LLM"
 
 VALID_AI_MODES = {
     AI_MODE_TEST_LOCAL_ONLY,
-    AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+    AI_MODE_PRODUCTION_HYBRID_COPILOT,
     AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_COPILOT_ONLY,
     AI_MODE_NO_LLM,
 }
 
 BACKWARD_COMPATIBLE_AI_MODE_ALIASES = {
+    AI_MODE_PRODUCTION_HYBRID: AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
     AI_MODE_PRODUCTION_REMOTE_ONLY: AI_MODE_DEEPSEEK_ONLY,
 }
 
-TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID
+TELEGRAM_DEFAULT_AI_MODE = AI_MODE_PRODUCTION_HYBRID_DEEPSEEK
 PORTAL_DEFAULT_AI_MODE = AI_MODE_NO_LLM
 
 
@@ -51,6 +57,10 @@ def _local_ai_available() -> bool:
         "FORCE_DISABLE_LOCAL_AI",
         False,
     )
+
+
+def _copilot_available() -> bool:
+    return not _env_bool("FORCE_DISABLE_COPILOT", False)
 
 
 def normalize_ai_mode(value: Any) -> str:
@@ -127,10 +137,20 @@ def build_ai_context(source_channel: str, ai_mode: Any) -> dict[str, Any]:
     return {
         "ai_mode": resolved_ai_mode,
         "production_mode": resolved_ai_mode
-        in {AI_MODE_PRODUCTION_HYBRID, AI_MODE_DEEPSEEK_ONLY},
+        in {
+            AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+            AI_MODE_PRODUCTION_HYBRID_COPILOT,
+            AI_MODE_DEEPSEEK_ONLY,
+            AI_MODE_COPILOT_ONLY,
+        },
         "local_ai_enabled": resolved_ai_mode
-        in {AI_MODE_PRODUCTION_HYBRID, AI_MODE_TEST_LOCAL_ONLY},
+        in {
+            AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+            AI_MODE_PRODUCTION_HYBRID_COPILOT,
+            AI_MODE_TEST_LOCAL_ONLY,
+        },
         "deepseek_enabled": _deepseek_available(),
+        "copilot_enabled": _copilot_available(),
         "server_local_ai_enabled": _local_ai_available(),
         "source": source_channel,
         "source_channel": source_channel,

@@ -77,6 +77,7 @@ from app.services.test_design_workflow_service import (
 )
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
+from app.services.llm_router_service import test_all_llm_providers
 from app.services.portal_ai_mode_service import (
     get_current_portal_ai_mode,
     get_default_ai_mode,
@@ -250,6 +251,11 @@ async def check_jira_requirement(issue_key: str):
             "detail_url": f"/portal/requirements/{ticket_id}",
         }
     )
+
+
+@router.post("/llm/test-all")
+async def test_all_llms():
+    return JSONResponse(test_all_llm_providers())
 
 
 @router.get("/requirements/{ticket_id}", response_class=HTMLResponse)

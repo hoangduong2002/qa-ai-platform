@@ -8,7 +8,10 @@ from fastapi import HTTPException, Request
 from app.services.ai_mode_context_service import (
     AI_MODE_DEEPSEEK_ONLY,
     AI_MODE_NO_LLM,
+    AI_MODE_COPILOT_ONLY,
     AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_PRODUCTION_HYBRID_COPILOT,
+    AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
     AI_MODE_PRODUCTION_REMOTE_ONLY,
     AI_MODE_TEST_LOCAL_ONLY,
     VALID_AI_MODES,
@@ -21,8 +24,11 @@ logger = logging.getLogger(__name__)
 
 TEST_LOCAL_ONLY = AI_MODE_TEST_LOCAL_ONLY
 PRODUCTION_HYBRID = AI_MODE_PRODUCTION_HYBRID
+PRODUCTION_HYBRID_DEEPSEEK = AI_MODE_PRODUCTION_HYBRID_DEEPSEEK
+PRODUCTION_HYBRID_COPILOT = AI_MODE_PRODUCTION_HYBRID_COPILOT
 PRODUCTION_REMOTE_ONLY = AI_MODE_PRODUCTION_REMOTE_ONLY
 DEEPSEEK_ONLY = AI_MODE_DEEPSEEK_ONLY
+COPILOT_ONLY = AI_MODE_COPILOT_ONLY
 NO_LLM = AI_MODE_NO_LLM
 
 _portal_ai_mode: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -56,6 +62,10 @@ def _local_ai_available() -> bool:
         "FORCE_DISABLE_LOCAL_AI",
         False,
     )
+
+
+def _copilot_available() -> bool:
+    return not _env_bool("FORCE_DISABLE_COPILOT", False)
 
 
 def _default_ai_mode() -> str:
@@ -107,8 +117,23 @@ def is_deepseek_allowed_for_request(headers: Any | None = None) -> bool:
         return False
 
     return mode.get("ai_mode") in {
-        PRODUCTION_HYBRID,
+        PRODUCTION_HYBRID_DEEPSEEK,
         DEEPSEEK_ONLY,
+    }
+
+
+def is_copilot_allowed_for_request(headers: Any | None = None) -> bool:
+    mode = resolve_ai_mode_from_headers(headers) if headers is not None else _portal_ai_mode.get()
+
+    if mode is None:
+        return _copilot_available()
+
+    if not _copilot_available():
+        return False
+
+    return mode.get("ai_mode") in {
+        PRODUCTION_HYBRID_COPILOT,
+        COPILOT_ONLY,
     }
 
 
@@ -121,7 +146,11 @@ def is_local_ai_allowed_for_request(headers: Any | None = None) -> bool:
     if not _local_ai_available():
         return False
 
-    return mode.get("ai_mode") in {TEST_LOCAL_ONLY, PRODUCTION_HYBRID}
+    return mode.get("ai_mode") in {
+        TEST_LOCAL_ONLY,
+        PRODUCTION_HYBRID_DEEPSEEK,
+        PRODUCTION_HYBRID_COPILOT,
+    }
 
 
 def assert_deepseek_allowed() -> None:
@@ -134,12 +163,39 @@ def assert_deepseek_allowed() -> None:
     if mode:
         if mode.get("ai_mode") == TEST_LOCAL_ONLY:
             message = "DeepSeek call blocked because Portal is in TEST_LOCAL_ONLY mode."
+        elif mode.get("ai_mode") in {PRODUCTION_HYBRID_COPILOT, COPILOT_ONLY}:
+            message = (
+                "DeepSeek call blocked because Portal is in "
+                f"{mode.get('ai_mode')} mode."
+            )
         elif mode.get("ai_mode") == NO_LLM:
             message = "DeepSeek call blocked because Portal is in NO_LLM mode."
         elif _env_bool("FORCE_DISABLE_DEEPSEEK", False):
             message = "DeepSeek call blocked because FORCE_DISABLE_DEEPSEEK=true."
         elif not _env_str("DEEPSEEK_API_KEY"):
             message = "DeepSeek call blocked because DEEPSEEK_API_KEY is missing."
+
+    logger.warning(message)
+    raise RuntimeError(message)
+
+
+def assert_copilot_allowed() -> None:
+    if is_copilot_allowed_for_request():
+        return
+
+    mode = _portal_ai_mode.get()
+    message = "Copilot call blocked because Copilot is not available."
+
+    if mode:
+        if mode.get("ai_mode") in {TEST_LOCAL_ONLY, PRODUCTION_HYBRID_DEEPSEEK, DEEPSEEK_ONLY}:
+            message = (
+                "Copilot call blocked because Portal is in "
+                f"{mode.get('ai_mode')} mode."
+            )
+        elif mode.get("ai_mode") == NO_LLM:
+            message = "Copilot call blocked because Portal is in NO_LLM mode."
+        elif _env_bool("FORCE_DISABLE_COPILOT", False):
+            message = "Copilot provider is disabled by FORCE_DISABLE_COPILOT=true."
 
     logger.warning(message)
     raise RuntimeError(message)
@@ -153,10 +209,10 @@ def assert_local_ai_allowed() -> None:
     message = "Local AI call skipped because Local AI is not available."
 
     if mode:
-        if mode.get("ai_mode") == DEEPSEEK_ONLY:
+        if mode.get("ai_mode") in {DEEPSEEK_ONLY, COPILOT_ONLY}:
             message = (
                 "Local AI call skipped because Portal is in "
-                "DEEPSEEK_ONLY mode."
+                f"{mode.get('ai_mode')} mode."
             )
         elif mode.get("ai_mode") == NO_LLM:
             message = "Local AI call skipped because Portal is in NO_LLM mode."

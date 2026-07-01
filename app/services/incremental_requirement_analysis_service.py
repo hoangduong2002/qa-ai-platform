@@ -17,7 +17,8 @@ from app.utils.llm_json import parse_json
 
 REQUIREMENTS_ROOT = Path("requirements")
 LLM_REQUIRED_MESSAGE = (
-    "This action requires LLM. Select TEST_LOCAL_ONLY or PRODUCTION_HYBRID."
+    "This action requires LLM. Select TEST_LOCAL_ONLY, DEEPSEEK_ONLY, "
+    "COPILOT_ONLY, PRODUCTION_HYBRID_DEEPSEEK, or PRODUCTION_HYBRID_COPILOT."
 )
 
 

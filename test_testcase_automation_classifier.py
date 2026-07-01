@@ -1,7 +1,31 @@
 from app.services.testcase_automation_classifier import (
+    classify_testcases_automation,
     classify_testcase_automation,
 )
+from graph.nodes.generate_testcases import (
+    _normalize_compact_testcases,
+    _validate_testcases_for_function,
+    normalize_generated_testcase,
+)
 from graph.nodes.improve_testcases import merge_improved_testcases
+
+
+def _scenario():
+    return {
+        "scenario_id": "SC001",
+        "function_id": "FUNC012",
+        "sub_function_id": "SUB001",
+        "test_area_id": "AREA001",
+        "related_requirement_ids": ["REQ001"],
+    }
+
+
+def _validate_one(testcase):
+    _validate_testcases_for_function(
+        testcases=[testcase],
+        function_id="FUNC012",
+        expected_scenario_ids={"SC001"},
+    )
 
 
 def test_login_form_validation_is_automation():
@@ -176,3 +200,91 @@ def test_improve_merge_preserves_classification_fields():
     assert merged[0]["automation_tool"] == "Playwright"
     assert merged[0]["automation_priority"] == "High"
     assert merged[0]["automation_reason"]
+
+
+def test_testcase_id_alias_is_converted_to_test_case_id():
+    testcase = normalize_generated_testcase(
+        {
+            "testcase_id": "TC0012",
+            "scenarioId": "SC001",
+            "testSteps": "Open page\nClick Save",
+            "expectedResult": "Saved message is displayed",
+        }
+    )
+
+    assert testcase["test_case_id"] == "TC0012"
+    assert testcase["testcase_id"] == "TC0012"
+    assert testcase["scenario_id"] == "SC001"
+    assert testcase["steps"] == ["Open page", "Click Save"]
+    assert testcase["test_steps"] == ["Open page", "Click Save"]
+    assert testcase["expected_results"] == ["Saved message is displayed"]
+
+
+def test_missing_automation_fields_are_filled_by_classifier():
+    normalized = _normalize_compact_testcases(
+        [
+            {
+                "test_case_id": "TC001",
+                "scenario_id": "SC001",
+                "title": "Search users",
+                "priority": "High",
+                "steps": ["Navigate to users", "Input search text", "Click Search"],
+                "expected_result": ["Search results are displayed"],
+            }
+        ],
+        [_scenario()],
+    )
+
+    classified = classify_testcases_automation(normalized)
+
+    assert classified[0]["execution_type"] == "AUTOMATION"
+    assert classified[0]["automation_candidate"] is True
+    assert classified[0]["automation_blockers"] == []
+    _validate_one(classified[0])
+
+
+def test_automation_blockers_string_becomes_list():
+    testcase = normalize_generated_testcase(
+        {
+            "test_case_id": "TC001",
+            "automation_blockers": "email inbox\nmanual verification",
+        }
+    )
+
+    assert testcase["automation_blockers"] == [
+        "email inbox",
+        "manual verification",
+    ]
+
+
+def test_automation_candidate_string_becomes_boolean():
+    testcase = normalize_generated_testcase(
+        {
+            "test_case_id": "TC001",
+            "automation_candidate": "false",
+        }
+    )
+
+    assert testcase["automation_candidate"] is False
+
+
+def test_old_testcase_format_still_validates_after_normalization():
+    normalized = _normalize_compact_testcases(
+        [
+            {
+                "testcase_id": "TC001",
+                "scenario_id": "SC001",
+                "title": "Review saved profile",
+                "priority": "Medium",
+                "preconditions": "User is logged in",
+                "test_steps": ["Open profile", "Click Save"],
+                "expected_results": ["Profile is saved"],
+            }
+        ],
+        [_scenario()],
+    )
+    classified = classify_testcases_automation(normalized)
+
+    _validate_one(classified[0])
+    assert classified[0]["test_case_id"] == "TC001"
+    assert classified[0]["testcase_id"] == "TC001"

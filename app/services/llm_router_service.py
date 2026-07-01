@@ -15,6 +15,7 @@ from app.services.local_ai_config_service import (
     is_local_ai_enabled,
 )
 from app.services.portal_ai_mode_service import (
+    assert_copilot_allowed,
     assert_deepseek_allowed,
     assert_local_ai_allowed,
     get_current_portal_ai_mode,
@@ -47,11 +48,15 @@ TASK_VISION_EXTRACT = "vision_extract"
 
 AI_MODE_TEST_LOCAL_ONLY = "TEST_LOCAL_ONLY"
 AI_MODE_PRODUCTION_HYBRID = "PRODUCTION_HYBRID"
+AI_MODE_PRODUCTION_HYBRID_DEEPSEEK = "PRODUCTION_HYBRID_DEEPSEEK"
+AI_MODE_PRODUCTION_HYBRID_COPILOT = "PRODUCTION_HYBRID_COPILOT"
 AI_MODE_PRODUCTION_REMOTE_ONLY = "PRODUCTION_REMOTE_ONLY"
 AI_MODE_DEEPSEEK_ONLY = "DEEPSEEK_ONLY"
+AI_MODE_COPILOT_ONLY = "COPILOT_ONLY"
 AI_MODE_NO_LLM = "NO_LLM"
 
 PROVIDER_DEEPSEEK = "DEEPSEEK"
+PROVIDER_COPILOT = "COPILOT"
 PROVIDER_LOCAL_TEXT = "LOCAL_TEXT"
 PROVIDER_LOCAL_COMPACT = "LOCAL_COMPACT"
 PROVIDER_LOCAL_VISION = "LOCAL_VISION"
@@ -77,12 +82,16 @@ VALID_TASK_TYPES = TEXT_REASONING_TASK_TYPES | COMPACT_TASK_TYPES | VISION_TASK_
 VALID_AI_MODES = {
     AI_MODE_TEST_LOCAL_ONLY,
     AI_MODE_PRODUCTION_HYBRID,
+    AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+    AI_MODE_PRODUCTION_HYBRID_COPILOT,
     AI_MODE_PRODUCTION_REMOTE_ONLY,
     AI_MODE_DEEPSEEK_ONLY,
+    AI_MODE_COPILOT_ONLY,
     AI_MODE_NO_LLM,
 }
 SUPPORTED_PROVIDERS = {
     PROVIDER_DEEPSEEK,
+    PROVIDER_COPILOT,
     PROVIDER_LOCAL_TEXT,
     PROVIDER_LOCAL_COMPACT,
     PROVIDER_LOCAL_VISION,
@@ -124,6 +133,9 @@ def _env_bool(name: str, default: bool = False) -> bool:
 def _normalize_ai_mode(ai_mode: str | None) -> str:
     normalized = (ai_mode or "").strip().upper()
 
+    if normalized == AI_MODE_PRODUCTION_HYBRID:
+        return AI_MODE_PRODUCTION_HYBRID_DEEPSEEK
+
     if normalized == AI_MODE_PRODUCTION_REMOTE_ONLY:
         return AI_MODE_DEEPSEEK_ONLY
 
@@ -159,6 +171,10 @@ def _deepseek_available() -> bool:
 
 def _local_available() -> bool:
     return is_local_ai_enabled()
+
+
+def _copilot_available() -> bool:
+    return not _env_bool("FORCE_DISABLE_COPILOT", False)
 
 
 def _deepseek_unavailable_reason(ai_mode: str) -> str:
@@ -199,9 +215,22 @@ def _local_unavailable_reason(ai_mode: str) -> str:
     )
 
 
+def _copilot_unavailable_reason(ai_mode: str) -> str:
+    if _env_bool("FORCE_DISABLE_COPILOT", False):
+        return "Copilot provider is disabled by FORCE_DISABLE_COPILOT=true."
+
+    return (
+        f"AI provider is not available for AI_MODE={ai_mode}: "
+        "Copilot is unavailable."
+    )
+
+
 def _provider_model(provider: str) -> str:
     if provider == PROVIDER_DEEPSEEK:
         return _env_str("DEEPSEEK_MODEL", "deepseek-v4-flash")
+
+    if provider == PROVIDER_COPILOT:
+        return _env_str("COPILOT_MODEL", "claude-sonnet-4.6")
 
     if provider == PROVIDER_LOCAL_TEXT:
         return get_LOCAL_text_model()
@@ -233,6 +262,9 @@ def _provider_timeout(provider: str) -> float:
     if provider == PROVIDER_DEEPSEEK:
         return _env_float("DEEPSEEK_TIMEOUT", 120)
 
+    if provider == PROVIDER_COPILOT:
+        return _env_float("COPILOT_TIMEOUT", 120)
+
     if provider == PROVIDER_LOCAL_COMPACT:
         return _env_float(
             "LOCAL_COMPACT_TIMEOUT",
@@ -248,6 +280,10 @@ def _provider_timeout(provider: str) -> float:
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+def _health_check_timeout() -> float:
+    return _env_float("LLM_HEALTH_CHECK_TIMEOUT", 30)
+
+
 def _deepseek_chat_completions_url() -> str:
     configured = _env_str(
         "DEEPSEEK_BASE_URL",
@@ -258,6 +294,13 @@ def _deepseek_chat_completions_url() -> str:
         return configured
 
     return f"{configured}/chat/completions"
+
+
+def _copilot_chat_completions_url() -> str:
+    return _env_str(
+        "COPILOT_BASE_URL",
+        "http://localhost:3100/v1/chat/completions",
+    )
 
 
 def _provider_result(
@@ -295,11 +338,12 @@ def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
         raise ValueError(f"Unsupported ai_mode: {ai_mode}")
 
     deepseek_available = _deepseek_available()
+    copilot_available = _copilot_available()
     local_available = _local_available()
 
     if normalized_task_type in TEXT_REASONING_TASK_TYPES:
         if normalized_ai_mode in {
-            AI_MODE_PRODUCTION_HYBRID,
+            AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
             AI_MODE_DEEPSEEK_ONLY,
         }:
             if deepseek_available:
@@ -315,6 +359,25 @@ def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
                 normalized_ai_mode,
                 PROVIDER_SKIP,
                 _deepseek_unavailable_reason(normalized_ai_mode),
+            )
+
+        if normalized_ai_mode in {
+            AI_MODE_PRODUCTION_HYBRID_COPILOT,
+            AI_MODE_COPILOT_ONLY,
+        }:
+            if copilot_available:
+                return _provider_result(
+                    normalized_task_type,
+                    normalized_ai_mode,
+                    PROVIDER_COPILOT,
+                    f"{normalized_ai_mode} routes text/reasoning tasks to Copilot.",
+                )
+
+            return _provider_result(
+                normalized_task_type,
+                normalized_ai_mode,
+                PROVIDER_SKIP,
+                _copilot_unavailable_reason(normalized_ai_mode),
             )
 
         if normalized_ai_mode == AI_MODE_TEST_LOCAL_ONLY:
@@ -340,13 +403,15 @@ def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
                 PROVIDER_SKIP,
                 (
                     "AI mode is NO_LLM. This action requires an LLM. "
-                    "Select TEST_LOCAL_ONLY, DEEPSEEK_ONLY, or PRODUCTION_HYBRID."
+                    "Select TEST_LOCAL_ONLY, DEEPSEEK_ONLY, COPILOT_ONLY, "
+                    "PRODUCTION_HYBRID_DEEPSEEK, or PRODUCTION_HYBRID_COPILOT."
                 ),
             )
 
     if normalized_task_type in COMPACT_TASK_TYPES:
         if normalized_ai_mode in {
-            AI_MODE_PRODUCTION_HYBRID,
+            AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+            AI_MODE_PRODUCTION_HYBRID_COPILOT,
             AI_MODE_TEST_LOCAL_ONLY,
         }:
             if local_available:
@@ -381,7 +446,8 @@ def resolve_provider_for_task(task_type: str, ai_mode: str) -> dict[str, str]:
 
     if normalized_task_type in VISION_TASK_TYPES:
         if normalized_ai_mode in {
-            AI_MODE_PRODUCTION_HYBRID,
+            AI_MODE_PRODUCTION_HYBRID_DEEPSEEK,
+            AI_MODE_PRODUCTION_HYBRID_COPILOT,
             AI_MODE_TEST_LOCAL_ONLY,
         }:
             if local_available:
@@ -423,6 +489,7 @@ def _call_deepseek(
     prompt: str,
     system_prompt: str | None,
     response_format: Any | None,
+    timeout: float | None = None,
 ) -> tuple[str, dict[str, Any]]:
     assert_deepseek_allowed()
 
@@ -456,7 +523,7 @@ def _call_deepseek(
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=_provider_timeout(PROVIDER_DEEPSEEK),
+            timeout=timeout or _provider_timeout(PROVIDER_DEEPSEEK),
         )
     response.raise_for_status()
     data = response.json()
@@ -468,11 +535,68 @@ def _call_deepseek(
     return content, data
 
 
+def _call_copilot(
+    prompt: str,
+    system_prompt: str | None = None,
+    response_format: Any | None = None,
+    timeout: float | None = None,
+) -> tuple[str, dict[str, Any]]:
+    if _env_bool("FORCE_DISABLE_COPILOT", False):
+        raise RuntimeError(
+            "Copilot provider is disabled by FORCE_DISABLE_COPILOT=true."
+        )
+
+    assert_copilot_allowed()
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+    api_key = _env_str("COPILOT_API_KEY")
+
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload: dict[str, Any] = {
+        "model": _provider_model(PROVIDER_COPILOT),
+        "messages": _messages(prompt, system_prompt),
+    }
+
+    if response_format == "json":
+        payload["response_format"] = {"type": "json_object"}
+    elif response_format:
+        payload["response_format"] = response_format
+
+    with limit_llm_call(PROVIDER_COPILOT):
+        response = requests.post(
+            _copilot_chat_completions_url(),
+            headers=headers,
+            json=payload,
+            timeout=timeout or _provider_timeout(PROVIDER_COPILOT),
+        )
+
+    response.raise_for_status()
+    data = response.json()
+
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise RuntimeError(
+            "Copilot provider returned an invalid response: "
+            "missing choices[0].message.content."
+        ) from error
+
+    if not str(content or "").strip():
+        raise RuntimeError("Copilot returned an empty response.")
+
+    return str(content), data
+
+
 def _call_LOCAL(
     provider: str,
     prompt: str,
     system_prompt: str | None,
     response_format: Any | None,
+    timeout: float | None = None,
     **kwargs,
 ) -> tuple[str, dict[str, Any]]:
     assert_local_ai_allowed()
@@ -502,7 +626,7 @@ def _call_LOCAL(
             f"{base_url.rstrip('/')}/api/chat",
             headers={"Content-Type": "application/json"},
             json=payload,
-            timeout=_provider_timeout(provider),
+            timeout=timeout or _provider_timeout(provider),
         )
     response.raise_for_status()
     data = response.json()
@@ -528,16 +652,330 @@ def _call_provider(
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
+    timeout = kwargs.pop("timeout", None)
+
     if provider == PROVIDER_DEEPSEEK:
-        return _call_deepseek(prompt, system_prompt, response_format)
+        return _call_deepseek(
+            prompt,
+            system_prompt,
+            response_format,
+            timeout=timeout,
+        )
+
+    if provider == PROVIDER_COPILOT:
+        return _call_copilot(
+            prompt,
+            system_prompt,
+            response_format,
+            timeout=timeout,
+        )
 
     return _call_LOCAL(
         provider,
         prompt,
         system_prompt,
         response_format,
+        timeout=timeout,
         **kwargs,
     )
+
+
+def _health_result(
+    provider: str,
+    model: str,
+    status: str,
+    duration_ms: int = 0,
+    message: str = "",
+    error: str = "",
+    **extra: Any,
+) -> dict[str, Any]:
+    result = {
+        "provider": provider,
+        "model": model,
+        "status": status,
+        "duration_ms": duration_ms,
+        "message": message,
+        "error": error,
+    }
+
+    result.update(extra)
+    return result
+
+
+def _friendly_health_error(error: Exception) -> str:
+    if isinstance(error, requests.exceptions.ConnectTimeout):
+        return "Connection timed out while contacting provider."
+
+    if isinstance(error, requests.exceptions.ReadTimeout):
+        return "Provider did not respond before the read timeout."
+
+    if isinstance(error, requests.exceptions.ConnectionError):
+        return "Could not connect to provider endpoint."
+
+    if isinstance(error, requests.exceptions.HTTPError):
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if status_code:
+            return f"Provider returned HTTP {status_code}."
+        return "Provider returned an HTTP error."
+
+    if isinstance(error, (KeyError, IndexError, TypeError, ValueError)):
+        return f"Provider returned an invalid response format: {error}"
+
+    if isinstance(error, RuntimeError):
+        return str(error) or "Provider runtime error."
+
+    return str(error) or "Provider health check failed."
+
+
+def _friendly_local_health_error(error: Exception) -> str:
+    if isinstance(error, requests.exceptions.ConnectionError):
+        return "Could not connect to Ollama endpoint."
+
+    if isinstance(error, requests.exceptions.ReadTimeout):
+        return "Ollama connected but model did not respond before timeout."
+
+    if isinstance(error, requests.exceptions.ConnectTimeout):
+        return "Could not connect to Ollama endpoint before timeout."
+
+    if isinstance(error, requests.exceptions.HTTPError):
+        return "Ollama returned HTTP error."
+
+    if isinstance(error, RuntimeError):
+        return str(error) or "Ollama health check failed."
+
+    return str(error) or "Ollama health check failed."
+
+
+def _test_provider_health(provider: str, model: str) -> dict[str, Any]:
+    prompt = "Reply with exactly: OK"
+    system_prompt = "You are a health check endpoint. Reply only with OK."
+    started = time.time()
+
+    try:
+        content, _ = _call_provider(
+            provider=provider,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            response_format=None,
+            timeout=_health_check_timeout(),
+            temperature=0,
+        )
+        duration_ms = int((time.time() - started) * 1000)
+
+        if not str(content or "").strip():
+            return _health_result(
+                provider=provider,
+                model=model,
+                status="FAILED",
+                duration_ms=duration_ms,
+                error="Provider returned an empty response.",
+            )
+
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="OK",
+            duration_ms=duration_ms,
+            message="Provider responded successfully.",
+        )
+    except Exception as error:
+        duration_ms = int((time.time() - started) * 1000)
+        logger.warning(
+            "LLM health check failed provider=%s model=%s duration_ms=%s error=%s",
+            provider,
+            model,
+            duration_ms,
+            _friendly_health_error(error),
+        )
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="FAILED",
+            duration_ms=duration_ms,
+            error=_friendly_health_error(error),
+        )
+
+
+def _test_local_text_health(model: str, base_url: str) -> dict[str, Any]:
+    provider = PROVIDER_LOCAL_TEXT
+    resolved_url = f"{base_url.rstrip('/')}/api/chat"
+    started = time.time()
+
+    try:
+        with limit_llm_call(provider), limit_LOCAL_call(provider):
+            response = requests.post(
+                resolved_url,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Reply with exactly: OK",
+                        },
+                    ],
+                    "stream": False,
+                },
+                timeout=_health_check_timeout(),
+            )
+
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("message", {}).get("content")
+        duration_ms = int((time.time() - started) * 1000)
+
+        if not str(content or "").strip():
+            raise RuntimeError(
+                "Ollama response did not contain message.content."
+            )
+
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="OK",
+            duration_ms=duration_ms,
+            message="Provider is working.",
+            base_url=base_url,
+            resolved_url=resolved_url,
+            exception_type="",
+        )
+    except Exception as error:
+        duration_ms = int((time.time() - started) * 1000)
+        exception_type = type(error).__name__
+        friendly_error = _friendly_local_health_error(error)
+        logger.warning(
+            "LOCAL_TEXT health check failed provider=%s model=%s base_url=%s "
+            "resolved_url=%s exception_type=%s duration_ms=%s error=%s",
+            provider,
+            model,
+            base_url,
+            resolved_url,
+            exception_type,
+            duration_ms,
+            friendly_error,
+        )
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="FAILED",
+            duration_ms=duration_ms,
+            error=friendly_error,
+            base_url=base_url,
+            resolved_url=resolved_url,
+            exception_type=exception_type,
+        )
+
+
+def test_all_llm_providers() -> dict[str, Any]:
+    started = time.time()
+    results = []
+
+    deepseek_model = _provider_model(PROVIDER_DEEPSEEK)
+    if _env_bool("FORCE_DISABLE_DEEPSEEK", False):
+        results.append(
+            _health_result(
+                PROVIDER_DEEPSEEK,
+                deepseek_model,
+                "DISABLED",
+                message="DeepSeek is disabled by FORCE_DISABLE_DEEPSEEK=true.",
+            )
+        )
+    elif not _env_str("DEEPSEEK_API_KEY"):
+        results.append(
+            _health_result(
+                PROVIDER_DEEPSEEK,
+                deepseek_model,
+                "SKIPPED",
+                message="DEEPSEEK_API_KEY is missing.",
+            )
+        )
+    else:
+        results.append(_test_provider_health(PROVIDER_DEEPSEEK, deepseek_model))
+
+    copilot_model = _env_str("COPILOT_MODEL")
+    copilot_base_url = _env_str("COPILOT_BASE_URL")
+    if _env_bool("FORCE_DISABLE_COPILOT", False):
+        results.append(
+            _health_result(
+                PROVIDER_COPILOT,
+                copilot_model,
+                "DISABLED",
+                message="Copilot provider is disabled by FORCE_DISABLE_COPILOT=true.",
+            )
+        )
+    elif not copilot_base_url:
+        results.append(
+            _health_result(
+                PROVIDER_COPILOT,
+                copilot_model,
+                "SKIPPED",
+                message="COPILOT_BASE_URL is missing.",
+            )
+        )
+    elif not copilot_model:
+        results.append(
+            _health_result(
+                PROVIDER_COPILOT,
+                copilot_model,
+                "SKIPPED",
+                message="COPILOT_MODEL is missing.",
+            )
+        )
+    else:
+        results.append(_test_provider_health(PROVIDER_COPILOT, copilot_model))
+
+    local_text_model = _env_str("LOCAL_TEXT_MODEL")
+    local_base_url = _env_str("LOCAL_BASE_URL")
+    if _env_bool("FORCE_DISABLE_LOCAL_AI", False):
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_TEXT,
+                local_text_model,
+                "DISABLED",
+                message="Local AI is disabled by FORCE_DISABLE_LOCAL_AI=true.",
+            )
+        )
+    elif not local_base_url:
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_TEXT,
+                local_text_model,
+                "SKIPPED",
+                message="LOCAL_BASE_URL is missing.",
+            )
+        )
+    elif not local_text_model:
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_TEXT,
+                local_text_model,
+                "SKIPPED",
+                message="LOCAL_TEXT_MODEL is missing.",
+            )
+        )
+    else:
+        results.append(
+            _test_local_text_health(
+                model=local_text_model,
+                base_url=local_base_url,
+            )
+        )
+
+    results.append(
+        _health_result(
+            PROVIDER_LOCAL_VISION,
+            _env_str("LOCAL_VISION_MODEL"),
+            "SKIPPED",
+            message="Vision health check is not implemented yet.",
+        )
+    )
+
+    return {
+        "ok": not any(result.get("status") == "FAILED" for result in results),
+        "duration_ms": int((time.time() - started) * 1000),
+        "results": results,
+    }
 
 
 def _raise_if_non_text_provider(resolution: dict[str, str]) -> None:
@@ -592,7 +1030,7 @@ def call_text_llm(
         kwargs.setdefault("response_format", "json")
         kwargs.setdefault("temperature", 0)
 
-    if json_output_task and provider == PROVIDER_DEEPSEEK:
+    if json_output_task and provider in {PROVIDER_DEEPSEEK, PROVIDER_COPILOT}:
         kwargs.setdefault("response_format", {"type": "json_object"})
 
     try:

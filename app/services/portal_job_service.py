@@ -29,7 +29,8 @@ LOCAL_LIMIT_MESSAGE = "The local AI server is currently busy. Please try again s
 # Provider safety messages
 NO_LLM_BLOCKED_MESSAGE = (
     "AI mode is NO_LLM. This action requires an LLM. "
-    "Select TEST_LOCAL_ONLY, PRODUCTION_HYBRID, or DEEPSEEK_ONLY."
+    "Select TEST_LOCAL_ONLY, PRODUCTION_HYBRID_DEEPSEEK, "
+    "PRODUCTION_HYBRID_COPILOT, DEEPSEEK_ONLY, or COPILOT_ONLY."
 )
 TEST_LOCAL_ONLY_UNAVAILABLE_MESSAGE = (
     "AI mode is TEST_LOCAL_ONLY but the local AI provider is not available. "
@@ -120,6 +121,9 @@ def _normalize_provider_key(provider: str = "") -> str:
     if normalized == "DEEPSEEK":
         return "DEEPSEEK"
 
+    if normalized == "COPILOT":
+        return "COPILOT"
+
     if normalized.startswith("LOCAL"):
         return "LOCAL"
 
@@ -129,6 +133,9 @@ def _normalize_provider_key(provider: str = "") -> str:
 def _provider_llm_env(provider_key: str) -> tuple[str, int]:
     if provider_key == "DEEPSEEK":
         return "MAX_CONCURRENT_DEEPSEEK_CALLS", 2
+
+    if provider_key == "COPILOT":
+        return "MAX_CONCURRENT_COPILOT_CALLS", 2
 
     if provider_key == "LOCAL":
         return "MAX_CONCURRENT_LOCAL_CALLS", 1

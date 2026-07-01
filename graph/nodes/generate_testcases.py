@@ -25,6 +25,24 @@ from app.utils.function_testcase_store import (
 
 logger = logging.getLogger(__name__)
 
+VALID_EXECUTION_TYPES = {"AUTOMATION", "MANUAL", "HYBRID"}
+
+
+class TestcaseSchemaValidationError(ValueError):
+    def __init__(
+        self,
+        function_id: str,
+        invalid_item: Any,
+        details: list[str],
+    ):
+        self.function_id = function_id
+        self.invalid_item = invalid_item
+        self.details = details
+        super().__init__(
+            f"Invalid testcase schema for function {function_id}. "
+            f"Details: {', '.join(details)}"
+        )
+
 
 def _resolve_ai_mode(state: dict | None = None) -> str | None:
     state = state or {}
@@ -146,6 +164,134 @@ def _as_list(value: Any) -> list:
         return value
 
     return [value]
+
+
+def _first_present(item: dict, keys: list[str], default: Any = None) -> Any:
+    for key in keys:
+        if key in item and item.get(key) is not None:
+            return item.get(key)
+
+    return default
+
+
+def _split_text_list(value: Any) -> list:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, tuple) or isinstance(value, set):
+        return list(value)
+
+    if isinstance(value, str):
+        text = value.strip()
+
+        if not text:
+            return []
+
+        lines = [
+            line.strip(" -\t")
+            for line in text.splitlines()
+            if line.strip(" -\t")
+        ]
+
+        return lines or [text]
+
+    return [str(value)]
+
+
+def _bool_or_original(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+
+        if normalized in {"true", "yes", "y", "1", "automation"}:
+            return True
+
+        if normalized in {"false", "no", "n", "0", "manual"}:
+            return False
+
+    return value
+
+
+def _normalize_execution_type(value: Any) -> str:
+    normalized = str(value or "").strip().upper()
+    return normalized if normalized in VALID_EXECUTION_TYPES else ""
+
+
+def normalize_generated_testcase(testcase: dict) -> dict:
+    if not isinstance(testcase, dict):
+        return testcase
+
+    item = dict(testcase)
+
+    testcase_id = _first_present(
+        item,
+        ["test_case_id", "testcase_id", "testCaseId", "tc_id"],
+        "",
+    )
+    if testcase_id:
+        item["test_case_id"] = testcase_id
+        item["testcase_id"] = testcase_id
+
+    function_id = _first_present(item, ["function_id", "functionId"], "")
+    if function_id:
+        item["function_id"] = function_id
+
+    scenario_id = _first_present(item, ["scenario_id", "scenarioId"], "")
+    if scenario_id:
+        item["scenario_id"] = scenario_id
+
+    steps = _first_present(item, ["steps", "test_steps", "testSteps"], None)
+    if steps is not None:
+        normalized_steps = _split_text_list(steps)
+        item["steps"] = normalized_steps
+        item["test_steps"] = normalized_steps
+
+    expected_result = _first_present(
+        item,
+        ["expected_result", "expected_results", "expectedResult", "expected"],
+        None,
+    )
+    if expected_result is not None:
+        item["expected_result"] = expected_result
+        item["expected_results"] = _split_text_list(expected_result)
+
+    preconditions = item.get("preconditions")
+    if preconditions is not None:
+        item["preconditions"] = _split_text_list(preconditions)
+
+    test_data = _first_present(item, ["test_data", "testdata", "testData"], None)
+    if test_data is not None:
+        item["test_data"] = test_data
+
+    item["automation_blockers"] = _split_text_list(
+        item.get("automation_blockers")
+    )
+
+    if "automation_candidate" in item:
+        item["automation_candidate"] = _bool_or_original(
+            item.get("automation_candidate")
+        )
+
+    execution_type = _normalize_execution_type(item.get("execution_type"))
+    if execution_type:
+        item["execution_type"] = execution_type
+    elif "execution_type" in item:
+        item.pop("execution_type", None)
+
+    return item
+
+
+def normalize_generated_testcases(testcases: list[dict]) -> list[dict]:
+    return [
+        normalize_generated_testcase(testcase)
+        for testcase in testcases or []
+        if isinstance(testcase, dict)
+    ]
 
 
 def _unique_ids(values: list) -> list[str]:
@@ -354,16 +500,7 @@ def _build_scenario_index(scenarios: list) -> dict:
 
 
 def _normalize_list_field(value: Any) -> list:
-    if value is None:
-        return []
-
-    if isinstance(value, list):
-        return value
-
-    if isinstance(value, str):
-        return [value]
-
-    return [str(value)]
+    return _split_text_list(value)
 
 
 ALLOWED_TEST_DESIGN_TECHNIQUES = {
@@ -483,6 +620,8 @@ def _normalize_compact_testcase(
     if not isinstance(testcase, dict):
         return {}
 
+    testcase = normalize_generated_testcase(testcase)
+
     scenario_id = testcase.get("scenario_id", "")
     scenario_info = scenario_index.get(scenario_id, {})
 
@@ -497,19 +636,16 @@ def _normalize_compact_testcase(
         related_requirement_ids
     )
 
-    test_steps = (
-        testcase.get("steps")
-        or testcase.get("test_steps")
-        or []
-    )
+    test_steps = _first_present(testcase, ["steps", "test_steps"], [])
 
-    expected_results = (
-        testcase.get("expected")
-        or testcase.get("expected_results")
-        or []
+    expected_results = _first_present(
+        testcase,
+        ["expected_result", "expected_results", "expected"],
+        [],
     )
 
     item = {
+        "test_case_id": testcase.get("test_case_id", ""),
         "testcase_id": testcase.get("testcase_id", ""),
         "scenario_id": scenario_id,
         "function_id": (
@@ -534,7 +670,9 @@ def _normalize_compact_testcase(
         "preconditions": _normalize_list_field(
             testcase.get("preconditions", [])
         ),
+        "steps": _normalize_list_field(test_steps),
         "test_steps": _normalize_list_field(test_steps),
+        "expected_result": expected_results,
         "expected_results": _normalize_list_field(expected_results),
         "related_requirement_ids": related_requirement_ids,
         "traceability": ", ".join(related_requirement_ids),
@@ -560,6 +698,7 @@ def _normalize_compact_testcases(
     scenarios: list,
 ) -> list:
     scenario_index = _build_scenario_index(scenarios)
+    testcases = normalize_generated_testcases(testcases)
 
     normalized = []
 
@@ -573,6 +712,39 @@ def _normalize_compact_testcases(
             normalized.append(normalized_item)
 
     return normalized
+
+
+def _testcase_validation_errors(item: Any) -> list[str]:
+    if not isinstance(item, dict):
+        return ["item is not an object"]
+
+    errors = []
+
+    required_fields = [
+        "testcase_id",
+        "scenario_id",
+        "function_id",
+        "test_area_id",
+        "related_requirement_ids",
+        "test_steps",
+        "expected_results",
+    ]
+
+    for field in required_fields:
+        if not item.get(field):
+            errors.append(f"missing {field}")
+
+    execution_type = item.get("execution_type")
+    if execution_type not in VALID_EXECUTION_TYPES:
+        errors.append("invalid execution_type")
+
+    if not isinstance(item.get("automation_candidate"), bool):
+        errors.append("invalid automation_candidate")
+
+    if not isinstance(item.get("automation_blockers"), list):
+        errors.append("invalid automation_blockers")
+
+    return errors
 
 
 def _validate_testcases_for_function(
@@ -589,36 +761,15 @@ def _validate_testcases_for_function(
     generated_scenario_ids = set()
 
     for item in testcases:
-        if not isinstance(item, dict):
-            invalid_items.append(item)
-            continue
+        validation_errors = _testcase_validation_errors(item)
 
-        if not item.get("testcase_id"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("scenario_id"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("function_id"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("test_area_id"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("related_requirement_ids"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("test_steps"):
-            invalid_items.append(item)
-            continue
-
-        if not item.get("expected_results"):
-            invalid_items.append(item)
+        if validation_errors:
+            invalid_items.append(
+                {
+                    "item": item,
+                    "details": validation_errors,
+                }
+            )
             continue
 
         generated_scenario_ids.add(item.get("scenario_id"))
@@ -631,9 +782,11 @@ def _validate_testcases_for_function(
             )
 
     if invalid_items:
-        raise ValueError(
-            f"Invalid testcase schema for function {function_id}. "
-            f"First invalid item: {invalid_items[0]}"
+        first_invalid = invalid_items[0]
+        raise TestcaseSchemaValidationError(
+            function_id=function_id,
+            invalid_item=first_invalid["item"],
+            details=first_invalid["details"],
         )
 
     missing_scenario_ids = expected_scenario_ids - generated_scenario_ids
@@ -650,7 +803,9 @@ def _renumber_testcases(testcases: list) -> list:
 
     for index, testcase in enumerate(testcases, start=1):
         testcase = dict(testcase)
-        testcase["testcase_id"] = f"TC{index:03d}"
+        testcase_id = f"TC{index:03d}"
+        testcase["test_case_id"] = testcase_id
+        testcase["testcase_id"] = testcase_id
         renumbered.append(testcase)
 
     return renumbered
@@ -790,7 +945,9 @@ def _renumber_function_testcases(
 
     for index, testcase in enumerate(testcases, start=1):
         item = dict(testcase)
-        item["testcase_id"] = f"{function_id}_TC{index:03d}"
+        testcase_id = f"{function_id}_TC{index:03d}"
+        item["test_case_id"] = testcase_id
+        item["testcase_id"] = testcase_id
         item["function_id"] = item.get("function_id") or function_id
         renumbered.append(item)
 
@@ -862,6 +1019,7 @@ def _generate_testcases_for_scenario_batch(
                     testcases=raw_testcases,
                     scenarios=function_scenarios_batch,
                 )
+                testcases = classify_testcases_automation(testcases)
 
                 expected_scenario_ids = {
                     scenario.get("scenario_id")
@@ -877,6 +1035,39 @@ def _generate_testcases_for_scenario_batch(
 
             except PortalConcurrencyError:
                 raise
+            except TestcaseSchemaValidationError as error:
+                error_file = save_raw_response(
+                    ticket_id,
+                    f"generate_testcases_{function_id}_batch_{batch_index}_schema_error",
+                    (
+                        f"Invalid testcase schema for {function_id}, batch {batch_index}.\n\n"
+                        f"Details:\n"
+                        f"{json.dumps(error.details, indent=2, ensure_ascii=False)}\n\n"
+                        f"Function:\n"
+                        f"{json.dumps(function_item, indent=2, ensure_ascii=False)}\n\n"
+                        f"Scenarios:\n"
+                        f"{json.dumps(function_scenarios_batch, indent=2, ensure_ascii=False)}\n\n"
+                        f"Normalized invalid item:\n"
+                        f"{json.dumps(error.invalid_item, indent=2, ensure_ascii=False)}\n\n"
+                        f"Raw response file:\n{raw_file}\n"
+                    ),
+                )
+
+                logger.warning(
+                    "Testcase schema validation failed. "
+                    "ticket_id=%s function_id=%s batch_index=%s details=%s error_file=%s raw_file=%s",
+                    ticket_id,
+                    function_id,
+                    batch_index,
+                    error.details,
+                    error_file,
+                    raw_file,
+                )
+
+                raise ValueError(
+                    f"Test case generation failed because provider returned invalid schema "
+                    f"for {function_id} batch {batch_index}. Details saved to logs."
+                ) from error
             except Exception as error:
                 error_file = save_raw_response(
                     ticket_id,
@@ -893,10 +1084,8 @@ def _generate_testcases_for_scenario_batch(
                 )
 
                 raise ValueError(
-                    f"Failed to generate test cases for {function_id}, batch {batch_index}.\n"
-                    f"Raw response saved to: {raw_file}\n"
-                    f"Parse debug saved to: {error_file}\n"
-                    f"Original error: {error}"
+                    f"Test case generation failed for {function_id} batch {batch_index}. "
+                    f"Details saved to logs."
                 ) from error
 
             break
@@ -1042,10 +1231,12 @@ def _generate_testcases_for_function(
             ),
         )
 
+        first_error = str(batch_errors[0].get("error") or "")
+        if first_error.startswith("Test case generation failed because provider returned invalid schema"):
+            raise ValueError(first_error) from None
+
         raise ValueError(
-            f"One or more scenario batches failed for {function_id}.\n"
-            f"Error details saved to: {error_file}\n"
-            f"Errors: {batch_errors}"
+            f"Test case generation failed for {function_id}. Details saved to logs."
         )
 
     batch_results.sort(key=lambda item: item["batch_index"])
@@ -1310,11 +1501,12 @@ def generate_testcases(state):
             error_file,
         )
 
+        first_error = str(errors[0].get("error") or "")
+        if first_error.startswith("Test case generation failed because provider returned invalid schema"):
+            raise ValueError(first_error) from None
+
         raise ValueError(
-            "One or more main functions failed during parallel test case "
-            "generation.\n"
-            f"Error details saved to: {error_file}\n"
-            f"Errors: {errors}"
+            "Test case generation failed. Details saved to logs."
         )
 
     function_results.sort(key=lambda item: item["function_id"])

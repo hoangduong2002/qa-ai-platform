@@ -7,9 +7,23 @@
         body{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#111827}
         header{height:44px;background:#111827;color:white;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 16px;box-sizing:border-box}
         header h1{font-size:17px;margin:0}
+        .header-controls{display:flex;align-items:center;gap:10px;min-width:0}
         .header-ai-mode{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}
         .header-ai-mode select{font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid #374151;background:#f9fafb;color:#111827;max-width:190px}
         .header-ai-status{font-size:11px;color:#d1d5db;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .header-test-button{background:#4b5563;color:white;border:1px solid #6b7280;border-radius:6px;padding:5px 9px;font-size:12px;white-space:nowrap}
+        .llm-test-panel{display:none;position:fixed;top:48px;right:16px;width:min(760px,calc(100vw - 32px));max-height:420px;overflow:auto;background:white;color:#111827;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.22);z-index:1001;padding:12px}
+        .llm-test-panel.visible{display:block}
+        .llm-test-panel h3{margin:0 0 8px;font-size:14px}
+        .llm-test-message{font-size:12px;color:#4b5563;margin-bottom:8px}
+        .llm-test-table{width:100%;border-collapse:collapse;font-size:12px}
+        .llm-test-table th,.llm-test-table td{border-bottom:1px solid #e5e7eb;padding:7px;text-align:left;vertical-align:top}
+        .llm-test-table th{background:#f3f4f6;color:#374151}
+        .llm-status{display:inline-block;border-radius:999px;padding:3px 8px;font-weight:bold;font-size:11px}
+        .llm-status.ok{background:#d1fae5;color:#065f46}
+        .llm-status.failed{background:#fee2e2;color:#991b1b}
+        .llm-status.skipped{background:#e5e7eb;color:#374151}
+        .llm-status.disabled{background:#fef3c7;color:#92400e}
         main{padding:56px 12px 18px}
         .portal-layout{display:grid;grid-template-columns:232px minmax(0,1fr);gap:12px;align-items:start}
         .sidebar{position:sticky;top:56px;height:calc(100vh - 68px);overflow-y:auto;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px;box-shadow:0 1px 5px rgba(0,0,0,.07);box-sizing:border-box}
@@ -70,17 +84,23 @@
 <body>
 <header>
     <h1>QA AI Platform - Web Portal</h1>
-    <label class="header-ai-mode" for="portalAiModeSelect">
-        AI Execution Mode:
-        <select id="portalAiModeSelect">
-            <option value="NO_LLM">NO_LLM</option>
-            <option value="TEST_LOCAL_ONLY">TEST_LOCAL_ONLY</option>
-            <option value="PRODUCTION_HYBRID">PRODUCTION_HYBRID</option>
-            <option value="DEEPSEEK_ONLY">DEEPSEEK_ONLY</option>
-        </select>
-    </label>
-    <span id="portalAiModeStatus" class="header-ai-status"></span>
+    <div class="header-controls">
+        <label class="header-ai-mode" for="portalAiModeSelect">
+            AI Execution Mode:
+            <select id="portalAiModeSelect">
+                <option value="NO_LLM">No LLM</option>
+                <option value="PRODUCTION_HYBRID_DEEPSEEK">Production Hybrid - DeepSeek</option>
+                <option value="PRODUCTION_HYBRID_COPILOT">Production Hybrid - Copilot</option>
+                <option value="DEEPSEEK_ONLY">DeepSeek Only</option>
+                <option value="COPILOT_ONLY">Copilot Only</option>
+                <option value="TEST_LOCAL_ONLY">Test Local Only</option>
+            </select>
+        </label>
+        <button id="llmTestAllButton" class="header-test-button" type="button">Test All LLMs</button>
+        <span id="portalAiModeStatus" class="header-ai-status"></span>
+    </div>
 </header>
+<div id="llmTestPanel" class="llm-test-panel" aria-live="polite"></div>
 <main>{% block content %}{% endblock %}</main>
 <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-box">
@@ -102,8 +122,18 @@ function showLoading(title,message){
 
 function getPortalAiState() {
     const stored = localStorage.getItem(PORTAL_AI_MODE_KEY) || PORTAL_DEFAULT_AI_MODE || "NO_LLM";
-    const aiMode = String(stored).trim().toUpperCase();
-    const validModes = ["TEST_LOCAL_ONLY","PRODUCTION_HYBRID","DEEPSEEK_ONLY","NO_LLM"];
+    let aiMode = String(stored).trim().toUpperCase();
+    if (aiMode === "PRODUCTION_HYBRID") {
+        aiMode = "PRODUCTION_HYBRID_DEEPSEEK";
+    }
+    const validModes = [
+        "NO_LLM",
+        "PRODUCTION_HYBRID_DEEPSEEK",
+        "PRODUCTION_HYBRID_COPILOT",
+        "DEEPSEEK_ONLY",
+        "COPILOT_ONLY",
+        "TEST_LOCAL_ONLY",
+    ];
     return {
         aiMode: validModes.includes(aiMode) ? aiMode : "NO_LLM",
     };
@@ -111,15 +141,21 @@ function getPortalAiState() {
 
 function getPortalAiStatusText(aiMode) {
     if (aiMode === "TEST_LOCAL_ONLY") {
-        return "Test mode: all AI tasks use local providers only. DeepSeek is OFF.";
+        return "Test mode: all AI tasks use local providers only. Remote providers are OFF.";
     }
-    if (aiMode === "PRODUCTION_HYBRID") {
+    if (aiMode === "PRODUCTION_HYBRID_DEEPSEEK") {
         return "Production hybrid: DeepSeek handles reasoning; local AI handles vision/compact/helper tasks.";
+    }
+    if (aiMode === "PRODUCTION_HYBRID_COPILOT") {
+        return "Production hybrid: Copilot handles reasoning; local AI handles vision/compact/helper tasks.";
     }
     if (aiMode === "DEEPSEEK_ONLY") {
         return "DeepSeek only: all text reasoning uses DeepSeek. Local AI is OFF.";
     }
-    return "This action requires LLM. Select TEST_LOCAL_ONLY, PRODUCTION_HYBRID, or DEEPSEEK_ONLY.";
+    if (aiMode === "COPILOT_ONLY") {
+        return "Copilot only: all text reasoning uses Copilot. Local AI is OFF.";
+    }
+    return "This action requires LLM. Select an AI mode other than NO_LLM.";
 }
 
 function friendlyPortalError(message) {
@@ -157,7 +193,7 @@ function renderPortalAiModeControls() {
     document.querySelectorAll("form[data-ai-action='true'] button[type='submit']").forEach(button => {
         if (state.aiMode === "NO_LLM") {
             button.disabled = true;
-            button.title = "This action requires LLM. Select TEST_LOCAL_ONLY, PRODUCTION_HYBRID, or DEEPSEEK_ONLY.";
+            button.title = "This action requires LLM. Select an AI mode other than NO_LLM.";
         } else if (button.dataset.partialBlocked !== "true") {
             button.disabled = false;
             button.title = "";
@@ -170,6 +206,107 @@ function portalAiHeaders() {
     return {
         "X-AI-Mode": state.aiMode,
     };
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function renderLlmTestResult(data) {
+    const panel = document.getElementById("llmTestPanel");
+
+    if (!panel) {
+        return;
+    }
+
+    const rows = (data && data.results) || [];
+    const body = rows.map(row => {
+        const status = String(row.status || "FAILED").toUpperCase();
+        const statusClass = status.toLowerCase();
+        const message = row.error || row.message || "";
+        return `
+            <tr>
+                <td>${escapeHtml(row.provider)}</td>
+                <td>${escapeHtml(row.model)}</td>
+                <td><span class="llm-status ${escapeHtml(statusClass)}">${escapeHtml(status)}</span></td>
+                <td>${escapeHtml(row.duration_ms || 0)} ms</td>
+                <td>${escapeHtml(message)}</td>
+            </tr>
+        `;
+    }).join("");
+
+    panel.innerHTML = `
+        <h3>LLM Provider Health Check</h3>
+        <div class="llm-test-message">
+            Overall: ${data && data.ok ? "OK" : "Check failed"} · Duration: ${escapeHtml((data && data.duration_ms) || 0)} ms
+        </div>
+        <table class="llm-test-table">
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>Status</th>
+                    <th>Response Time</th>
+                    <th>Message / Error</th>
+                </tr>
+            </thead>
+            <tbody>${body}</tbody>
+        </table>
+    `;
+    panel.classList.add("visible");
+}
+
+function renderLlmTestFailure(message) {
+    renderLlmTestResult({
+        ok: false,
+        duration_ms: 0,
+        results: [
+            {
+                provider: "PORTAL",
+                model: "",
+                status: "FAILED",
+                duration_ms: 0,
+                error: friendlyPortalError(message),
+            },
+        ],
+    });
+}
+
+async function testAllLlms() {
+    const button = document.getElementById("llmTestAllButton");
+    const panel = document.getElementById("llmTestPanel");
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Testing...";
+    }
+
+    if (panel) {
+        panel.innerHTML = `
+            <h3>LLM Provider Health Check</h3>
+            <div class="llm-test-message">Testing all LLM providers...</div>
+        `;
+        panel.classList.add("visible");
+    }
+
+    try {
+        const data = await portalFetch("/portal/llm/test-all", {
+            method: "POST",
+        });
+        renderLlmTestResult(data);
+    } catch (error) {
+        renderLlmTestFailure(error.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Test All LLMs";
+        }
+    }
 }
 
 async function parseFetchResponse(response) {
@@ -249,6 +386,14 @@ document.addEventListener("DOMContentLoaded",()=>{
     if (modeSelect) {
         modeSelect.addEventListener("change", () => {
             savePortalAiState(modeSelect.value);
+        });
+    }
+
+    const llmTestAllButton = document.getElementById("llmTestAllButton");
+
+    if (llmTestAllButton) {
+        llmTestAllButton.addEventListener("click", () => {
+            testAllLlms();
         });
     }
 

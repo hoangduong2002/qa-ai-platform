@@ -5,6 +5,7 @@ from typing import Any
 PROVIDER_ERROR_MARKERS = (
     "provider",
     "deepseek",
+    "copilot",
     "local ai",
     "local_",
     "ollama",
@@ -34,6 +35,9 @@ def classify_provider_error(error: Exception | str) -> str:
 
     if "force_disable_deepseek" in lowered or "deepseek is disabled" in lowered:
         return "deepseek_force_disabled"
+
+    if "force_disable_copilot" in lowered or "copilot provider is disabled" in lowered:
+        return "copilot_force_disabled"
 
     if "deepseek_api_key" in lowered and "missing" in lowered:
         return "deepseek_missing_api_key"
@@ -83,6 +87,9 @@ def _friendly_detail(error: Exception | str, classification: str) -> str:
     if classification == "deepseek_force_disabled":
         return "DeepSeek is disabled by FORCE_DISABLE_DEEPSEEK=true."
 
+    if classification == "copilot_force_disabled":
+        return "Copilot provider is disabled by FORCE_DISABLE_COPILOT=true."
+
     if classification == "local_unavailable":
         return (
             "Local/Ollama provider is unavailable. Check LOCAL_BASE_URL, "
@@ -92,7 +99,8 @@ def _friendly_detail(error: Exception | str, classification: str) -> str:
     if classification == "no_llm_blocked":
         return (
             "AI mode is NO_LLM. This action requires an LLM. "
-            "Select TEST_LOCAL_ONLY, DEEPSEEK_ONLY, or PRODUCTION_HYBRID."
+            "Select TEST_LOCAL_ONLY, DEEPSEEK_ONLY, COPILOT_ONLY, "
+            "PRODUCTION_HYBRID_DEEPSEEK, or PRODUCTION_HYBRID_COPILOT."
         )
 
     if classification == "provider_non_json":

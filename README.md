@@ -109,12 +109,12 @@ At minimum, configure one AI provider.
 
 ### 4.1 DeepSeek
 
-Use this when running `PRODUCTION_HYBRID` or `DEEPSEEK_ONLY`.
+Use this when running `PRODUCTION_HYBRID_DEEPSEEK` or `DEEPSEEK_ONLY`.
 
 `.env`:
 
 ```env
-TELEGRAM_AI_MODE=PRODUCTION_HYBRID
+TELEGRAM_AI_MODE=PRODUCTION_HYBRID_DEEPSEEK
 PORTAL_DEFAULT_AI_MODE=NO_LLM
 
 DEEPSEEK_MODEL=deepseek-v4-flash
@@ -130,9 +130,37 @@ FORCE_DISABLE_DEEPSEEK=false
 DEEPSEEK_API_KEY=
 ```
 
-### 4.2 Local AI / Ollama
+### 4.2 Copilot
 
-Use this when running `TEST_LOCAL_ONLY` or when `PRODUCTION_HYBRID` needs local compact/vision.
+Use this when running `PRODUCTION_HYBRID_COPILOT` or `COPILOT_ONLY`.
+
+```env
+COPILOT_BASE_URL=http://localhost:3100/v1/chat/completions
+COPILOT_MODEL=claude-sonnet-4.6
+COPILOT_TIMEOUT=120
+COPILOT_API_KEY=
+FORCE_DISABLE_COPILOT=false
+MAX_CONCURRENT_COPILOT_CALLS=2
+```
+
+Smoke-test the Copilot-compatible endpoint:
+
+```powershell
+$body = @{
+  model = "claude-sonnet-4.6"
+  messages = @(@{ role = "user"; content = "Say hello in one sentence." })
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Uri "http://localhost:3100/v1/chat/completions" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+### 4.3 Local AI / Ollama
+
+Use this when running `TEST_LOCAL_ONLY` or when a production hybrid mode needs local compact/vision.
 
 ```env
 LOCAL_AI_PROVIDER=OLLAMA
@@ -161,7 +189,29 @@ Check connectivity:
 Invoke-RestMethod http://<LAN_IP>:11434/api/tags
 ```
 
-### 4.3 Jira
+### 4.4 Web Portal LLM Health Check
+
+The Web Portal header includes a `Test All LLMs` button. It tests every configured provider independently:
+
+* `DEEPSEEK`
+* `COPILOT`
+* `LOCAL_TEXT`
+* `LOCAL_VISION` is currently reported as `SKIPPED` because vision health check is not implemented yet.
+
+The check sends only this short prompt: `Reply with exactly: OK`. It does not require a requirement, does not create portal job files, does not save requirement artifacts, and does not call Jira or Figma.
+
+Status meanings:
+
+* `OK`: provider responded with non-empty content.
+* `FAILED`: provider is configured and enabled, but the request failed.
+* `SKIPPED`: provider is not configured, such as a missing API key, base URL, or model.
+* `DISABLED`: provider is disabled by a `FORCE_DISABLE_*` setting.
+
+```env
+LLM_HEALTH_CHECK_TIMEOUT=30
+```
+
+### 4.5 Jira
 
 Required when importing or syncing Jira requirements.
 
@@ -180,7 +230,7 @@ JIRA_INCLUDE_SUBTASKS=true
 JIRA_PAT=
 ```
 
-### 4.4 Figma
+### 4.6 Figma
 
 Required only when Figma extraction is enabled.
 
@@ -198,7 +248,7 @@ FIGMA_ALLOW_FIRST_PAGE_FALLBACK=false
 FIGMA_ACCESS_TOKEN=
 ```
 
-### 4.5 Telegram
+### 4.7 Telegram
 
 Required only when running Telegram Bot.
 

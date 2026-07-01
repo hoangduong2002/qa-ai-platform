@@ -7,14 +7,32 @@ Core rules:
 - Do not skip any scenario.
 - Do not generate extra test cases outside the provided scenarios.
 - Preserve scenario_id exactly.
-- Do not output function_id.
+- Use exact field names only:
+  - test_case_id
+  - function_id
+  - scenario_id
+  - title
+  - type
+  - priority
+  - preconditions
+  - steps
+  - expected_result
+  - test_data
+  - execution_type
+  - automation_candidate
+  - automation_tool
+  - automation_priority
+  - automation_reason
+  - automation_blockers
+  - manual_reason
+- Do not use testcase_id. Use test_case_id only.
+- Set function_id to the current main function id.
 - Do not output sub_function_id.
 - Do not output test_area_id.
 - Do not output related_requirement_ids.
 - Do not output requirement_ids.
 - Do not output traceability.
-- Do not output test_data.
-- The application will derive function_id, sub_function_id, test_area_id, related_requirement_ids, and traceability from scenario_id.
+- The application will derive sub_function_id, test_area_id, related_requirement_ids, and traceability from scenario_id.
 - Priority must be High, Medium, or Low.
 - Type should match the scenario type when possible.
 - Do not create test cases for open questions or missing information.
@@ -59,8 +77,7 @@ Automation classification rules:
 - automation_blockers must list blockers such as visual review, manual verification, email inbox, sms, phone call, third-party, approval, print, scan, signature, external system, or human judgment.
 
 Test data rules:
-- Put concrete test data values directly inside steps.
-- Do not create a separate test_data field.
+- Put concrete test data values in test_data and directly inside steps when useful.
 - Do not output JSON objects for test data.
 - Use concise sample values inside step text, for example: Enter email 'new_user@example.com'.
 - For boundary values, use concise placeholders inside steps, for example: Enter a password with exactly 128 valid characters.
@@ -71,7 +88,7 @@ Output compactness rules:
 - Keep each test case concise.
 - preconditions must contain at most 3 items.
 - steps must contain 3 to 6 items.
-- expected must contain 2 to 4 items.
+- expected_result must contain 2 to 4 items.
 - Do not repeat requirement text in steps.
 - Do not explain why the test case is needed.
 - Do not include implementation details unless required by the scenario.
@@ -99,7 +116,8 @@ JSON safety rules:
 Each test case must follow this schema:
 [
   {
-    "testcase_id": "TC001",
+    "test_case_id": "TC001",
+    "function_id": "FUNC001",
     "scenario_id": "SC001",
     "technique": "EP",
     "title": "Register with valid data",
@@ -112,6 +130,7 @@ Each test case must follow this schema:
     "automation_reason": "Registration can be exercised through browser UI with deterministic success assertions.",
     "automation_blockers": [],
     "manual_reason": "",
+    "test_data": "email='new_user@example.com', password='Password123'",
     "preconditions": [
       "User is on the registration page"
     ],
@@ -120,7 +139,7 @@ Each test case must follow this schema:
       "Enter password 'Password123'",
       "Click Register"
     ],
-    "expected": [
+    "expected_result": [
       "The account is created successfully",
       "A verification email is sent"
     ]
