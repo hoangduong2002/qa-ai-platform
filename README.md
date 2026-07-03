@@ -196,9 +196,11 @@ The Web Portal header includes a `Test All LLMs` button. It tests every configur
 * `DEEPSEEK`
 * `COPILOT`
 * `LOCAL_TEXT`
-* `LOCAL_VISION` is currently reported as `SKIPPED` because vision health check is not implemented yet.
+* `LOCAL_VISION`
 
-The check sends only this short prompt: `Reply with exactly: OK`. It does not require a requirement, does not create portal job files, does not save requirement artifacts, and does not call Jira or Figma.
+For text providers, the check sends only this short prompt: `Reply with exactly: OK`.
+For `LOCAL_VISION`, the check only verifies that `LOCAL_VISION_MODEL` is available in Ollama by calling `/api/show`; it does not send an image and does not test real image understanding.
+The check does not require a requirement, does not create portal job files, does not save requirement artifacts, and does not call Jira or Figma.
 
 Status meanings:
 
@@ -211,7 +213,79 @@ Status meanings:
 LLM_HEALTH_CHECK_TIMEOUT=30
 ```
 
-### 4.5 Jira
+### 4.5 Web Portal AI Chat
+
+Open the chat page from the portal header or directly:
+
+```text
+http://localhost:8000/portal/chat
+```
+
+AI Chat supports multi-turn sessions, assistant Markdown rendering, copying assistant responses, and file context extraction for:
+
+```text
+.txt, .md, .json, .csv, .xlsx, .docx, .pdf
+```
+
+PDF support is text-based only. Phase 1 does not perform OCR, image vision, streaming responses, voice input, image generation, internet browsing, or Jira/Figma actions from chat.
+
+Chat LLM calls use the normal shared LLM router with `source_channel=web_chat` and `task_type=chat`. Select one of the supported AI modes in the portal header or chat composer:
+
+```text
+PRODUCTION_HYBRID_DEEPSEEK
+PRODUCTION_HYBRID_COPILOT
+DEEPSEEK_ONLY
+COPILOT_ONLY
+TEST_LOCAL_ONLY
+NO_LLM
+```
+
+Configuration:
+
+```env
+CHAT_MAX_UPLOAD_MB=10
+CHAT_MAX_EXTRACTED_CHARS=60000
+CHAT_HISTORY_MAX_MESSAGES=10
+CHAT_SESSIONS_DIR=runtime/chat_sessions
+CHAT_UNLOCK_TOKEN_TTL_HOURS=8
+```
+
+Recent chats can be deleted from the AI Chat sidebar. Delete is a soft delete:
+the session folder remains on disk, but `session.json` is marked with
+`deleted=true` and the chat no longer appears in Recent Chats.
+
+New chats can optionally be password protected. Passwords are never stored in
+plain text; the file-based chat store keeps only a PBKDF2 password hash and
+salt in `session.json`. Protected chats must be unlocked before messages are
+returned. Unlock tokens expire after `CHAT_UNLOCK_TOKEN_TTL_HOURS`.
+
+Browser storage behavior:
+
+```text
+localStorage["qa_ai_platform_browser_id"]              = browser identifier
+localStorage["qa_ai_platform_last_chat_session_id"]    = last opened chat
+localStorage["qa_ai_platform_recent_chats"]            = recent metadata only
+sessionStorage["chat_unlock_token_<session_id>"]       = temporary unlock token
+```
+
+Passwords are not stored in browser storage. Protected chat messages are not
+cached in browser storage. This file-based password protection is suitable for
+shared portal usage, but it is not a full enterprise authentication system. For
+strong multi-user isolation, add real login and authorization later.
+
+AI Chat includes a lightweight reliability layer before LLM routing:
+
+* Simple rule-based task classification runs locally and does not call an LLM.
+* Deterministic date/time questions are answered by an internal datetime tool
+  using `APP_TIMEZONE` when configured.
+* Simple arithmetic is answered by a safe calculator parser, not Python `eval`.
+* Language, QA analysis, file summaries, code help, and broader reasoning still
+  use the configured LLM through the shared router.
+* The chat model has no internet browsing. If browsing/current-source lookup is
+  implemented later, it should be exposed as an explicit tool result; until then
+  live online/source-checking claims are treated as unverified.
+
+### 4.6 Jira
 
 Required when importing or syncing Jira requirements.
 
@@ -230,7 +304,7 @@ JIRA_INCLUDE_SUBTASKS=true
 JIRA_PAT=
 ```
 
-### 4.6 Figma
+### 4.7 Figma
 
 Required only when Figma extraction is enabled.
 
@@ -248,7 +322,7 @@ FIGMA_ALLOW_FIRST_PAGE_FALLBACK=false
 FIGMA_ACCESS_TOKEN=
 ```
 
-### 4.7 Telegram
+### 4.8 Telegram
 
 Required only when running Telegram Bot.
 

@@ -25,6 +25,7 @@ from app.services.portal_job_service import (
     limit_LOCAL_call,
     limit_llm_call,
 )
+from app.utils.ai_usage_logger import log_ai_usage
 
 
 load_project_env()
@@ -43,6 +44,7 @@ TASK_SCENARIO_IMPROVEMENT = "scenario_improvement"
 TASK_TESTCASE_IMPROVEMENT = "testcase_improvement"
 TASK_FINAL_REVIEW = "final_review"
 TASK_CLARIFICATION_GENERATION = "clarification_generation"
+TASK_CHAT = "chat"
 TASK_COMPACT_CONTEXT = "compact_context"
 TASK_VISION_EXTRACT = "vision_extract"
 
@@ -75,6 +77,7 @@ TEXT_REASONING_TASK_TYPES = {
     TASK_TESTCASE_IMPROVEMENT,
     TASK_FINAL_REVIEW,
     TASK_CLARIFICATION_GENERATION,
+    TASK_CHAT,
 }
 COMPACT_TASK_TYPES = {TASK_COMPACT_CONTEXT, "compact"}
 VISION_TASK_TYPES = {TASK_VISION_EXTRACT, "vision"}
@@ -747,6 +750,47 @@ def _friendly_local_health_error(error: Exception) -> str:
     return str(error) or "Ollama health check failed."
 
 
+def _ollama_error_detail(error: Exception) -> str:
+    response = getattr(error, "response", None)
+
+    if response is None:
+        return ""
+
+    try:
+        data = response.json()
+    except Exception:
+        text = getattr(response, "text", "")
+        return str(text or "").strip()
+
+    if isinstance(data, dict):
+        return str(data.get("error") or data.get("message") or "").strip()
+
+    return ""
+
+
+def _is_ollama_model_not_found(error: Exception) -> bool:
+    response = getattr(error, "response", None)
+    status_code = getattr(response, "status_code", None)
+    detail = _ollama_error_detail(error).lower()
+
+    return (
+        status_code == 404
+        or "not found" in detail
+        or "not available" in detail
+        or "model" in detail and "does not exist" in detail
+    )
+
+
+def _friendly_local_vision_health_error(error: Exception, model: str) -> str:
+    if isinstance(error, requests.exceptions.HTTPError) and _is_ollama_model_not_found(error):
+        return (
+            f"Ollama could not find model '{model}'. "
+            f"Pull it with: ollama pull {model}"
+        )
+
+    return _friendly_local_health_error(error)
+
+
 def _test_provider_health(provider: str, model: str) -> dict[str, Any]:
     prompt = "Reply with exactly: OK"
     system_prompt = "You are a health check endpoint. Reply only with OK."
@@ -867,6 +911,66 @@ def _test_local_text_health(model: str, base_url: str) -> dict[str, Any]:
         )
 
 
+def _test_local_vision_health(model: str, base_url: str) -> dict[str, Any]:
+    provider = PROVIDER_LOCAL_VISION
+    resolved_url = f"{base_url.rstrip('/')}/api/show"
+    started = time.time()
+
+    try:
+        with limit_llm_call(provider), limit_LOCAL_call(provider):
+            response = requests.post(
+                resolved_url,
+                headers={"Content-Type": "application/json"},
+                json={"model": model},
+                timeout=_health_check_timeout(),
+            )
+
+        response.raise_for_status()
+        duration_ms = int((time.time() - started) * 1000)
+
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="OK",
+            duration_ms=duration_ms,
+            message="Vision model is available in Ollama. Vision inference was not tested.",
+            base_url=base_url,
+            resolved_url=resolved_url,
+            exception_type="",
+        )
+    except Exception as error:
+        duration_ms = int((time.time() - started) * 1000)
+        exception_type = type(error).__name__
+        friendly_error = _friendly_local_vision_health_error(error, model)
+        message = (
+            "Vision model is not available in Ollama."
+            if _is_ollama_model_not_found(error)
+            else "Vision model availability check failed."
+        )
+        logger.warning(
+            "LOCAL_VISION health check failed provider=%s model=%s base_url=%s "
+            "resolved_url=%s exception_type=%s duration_ms=%s error=%s",
+            provider,
+            model,
+            base_url,
+            resolved_url,
+            exception_type,
+            duration_ms,
+            friendly_error,
+        )
+        return _health_result(
+            provider=provider,
+            model=model,
+            status="FAILED",
+            duration_ms=duration_ms,
+            message=message,
+            error=friendly_error,
+            base_url=base_url,
+            resolved_url=resolved_url,
+            exception_type=exception_type,
+        )
+
+
 def test_all_llm_providers() -> dict[str, Any]:
     started = time.time()
     results = []
@@ -962,14 +1066,41 @@ def test_all_llm_providers() -> dict[str, Any]:
             )
         )
 
-    results.append(
-        _health_result(
-            PROVIDER_LOCAL_VISION,
-            _env_str("LOCAL_VISION_MODEL"),
-            "SKIPPED",
-            message="Vision health check is not implemented yet.",
+    local_vision_model = _env_str("LOCAL_VISION_MODEL")
+    if _env_bool("FORCE_DISABLE_LOCAL_AI", False):
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_VISION,
+                local_vision_model,
+                "DISABLED",
+                message="Local AI is disabled by FORCE_DISABLE_LOCAL_AI=true.",
+            )
         )
-    )
+    elif not local_base_url:
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_VISION,
+                local_vision_model,
+                "SKIPPED",
+                message="LOCAL_BASE_URL is missing.",
+            )
+        )
+    elif not local_vision_model:
+        results.append(
+            _health_result(
+                PROVIDER_LOCAL_VISION,
+                local_vision_model,
+                "SKIPPED",
+                message="LOCAL_VISION_MODEL is missing.",
+            )
+        )
+    else:
+        results.append(
+            _test_local_vision_health(
+                model=local_vision_model,
+                base_url=local_base_url,
+            )
+        )
 
     return {
         "ok": not any(result.get("status") == "FAILED" for result in results),
@@ -1015,6 +1146,8 @@ def call_text_llm(
     input_chars = len(prompt or "") + len(system_prompt or "")
     started = time.time()
     content = ""
+    ticket_id = str(kwargs.get("ticket_id") or "")
+    node_name = str(kwargs.get("node_name") or "")
 
     _raise_if_non_text_provider(resolution)
 
@@ -1034,7 +1167,7 @@ def call_text_llm(
         kwargs.setdefault("response_format", {"type": "json_object"})
 
     try:
-        content, _ = _call_provider(
+        content, raw = _call_provider(
             provider=provider,
             prompt=prompt,
             system_prompt=system_prompt,
@@ -1058,8 +1191,23 @@ def call_text_llm(
             duration_ms,
             response_preview,
         )
+        log_ai_usage(
+            ticket_id=ticket_id,
+            node_name=node_name,
+            model=model,
+            provider=provider,
+            prompt=(system_prompt or "") + (prompt or ""),
+            response=content,
+            duration_ms=duration_ms,
+            ai_mode=resolution["ai_mode"],
+            task_type=resolution["task_type"],
+            source_channel=source_channel or "",
+            job_id=get_current_job_id(),
+            status="success",
+            raw_usage=raw,
+        )
         return content
-    except Exception:
+    except Exception as error:
         duration_ms = int((time.time() - started) * 1000)
         provider_status = "error"
         logger.warning(
@@ -1073,6 +1221,21 @@ def call_text_llm(
             model,
             input_chars,
             duration_ms,
+        )
+        log_ai_usage(
+            ticket_id=ticket_id,
+            node_name=node_name,
+            model=model,
+            provider=provider,
+            prompt=(system_prompt or "") + (prompt or ""),
+            response=content,
+            duration_ms=duration_ms,
+            ai_mode=resolution["ai_mode"],
+            task_type=resolution["task_type"],
+            source_channel=source_channel or "",
+            job_id=get_current_job_id(),
+            status="error",
+            error_type=type(error).__name__,
         )
         raise
 
@@ -1097,13 +1260,32 @@ def call_llm_with_fallback(
 
     _raise_if_non_text_provider(resolution)
 
-    content, raw = _call_provider(
-        provider=provider,
-        prompt=prompt,
-        system_prompt=system_prompt,
-        response_format=response_format,
-    )
-    duration = time.time() - started
+    try:
+        content, raw = _call_provider(
+            provider=provider,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            response_format=response_format,
+        )
+        duration = time.time() - started
+    except Exception as error:
+        duration_ms = int((time.time() - started) * 1000)
+        log_ai_usage(
+            ticket_id="",
+            node_name="",
+            model=model,
+            provider=provider,
+            prompt=(system_prompt or "") + (prompt or ""),
+            response="",
+            duration_ms=duration_ms,
+            ai_mode=resolution["ai_mode"],
+            task_type=resolution["task_type"],
+            source_channel=source_channel or "",
+            job_id=get_current_job_id(),
+            status="error",
+            error_type=type(error).__name__,
+        )
+        raise
 
     logger.info(
         "LLM router success job_id=%s task_type=%s ai_mode=%s provider=%s model=%s "
@@ -1117,6 +1299,21 @@ def call_llm_with_fallback(
         duration,
         input_chars,
         len(content or ""),
+    )
+    log_ai_usage(
+        ticket_id="",
+        node_name="",
+        model=model,
+        provider=provider,
+        prompt=(system_prompt or "") + (prompt or ""),
+        response=content,
+        duration_ms=int(duration * 1000),
+        ai_mode=resolution["ai_mode"],
+        task_type=resolution["task_type"],
+        source_channel=source_channel or "",
+        job_id=get_current_job_id(),
+        status="success",
+        raw_usage=raw,
     )
 
     return LLMRouterResponse(

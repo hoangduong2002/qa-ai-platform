@@ -1,0 +1,516 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+    .chat-shell{display:grid;grid-template-columns:280px minmax(0,1fr);gap:12px;height:calc(100vh - 76px)}
+    .chat-sidebar{background:white;border:1px solid #e5e7eb;border-radius:8px;padding:10px;overflow:auto}
+    .chat-new{width:100%;margin-bottom:10px}
+    .chat-create-panel{display:none;border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:10px;margin-bottom:12px}
+    .chat-create-panel.visible{display:block}
+    .chat-create-panel input{margin:4px 0 8px}
+    .chat-create-actions{display:flex;gap:8px;justify-content:flex-end}
+    .chat-list{display:flex;flex-direction:column;gap:6px}
+    .chat-session-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:stretch}
+    .chat-session{display:block;text-align:left;text-decoration:none;color:#111827;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px;cursor:pointer;min-width:0}
+    .chat-session.active{background:#eff6ff;border-color:#2563eb}
+    .chat-session-title{font-size:13px;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .chat-session-date{font-size:11px;color:#6b7280;margin-top:3px}
+    .chat-lock{font-size:11px;color:#92400e;margin-right:4px}
+    .chat-delete{background:#6b7280;color:white;border-radius:7px;padding:0 8px;font-size:12px}
+    .chat-main{display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:white;border:1px solid #e5e7eb;border-radius:8px;min-width:0;overflow:hidden}
+    .chat-topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e5e7eb;padding:10px 12px}
+    .chat-topbar h2{font-size:16px;margin:0}
+    .chat-status{font-size:12px;color:#6b7280}
+    .chat-messages{padding:14px;overflow:auto;background:#f8fafc}
+    .message-row{display:flex;margin-bottom:12px}
+    .message-row.user{justify-content:flex-end}
+    .message-bubble{max-width:min(760px,82%);border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;background:white;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+    .message-row.user .message-bubble{background:#dbeafe;border-color:#bfdbfe}
+    .message-meta{font-size:11px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;font-weight:bold}
+    .message-content{font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+    .message-content h1,.message-content h2,.message-content h3{font-size:15px;margin:8px 0 5px}
+    .message-content pre{max-height:none;margin:8px 0}
+    .attachment-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .attachment-chip{font-size:12px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px;color:#374151}
+    .copy-response{float:right;background:#6b7280;margin-left:8px;padding:4px 8px;font-size:12px}
+    .chat-error{display:none;margin:0 12px 10px;padding:8px 10px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:13px}
+    .chat-warnings{display:none;margin:0 12px 10px;padding:8px 10px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:13px}
+    .unlock-card{max-width:420px;background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:30px auto;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .unlock-card h3{margin:0 0 10px;font-size:16px}
+    .unlock-card input{margin:4px 0 10px}
+    .chat-composer{border-top:1px solid #e5e7eb;padding:10px 12px;background:white}
+    .composer-controls{display:grid;grid-template-columns:190px 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+    .composer-controls select,.composer-controls input{margin:0}
+    .chat-composer textarea{min-height:78px;resize:vertical;margin:0 0 8px}
+    .composer-actions{display:flex;justify-content:flex-end;gap:8px;align-items:center}
+    .file-note{font-size:12px;color:#6b7280;margin-right:auto}
+    @media(max-width:900px){.chat-shell{grid-template-columns:1fr;height:auto}.chat-main{min-height:calc(100vh - 170px)}.composer-controls{grid-template-columns:1fr}}
+</style>
+
+<div class="chat-shell">
+    <aside class="chat-sidebar">
+        <button id="newChatButton" class="chat-new" type="button">New Chat</button>
+        <form id="newChatForm" class="chat-create-panel">
+            <input id="newChatTitle" name="title" type="text" placeholder="Chat title">
+            <input id="newChatPassword" name="password" type="password" placeholder="Optional password">
+            <input id="newChatConfirmPassword" name="confirm_password" type="password" placeholder="Confirm password">
+            <div class="chat-create-actions">
+                <button id="cancelNewChatButton" class="secondary" type="button">Cancel</button>
+                <button type="submit">Create</button>
+            </div>
+        </form>
+        <div class="side-title">Recent Chats</div>
+        <div id="chatSessionList" class="chat-list">
+            {% for session in sessions %}
+            <div class="chat-session-row" data-session-id="{{ session.session_id }}">
+                <button class="chat-session" type="button" data-session-id="{{ session.session_id }}">
+                    <div class="chat-session-title">
+                        {% if session.password_protected %}<span class="chat-lock" title="Password protected">&#128274;</span>{% endif %}
+                        {{ session.title }}
+                    </div>
+                    <div class="chat-session-date">{{ session.updated_at }}</div>
+                </button>
+                <button class="chat-delete" type="button" data-session-id="{{ session.session_id }}">Delete</button>
+            </div>
+            {% endfor %}
+        </div>
+    </aside>
+    <section class="chat-main">
+        <div class="chat-topbar">
+            <h2 id="chatTitle">AI Chat</h2>
+            <span id="chatStatus" class="chat-status">Ready</span>
+        </div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <form id="chatForm" class="chat-composer">
+            <div id="chatWarnings" class="chat-warnings"></div>
+            <div id="chatError" class="chat-error"></div>
+            <div class="composer-controls">
+                <select id="chatAiMode" name="ai_mode">
+                    <option value="NO_LLM">No LLM</option>
+                    <option value="PRODUCTION_HYBRID_DEEPSEEK">Production Hybrid - DeepSeek</option>
+                    <option value="PRODUCTION_HYBRID_COPILOT">Production Hybrid - Copilot</option>
+                    <option value="DEEPSEEK_ONLY">DeepSeek Only</option>
+                    <option value="COPILOT_ONLY">Copilot Only</option>
+                    <option value="TEST_LOCAL_ONLY">Test Local Only</option>
+                </select>
+                <input id="chatFiles" name="files" type="file" multiple accept=".txt,.md,.json,.csv,.xlsx,.docx,.pdf">
+                <button id="sendChatButton" type="submit">Send</button>
+            </div>
+            <textarea id="chatMessage" name="message" placeholder="Ask about requirements, QA strategy, test cases, automation, security, performance..."></textarea>
+            <div class="composer-actions">
+                <span class="file-note">Supported: txt, md, json, csv, xlsx, docx, text PDF</span>
+            </div>
+        </form>
+    </section>
+</div>
+
+<script>
+const CHAT_BROWSER_ID_KEY = "qa_ai_platform_browser_id";
+const CHAT_LAST_SESSION_KEY = "qa_ai_platform_last_chat_session_id";
+const CHAT_RECENT_CACHE_KEY = "qa_ai_platform_recent_chats";
+const CHAT_AI_MODE_KEY = "qa_ai_platform_chat_ai_mode";
+const CHAT_VALID_AI_MODES = [
+    "NO_LLM",
+    "PRODUCTION_HYBRID_DEEPSEEK",
+    "PRODUCTION_HYBRID_COPILOT",
+    "DEEPSEEK_ONLY",
+    "COPILOT_ONLY",
+    "TEST_LOCAL_ONLY",
+];
+let activeSessionId = "";
+
+function ensureBrowserId() {
+    let browserId = localStorage.getItem(CHAT_BROWSER_ID_KEY);
+    if (!browserId) {
+        browserId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+        localStorage.setItem(CHAT_BROWSER_ID_KEY, browserId);
+    }
+    return browserId;
+}
+
+function unlockTokenKey(sessionId) {
+    return `chat_unlock_token_${sessionId}`;
+}
+
+function getUnlockToken(sessionId) {
+    return sessionStorage.getItem(unlockTokenKey(sessionId)) || "";
+}
+
+function setUnlockToken(sessionId, token) {
+    if (token) {
+        sessionStorage.setItem(unlockTokenKey(sessionId), token);
+    }
+}
+
+function clearUnlockToken(sessionId) {
+    sessionStorage.removeItem(unlockTokenKey(sessionId));
+}
+
+function isValidChatAiMode(value) {
+    return CHAT_VALID_AI_MODES.includes(String(value || "").trim().toUpperCase());
+}
+
+function getStoredChatAiMode() {
+    const stored = localStorage.getItem(CHAT_AI_MODE_KEY);
+    return isValidChatAiMode(stored) ? stored.trim().toUpperCase() : "";
+}
+
+function saveChatAiMode(aiMode) {
+    const normalized = String(aiMode || "").trim().toUpperCase();
+    if (isValidChatAiMode(normalized)) {
+        localStorage.setItem(CHAT_AI_MODE_KEY, normalized);
+    }
+}
+
+function getSelectedChatAiMode(sessionAiMode = "", options = {}) {
+    const select = document.getElementById("chatAiMode");
+    const preferCurrent = options.preferCurrent !== false;
+    const current = select ? String(select.value || "").trim().toUpperCase() : "";
+    const stored = getStoredChatAiMode();
+    const sessionMode = String(sessionAiMode || "").trim().toUpperCase();
+    const portalMode = getPortalAiState().aiMode;
+
+    if (preferCurrent && select && select.dataset.userSelected === "true" && isValidChatAiMode(current)) {
+        return current;
+    }
+
+    if (stored) {
+        return stored;
+    }
+
+    if (isValidChatAiMode(sessionMode)) {
+        return sessionMode;
+    }
+
+    if (isValidChatAiMode(portalMode)) {
+        return portalMode;
+    }
+
+    return "NO_LLM";
+}
+
+function syncChatAiMode(sessionAiMode = "", options = {}) {
+    const select = document.getElementById("chatAiMode");
+    if (!select) {
+        return;
+    }
+    const aiMode = getSelectedChatAiMode(sessionAiMode, options);
+    select.value = aiMode;
+    saveChatAiMode(aiMode);
+}
+
+function markdownToHtml(value) {
+    let html = escapeHtml(value || "");
+    html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>");
+    html = html.replace(/^## (.*)$/gm, "<h2>$1</h2>");
+    html = html.replace(/^# (.*)$/gm, "<h1>$1</h1>");
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return html;
+}
+
+function chatHeaders(sessionId) {
+    const token = getUnlockToken(sessionId);
+    return token ? {"X-Chat-Unlock-Token": token} : {};
+}
+
+function renderMessage(message) {
+    const row = document.createElement("div");
+    row.className = `message-row ${message.role === "user" ? "user" : "assistant"}`;
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+    const copy = message.role === "assistant"
+        ? `<button class="copy-response" type="button">Copy</button>`
+        : "";
+    const attachments = (message.attachments || []).map(item => (
+        `<span class="attachment-chip">${escapeHtml(item.filename || "")}</span>`
+    )).join("");
+    bubble.innerHTML = `
+        ${copy}
+        <div class="message-meta">${escapeHtml(message.role || "")}</div>
+        <div class="message-content">${message.role === "assistant" ? markdownToHtml(message.content) : escapeHtml(message.content || "")}</div>
+        ${attachments ? `<div class="attachment-chips">${attachments}</div>` : ""}
+    `;
+    const copyButton = bubble.querySelector(".copy-response");
+    if (copyButton) {
+        copyButton.dataset.copyText = message.content || "";
+    }
+    row.appendChild(bubble);
+    return row;
+}
+
+function renderMessages(messages) {
+    const container = document.getElementById("chatMessages");
+    container.innerHTML = "";
+    (messages || []).forEach(message => container.appendChild(renderMessage(message)));
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderUnlockForm(session) {
+    const container = document.getElementById("chatMessages");
+    container.innerHTML = `
+        <form id="unlockChatForm" class="unlock-card">
+            <h3>Unlock Chat</h3>
+            <input id="unlockChatPassword" type="password" placeholder="Password" autocomplete="current-password">
+            <button type="submit">Unlock</button>
+        </form>
+    `;
+    document.getElementById("chatForm").style.display = "none";
+    document.getElementById("unlockChatForm").addEventListener("submit", event => unlockSession(event, session.session_id));
+}
+
+function clearChatPanel() {
+    activeSessionId = "";
+    localStorage.removeItem(CHAT_LAST_SESSION_KEY);
+    document.getElementById("chatTitle").textContent = "AI Chat";
+    document.getElementById("chatForm").style.display = "block";
+    renderMessages([]);
+}
+
+function setInlineMessage(id, values) {
+    const node = document.getElementById(id);
+    const items = Array.isArray(values) ? values.filter(Boolean) : [values].filter(Boolean);
+    node.style.display = items.length ? "block" : "none";
+    node.textContent = items.join(" ");
+}
+
+async function refreshSessions() {
+    const data = await portalFetch("/portal/chat/sessions");
+    const sessions = data.sessions || [];
+    localStorage.setItem(CHAT_RECENT_CACHE_KEY, JSON.stringify(sessions));
+    const list = document.getElementById("chatSessionList");
+    list.innerHTML = "";
+    sessions.forEach(session => {
+        const row = document.createElement("div");
+        row.className = "chat-session-row";
+        row.dataset.sessionId = session.session_id;
+        row.innerHTML = `
+            <button class="chat-session ${session.session_id === activeSessionId ? "active" : ""}" type="button" data-session-id="${escapeHtml(session.session_id)}">
+                <div class="chat-session-title">
+                    ${session.password_protected ? `<span class="chat-lock" title="Password protected">&#128274;</span>` : ""}
+                    ${escapeHtml(session.title)}
+                </div>
+                <div class="chat-session-date">${escapeHtml(session.updated_at)}</div>
+            </button>
+            <button class="chat-delete" type="button" data-session-id="${escapeHtml(session.session_id)}">Delete</button>
+        `;
+        list.appendChild(row);
+    });
+}
+
+async function loadSession(sessionId) {
+    const data = await portalFetch(`/portal/chat/sessions/${sessionId}`, {
+        headers: chatHeaders(sessionId),
+    });
+    activeSessionId = sessionId;
+    localStorage.setItem(CHAT_LAST_SESSION_KEY, sessionId);
+    document.getElementById("chatTitle").textContent = data.session.title || "AI Chat";
+    syncChatAiMode(data.session.ai_mode);
+    if (data.password_required) {
+        renderUnlockForm(data.session);
+    } else {
+        document.getElementById("chatForm").style.display = "block";
+        renderMessages(data.messages || []);
+    }
+    await refreshSessions();
+}
+
+async function createSession(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    setInlineMessage("chatError", "");
+    try {
+        const formData = new FormData(document.getElementById("newChatForm"));
+        formData.set("ai_mode", getSelectedChatAiMode());
+        const password = String(formData.get("password") || "");
+        const session = await portalFetch("/portal/chat/sessions", {
+            method: "POST",
+            body: formData,
+        });
+        document.getElementById("newChatForm").reset();
+        document.getElementById("newChatForm").classList.remove("visible");
+        if (password) {
+            const unlock = await portalFetch(`/portal/chat/sessions/${session.session_id}/unlock`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({password}),
+            });
+            setUnlockToken(session.session_id, unlock.unlock_token);
+        }
+        await loadSession(session.session_id);
+    } catch (error) {
+        setInlineMessage("chatError", error.message);
+        if (!event) {
+            throw error;
+        }
+    }
+}
+
+async function unlockSession(event, sessionId) {
+    event.preventDefault();
+    setInlineMessage("chatError", "");
+    const password = document.getElementById("unlockChatPassword").value;
+    try {
+        const data = await portalFetch(`/portal/chat/sessions/${sessionId}/unlock`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({password}),
+        });
+        setUnlockToken(sessionId, data.unlock_token);
+        await loadSession(sessionId);
+    } catch (error) {
+        setInlineMessage("chatError", error.message);
+    }
+}
+
+async function deleteSession(sessionId) {
+    setInlineMessage("chatError", "");
+    if (!confirm("Delete this chat? This action cannot be undone.")) {
+        return;
+    }
+    try {
+        await portalFetch(`/portal/chat/sessions/${sessionId}`, {
+            method: "DELETE",
+        });
+        clearUnlockToken(sessionId);
+        await refreshSessions();
+        if (activeSessionId === sessionId) {
+            const next = document.querySelector(".chat-session");
+            if (next) {
+                await loadSession(next.dataset.sessionId);
+            } else {
+                clearChatPanel();
+            }
+        }
+    } catch (error) {
+        setInlineMessage("chatError", error.message);
+    }
+}
+
+async function submitChat(event) {
+    event.preventDefault();
+    setInlineMessage("chatError", "");
+    setInlineMessage("chatWarnings", "");
+
+    if (!activeSessionId) {
+        await createSession();
+    }
+
+    const form = document.getElementById("chatForm");
+    const formData = new FormData(form);
+    const selectedAiMode = getSelectedChatAiMode();
+    saveChatAiMode(selectedAiMode);
+    formData.set("ai_mode", selectedAiMode);
+    const button = document.getElementById("sendChatButton");
+    button.disabled = true;
+    button.textContent = "Thinking...";
+    document.getElementById("chatStatus").textContent = "Thinking...";
+
+    try {
+        const data = await portalFetch(`/portal/chat/sessions/${activeSessionId}/messages`, {
+            method: "POST",
+            headers: chatHeaders(activeSessionId),
+            body: formData,
+        });
+        if (data.warnings && data.warnings.length) {
+            setInlineMessage("chatWarnings", data.warnings);
+        }
+        await loadSession(activeSessionId);
+        form.reset();
+        syncChatAiMode(selectedAiMode, {preferCurrent: false});
+    } catch (error) {
+        setInlineMessage("chatError", error.message);
+        await loadSession(activeSessionId);
+    } finally {
+        button.disabled = false;
+        button.textContent = "Send";
+        document.getElementById("chatStatus").textContent = "Ready";
+    }
+}
+
+async function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (_error) {
+            // Fall through to textarea fallback.
+        }
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+        return document.execCommand("copy");
+    } catch (_error) {
+        return false;
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
+
+async function handleCopyButton(button) {
+    const originalText = "Copy";
+    const text = button.dataset.copyText || "";
+    const copied = await copyTextToClipboard(text);
+    button.textContent = copied ? "Copied" : "Copy failed";
+    setTimeout(() => {
+        button.textContent = originalText;
+    }, 1500);
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    ensureBrowserId();
+    syncChatAiMode("", {preferCurrent: false});
+    document.getElementById("chatAiMode").addEventListener("change", event => {
+        event.target.dataset.userSelected = "true";
+        saveChatAiMode(event.target.value);
+    });
+    document.getElementById("newChatButton").addEventListener("click", () => {
+        document.getElementById("newChatForm").classList.toggle("visible");
+    });
+    document.getElementById("cancelNewChatButton").addEventListener("click", () => {
+        document.getElementById("newChatForm").classList.remove("visible");
+    });
+    document.getElementById("newChatForm").addEventListener("submit", createSession);
+    document.getElementById("chatForm").addEventListener("submit", submitChat);
+    document.getElementById("chatSessionList").addEventListener("click", event => {
+        const deleteButton = event.target.closest(".chat-delete");
+        if (deleteButton) {
+            deleteSession(deleteButton.dataset.sessionId);
+            return;
+        }
+        const button = event.target.closest(".chat-session");
+        if (button) {
+            loadSession(button.dataset.sessionId);
+        }
+    });
+    document.getElementById("chatMessages").addEventListener("click", event => {
+        const button = event.target.closest(".copy-response");
+        if (button) {
+            handleCopyButton(button);
+        }
+    });
+
+    await refreshSessions();
+    const lastSessionId = localStorage.getItem(CHAT_LAST_SESSION_KEY);
+    const preferred = lastSessionId
+        ? document.querySelector(`.chat-session[data-session-id="${CSS.escape(lastSessionId)}"]`)
+        : null;
+    const firstSession = preferred || document.querySelector(".chat-session");
+    if (firstSession) {
+        await loadSession(firstSession.dataset.sessionId);
+    } else {
+        clearChatPanel();
+        document.getElementById("newChatForm").classList.add("visible");
+    }
+});
+</script>
+{% endblock %}

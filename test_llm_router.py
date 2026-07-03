@@ -1,4 +1,5 @@
 import os
+import requests
 import sys
 
 from app.config.env_loader import load_project_env
@@ -8,6 +9,7 @@ from app.services.llm_router_service import (
     PROVIDER_DEEPSEEK,
     PROVIDER_LOCAL_COMPACT,
     PROVIDER_LOCAL_TEXT,
+    PROVIDER_LOCAL_VISION,
     PROVIDER_SKIP,
     TASK_COMPACT_CONTEXT,
     TASK_REQUIREMENT_ANALYSIS,
@@ -316,6 +318,7 @@ def test_health_local_disabled_returns_disabled(monkeypatch):
     result = run_test_all_llm_providers()
 
     assert _health_result_for(result, PROVIDER_LOCAL_TEXT)["status"] == "DISABLED"
+    assert _health_result_for(result, PROVIDER_LOCAL_VISION)["status"] == "DISABLED"
 
 
 def test_health_local_missing_base_url_or_model_returns_skipped(monkeypatch):
@@ -328,6 +331,139 @@ def test_health_local_missing_base_url_or_model_returns_skipped(monkeypatch):
     result = run_test_all_llm_providers()
 
     assert _health_result_for(result, PROVIDER_LOCAL_TEXT)["status"] == "SKIPPED"
+
+
+def test_health_local_vision_missing_model_returns_skipped(monkeypatch):
+    monkeypatch.setenv("FORCE_DISABLE_DEEPSEEK", "true")
+    monkeypatch.setenv("FORCE_DISABLE_COPILOT", "true")
+    monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
+    monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
+    monkeypatch.delenv("LOCAL_TEXT_MODEL", raising=False)
+    monkeypatch.delenv("LOCAL_VISION_MODEL", raising=False)
+
+    result = run_test_all_llm_providers()
+    local_vision = _health_result_for(result, PROVIDER_LOCAL_VISION)
+
+    assert local_vision["status"] == "SKIPPED"
+    assert local_vision["message"] == "LOCAL_VISION_MODEL is missing."
+
+
+def test_health_local_vision_api_show_success_returns_ok(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return FakeResponse()
+
+    monkeypatch.setenv("FORCE_DISABLE_DEEPSEEK", "true")
+    monkeypatch.setenv("FORCE_DISABLE_COPILOT", "true")
+    monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
+    monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
+    monkeypatch.delenv("LOCAL_TEXT_MODEL", raising=False)
+    monkeypatch.setenv("LOCAL_VISION_MODEL", "qwen2.5vl:7b")
+    monkeypatch.setenv("LLM_HEALTH_CHECK_TIMEOUT", "30")
+    monkeypatch.setattr("app.services.llm_router_service.requests.post", fake_post)
+
+    result = run_test_all_llm_providers()
+    local_vision = _health_result_for(result, PROVIDER_LOCAL_VISION)
+
+    assert local_vision["status"] == "OK"
+    assert (
+        local_vision["message"]
+        == "Vision model is available in Ollama. Vision inference was not tested."
+    )
+    assert local_vision["duration_ms"] >= 0
+    assert calls == [
+        {
+            "url": "http://172.76.10.44:11434/api/show",
+            "headers": {"Content-Type": "application/json"},
+            "json": {"model": "qwen2.5vl:7b"},
+            "timeout": 30.0,
+        }
+    ]
+
+
+def test_health_local_vision_model_not_found_returns_failed(monkeypatch):
+    class FakeResponse:
+        status_code = 404
+        text = '{"error":"model not found"}'
+
+        def json(self):
+            return {"error": "model not found"}
+
+        def raise_for_status(self):
+            error = requests.exceptions.HTTPError("404 Client Error")
+            error.response = self
+            raise error
+
+    def fake_post(url, headers, json, timeout):
+        return FakeResponse()
+
+    monkeypatch.setenv("FORCE_DISABLE_DEEPSEEK", "true")
+    monkeypatch.setenv("FORCE_DISABLE_COPILOT", "true")
+    monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
+    monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
+    monkeypatch.delenv("LOCAL_TEXT_MODEL", raising=False)
+    monkeypatch.setenv("LOCAL_VISION_MODEL", "missing-vision:latest")
+    monkeypatch.setattr("app.services.llm_router_service.requests.post", fake_post)
+
+    result = run_test_all_llm_providers()
+    local_vision = _health_result_for(result, PROVIDER_LOCAL_VISION)
+
+    assert result["ok"] is False
+    assert local_vision["status"] == "FAILED"
+    assert local_vision["message"] == "Vision model is not available in Ollama."
+    assert "ollama pull missing-vision:latest" in local_vision["error"]
+    assert local_vision["provider"] == PROVIDER_LOCAL_VISION
+    assert local_vision["model"] == "missing-vision:latest"
+    assert local_vision["base_url"] == "http://172.76.10.44:11434"
+    assert local_vision["resolved_url"] == "http://172.76.10.44:11434/api/show"
+    assert local_vision["exception_type"] == "HTTPError"
+    assert isinstance(local_vision["duration_ms"], int)
+
+
+def test_health_local_vision_does_not_use_chat_or_send_image(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, headers, json, timeout):
+        calls.append({"url": url, "json": json})
+        return FakeResponse()
+
+    monkeypatch.setenv("FORCE_DISABLE_DEEPSEEK", "true")
+    monkeypatch.setenv("FORCE_DISABLE_COPILOT", "true")
+    monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
+    monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
+    monkeypatch.delenv("LOCAL_TEXT_MODEL", raising=False)
+    monkeypatch.setenv("LOCAL_VISION_MODEL", "qwen2.5vl:7b")
+    monkeypatch.setattr("app.services.llm_router_service.requests.post", fake_post)
+
+    run_test_all_llm_providers()
+
+    assert calls == [
+        {
+            "url": "http://172.76.10.44:11434/api/show",
+            "json": {"model": "qwen2.5vl:7b"},
+        }
+    ]
+    assert all("/api/chat" not in call["url"] for call in calls)
+    assert all("image" not in call["json"] for call in calls)
+    assert all("images" not in call["json"] for call in calls)
+    assert all("base64" not in str(call["json"]).lower() for call in calls)
 
 
 def test_health_local_text_uses_ollama_api_chat_payload(monkeypatch):
@@ -358,6 +494,7 @@ def test_health_local_text_uses_ollama_api_chat_payload(monkeypatch):
     monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
     monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
     monkeypatch.setenv("LOCAL_TEXT_MODEL", "qwen2.5:14b")
+    monkeypatch.delenv("LOCAL_VISION_MODEL", raising=False)
     monkeypatch.setenv("LLM_HEALTH_CHECK_TIMEOUT", "30")
     monkeypatch.setattr("app.services.llm_router_service.requests.post", fake_post)
 
@@ -400,6 +537,7 @@ def test_health_local_text_invalid_response_is_failed_with_diagnostics(monkeypat
     monkeypatch.setenv("FORCE_DISABLE_LOCAL_AI", "false")
     monkeypatch.setenv("LOCAL_BASE_URL", "http://172.76.10.44:11434")
     monkeypatch.setenv("LOCAL_TEXT_MODEL", "qwen2.5:14b")
+    monkeypatch.delenv("LOCAL_VISION_MODEL", raising=False)
     monkeypatch.setattr("app.services.llm_router_service.requests.post", fake_post)
 
     result = run_test_all_llm_providers()

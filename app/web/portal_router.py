@@ -6,7 +6,7 @@ import json
 import logging
 import threading
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -84,6 +84,19 @@ from app.services.portal_ai_mode_service import (
     portal_ai_mode_dependency,
 )
 from app.services.ai_provider_error_service import format_provider_error
+from app.services.chat_file_extractor_service import save_and_extract_uploads
+from app.services.chat_service import (
+    create_chat_session,
+    get_chat_sessions_dir,
+    is_unlock_token_valid,
+    list_chat_sessions,
+    load_chat_messages,
+    load_chat_session,
+    send_chat_message,
+    soft_delete_chat_session,
+    unlock_chat_session,
+    public_chat_session,
+)
 from app.services.portal_job_service import (
     PortalConcurrencyError,
     PortalJobBusyError,
@@ -157,6 +170,177 @@ async def download_system_report():
         filename=report_path.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+@router.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {
+            "sessions": list_chat_sessions(),
+            "portal_default_ai_mode": get_default_ai_mode(),
+        },
+    )
+
+
+@router.get("/chat/sessions")
+async def chat_sessions():
+    return JSONResponse({"sessions": list_chat_sessions()})
+
+
+@router.post("/chat/sessions")
+async def create_portal_chat_session(
+    ai_mode: str = Form(""),
+    title: str = Form(""),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+):
+    try:
+        session = create_chat_session(
+            ai_mode=ai_mode or get_default_ai_mode(),
+            title=title,
+            password=password,
+            confirm_password=confirm_password,
+        )
+    except ValueError as error:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": str(error),
+            },
+            status_code=400,
+        )
+    return JSONResponse(session)
+
+
+@router.get("/chat/sessions/{session_id}")
+async def get_portal_chat_session(
+    session_id: str,
+    x_chat_unlock_token: str = Header(default=""),
+):
+    try:
+        session = load_chat_session(session_id)
+        if session.get("deleted"):
+            raise FileNotFoundError("Chat session not found.")
+        public_session = public_chat_session(session)
+        if session.get("password_protected") and not is_unlock_token_valid(
+            session_id,
+            x_chat_unlock_token,
+        ):
+            return JSONResponse(
+                {
+                    "session": public_session,
+                    "messages": [],
+                    "password_required": True,
+                }
+            )
+        messages = load_chat_messages(session_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Chat session not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return JSONResponse(
+        {
+            "session": public_session,
+            "messages": messages,
+            "password_required": False,
+        }
+    )
+
+
+@router.post("/chat/sessions/{session_id}/unlock")
+async def unlock_portal_chat_session(
+    session_id: str,
+    payload: dict[str, Any] = Body(default={}),
+):
+    try:
+        result = unlock_chat_session(session_id, str(payload.get("password") or ""))
+    except PermissionError as error:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": str(error),
+            },
+            status_code=403,
+        )
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Chat session not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return JSONResponse(result)
+
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_portal_chat_session(session_id: str):
+    try:
+        soft_delete_chat_session(session_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Chat session not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": "Chat deleted.",
+        }
+    )
+
+
+@router.post("/chat/sessions/{session_id}/messages")
+async def post_portal_chat_message(
+    session_id: str,
+    ai_mode: str = Form(""),
+    message: str = Form(""),
+    files: list[UploadFile] = File(default=[]),
+    x_chat_unlock_token: str = Header(default=""),
+):
+    try:
+        session = load_chat_session(session_id)
+        if session.get("deleted"):
+            raise FileNotFoundError("Chat session not found.")
+        if session.get("password_protected") and not is_unlock_token_valid(
+            session_id,
+            x_chat_unlock_token,
+        ):
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "Unlock this chat before sending a message.",
+                    "password_required": True,
+                    "warnings": [],
+                },
+                status_code=403,
+            )
+        session_dir = get_chat_sessions_dir() / session_id
+        attachments, extracted_context, warnings = await save_and_extract_uploads(
+            session_dir=session_dir,
+            files=files,
+        )
+        result = send_chat_message(
+            session_id=session_id,
+            user_message=message,
+            ai_mode=ai_mode or session.get("ai_mode") or get_default_ai_mode(),
+            attachments=attachments,
+            extracted_context=extracted_context,
+        )
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Chat session not found.") from error
+    except ValueError as error:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": str(error),
+                "warnings": [],
+            },
+            status_code=400,
+        )
+
+    result["warnings"] = warnings
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
 
 
 @router.get("", response_class=HTMLResponse)

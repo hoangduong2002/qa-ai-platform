@@ -110,11 +110,7 @@ def build_report_preview() -> dict:
     for row in node_rows:
         row["duration_seconds"] = _round(row["duration_seconds"])
 
-    recent_logs = sorted(
-        usage_logs,
-        key=lambda log: log.get("timestamp", ""),
-        reverse=True,
-    )[:100]
+    recent_logs = usage_logs[:100]
 
     log_rows = []
 

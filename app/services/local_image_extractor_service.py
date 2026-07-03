@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import io
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,8 @@ from app.services.local_ai_config_service import (
 )
 from app.services.portal_ai_mode_service import assert_local_ai_allowed
 from app.services.portal_job_service import limit_llm_call, limit_LOCAL_call
+from app.services.portal_job_service import get_current_job_id
+from app.utils.ai_usage_logger import log_ai_usage
 
 
 DEFAULT_IMAGE_EXTRACTION_PROMPT = """
@@ -105,6 +108,32 @@ def _get_timeout() -> int:
         )
     except Exception:
         return 180
+
+
+def _log_local_vision_usage(
+    model: str,
+    prompt: str,
+    response: str = "",
+    duration_ms: int = 0,
+    status: str = "success",
+    error_type: str = "",
+    raw_usage: dict | None = None,
+) -> None:
+    log_ai_usage(
+        ticket_id="",
+        node_name="local_vision_extract",
+        model=model,
+        provider="LOCAL_VISION",
+        prompt=prompt,
+        response=response,
+        duration_ms=duration_ms,
+        task_type="vision_extract",
+        source_channel="",
+        job_id=get_current_job_id(),
+        status=status,
+        error_type=error_type,
+        raw_usage=raw_usage,
+    )
     
     
 def _normalize_line_for_dedup(line: str) -> str:
@@ -239,6 +268,8 @@ def extract_image_with_LOCAL(
     base_url = _get_LOCAL_base_url()
     model = _get_LOCAL_model()
     timeout = _get_timeout()
+    usage_prompt = prompt or DEFAULT_IMAGE_EXTRACTION_PROMPT
+    started = time.time()
 
     image_base64 = _normalize_image_to_png_base64(image_path)
 
@@ -247,7 +278,7 @@ def extract_image_with_LOCAL(
         "messages": [
             {
                 "role": "user",
-                "content": prompt or DEFAULT_IMAGE_EXTRACTION_PROMPT,
+                "content": usage_prompt,
                 "images": [
                     image_base64
                 ],
@@ -277,6 +308,13 @@ def extract_image_with_LOCAL(
 
     except urllib.error.HTTPError as error:
         error_body = error.read().decode("utf-8", errors="ignore")
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type=type(error).__name__,
+        )
         raise RuntimeError(
             "LOCAL image extraction failed with HTTP "
             f"{error.code}: {error_body}\n"
@@ -288,13 +326,30 @@ def extract_image_with_LOCAL(
         ) from error
 
     except urllib.error.URLError as error:
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type=type(error).__name__,
+        )
         raise RuntimeError(
             f"Cannot connect to LOCAL vision server at {base_url}. "
             f"Please check LAN IP, firewall, LOCAL_HOST, and port 11434. "
             f"Error: {error}"
         ) from error
 
-    data = json.loads(raw_body)
+    try:
+        data = json.loads(raw_body)
+    except json.JSONDecodeError as error:
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type=type(error).__name__,
+        )
+        raise
 
     extracted_text = (
         data.get("message", {}).get("content")
@@ -303,12 +358,29 @@ def extract_image_with_LOCAL(
     ).strip()
 
     if not extracted_text:
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type="RuntimeError",
+            raw_usage=data,
+        )
         raise RuntimeError(
             f"LOCAL vision model returned empty response for image: {image_path}. "
             f"Raw response: {raw_body[:1000]}"
         )
 
     if _looks_like_no_image_response(extracted_text):
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            response=extracted_text,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type="RuntimeError",
+            raw_usage=data,
+        )
         raise RuntimeError(
             "LOCAL vision model did not receive/read the image correctly. "
             f"Model: {model}. "
@@ -319,6 +391,15 @@ def extract_image_with_LOCAL(
     extracted_text = _deduplicate_markdown_lines(extracted_text)
 
     if _looks_like_low_quality_vision_response(extracted_text):
+        _log_local_vision_usage(
+            model=model,
+            prompt=usage_prompt,
+            response=extracted_text,
+            duration_ms=int((time.time() - started) * 1000),
+            status="error",
+            error_type="RuntimeError",
+            raw_usage=data,
+        )
         raise RuntimeError(
             "LOCAL vision output looks low-quality or hallucinated. "
             "Extraction was rejected to avoid polluting requirement context. "
@@ -327,6 +408,14 @@ def extract_image_with_LOCAL(
             f"Response preview: {extracted_text[:800]}"
         )
 
+    _log_local_vision_usage(
+        model=model,
+        prompt=usage_prompt,
+        response=extracted_text,
+        duration_ms=int((time.time() - started) * 1000),
+        status="success",
+        raw_usage=data,
+    )
     return extracted_text
 
 
