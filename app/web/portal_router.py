@@ -109,6 +109,11 @@ from app.services.jira_delta_service import (
     build_and_save_latest_stored_jira_snapshot,
     sync_jira_changes_for_requirement,
 )
+from app.services.jira_requirement_service import (
+    figma_enabled_by_default,
+    jira_subtasks_enabled_by_default,
+    parse_jira_ticket_ids,
+)
 from app.services.requirement_source_service import (
     has_jira_snapshot as requirement_has_jira_snapshot,
     is_jira_requirement as requirement_is_jira,
@@ -352,6 +357,8 @@ async def dashboard(request: Request):
         {
             "requirements": list_requirements(),
             "portal_default_ai_mode": get_default_ai_mode(),
+            "jira_load_subtasks_default": jira_subtasks_enabled_by_default(),
+            "jira_load_figma_default": figma_enabled_by_default(),
         },
     )
 
@@ -381,8 +388,25 @@ async def create_requirement_from_jira(
     issue_key: str = Form(...),
     jira_pat: str = Form(""),
     refresh_existing: str = Form("false"),
+    load_subtasks: bool | None = Form(None),
+    load_figma: bool | None = Form(None),
 ):
-    ticket_id = normalize_requirement_id(issue_key)
+    try:
+        main_ticket_id, _ = parse_jira_ticket_ids(issue_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    ticket_id = normalize_requirement_id(main_ticket_id)
+    load_subtasks = (
+        jira_subtasks_enabled_by_default()
+        if load_subtasks is None
+        else load_subtasks
+    )
+    load_figma = (
+        figma_enabled_by_default()
+        if load_figma is None
+        else load_figma
+    )
     job_id = create_job(
         ticket_id=ticket_id,
         action="create_requirement_from_jira",
@@ -397,6 +421,8 @@ async def create_requirement_from_jira(
             issue_key=issue_key,
             jira_pat=jira_pat,
             refresh_existing=refresh_existing.lower() == "true",
+            load_subtasks=load_subtasks,
+            load_figma=load_figma,
         ),
         job_id=job_id,
     )
@@ -426,7 +452,12 @@ async def portal_job_status(job_id: str):
 
 @router.get("/requirements/check-jira")
 async def check_jira_requirement(issue_key: str):
-    ticket_id = normalize_requirement_id(issue_key)
+    try:
+        main_ticket_id, _ = parse_jira_ticket_ids(issue_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    ticket_id = normalize_requirement_id(main_ticket_id)
 
     return JSONResponse(
         {

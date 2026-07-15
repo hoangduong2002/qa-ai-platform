@@ -222,6 +222,7 @@ You are a senior QA analyst.
 Create a structured requirement summary from the requirement context, analysis output, requirement items, and clarification answers.
 
 The summary must be useful for generating test scenarios and test cases.
+The context may include a main Jira ticket and supporting Jira tickets. Treat the main ticket as primary. Use supporting tickets only to enrich or clarify the main requirement; do not let them override it unless the relationship is explicit.
 
 Return JSON only.
 

@@ -1783,8 +1783,12 @@ def export_figma_file_from_reference(
 def extract_figma_context_from_jira_texts(
     ticket_id: str,
     texts: list[str],
+    enabled: bool | None = None,
 ) -> str:
-    if not _env_bool("FIGMA_ENABLE_EXTRACTION", False):
+    if enabled is None:
+        enabled = _env_bool("FIGMA_ENABLE_EXTRACTION", False)
+
+    if not enabled:
         return ""
 
     references = extract_figma_references_from_texts(texts)

@@ -298,6 +298,26 @@ JIRA_VERIFY_SSL=true
 JIRA_INCLUDE_SUBTASKS=true
 ```
 
+In the Web Portal, use **Load Requirement from Jira** to import either one Jira
+ticket or a main ticket with supporting requirement tickets:
+
+```text
+EVNWCL-5175
+EVNWCL-5175, EVNWCL-5176, EVNWCL-5177
+```
+
+Ticket IDs are comma-separated. The first ticket is the main requirement and
+determines the requirement folder (for example, `requirements/EVNWCL-5175/`).
+All following tickets are loaded into that requirement as supporting context.
+Duplicates and empty comma-separated entries are ignored, and ticket IDs are
+normalized to uppercase.
+
+The **Load sub-tasks** checkbox controls whether sub-tasks are fetched for the
+main and supporting tickets. Its initial value follows `JIRA_INCLUDE_SUBTASKS`.
+The **Load Figma** checkbox controls Jira Figma-link detection, export, and
+vision analysis. Its initial value follows `FIGMA_ENABLE_EXTRACTION`; when it is
+off, requirement analysis uses Jira text and attachments without calling Figma.
+
 `.env.secrets`:
 
 ```env

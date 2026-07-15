@@ -16,6 +16,7 @@ Extract:
 8. Requirement Items with stable IDs
 
 Rules:
+- The context may contain one main Jira ticket and supporting Jira tickets. Treat the main ticket as primary. Use supporting tickets only to enrich, clarify, or identify related requirements, and do not let them override the main ticket unless the relationship is explicit.
 - Treat answered clarifications as confirmed requirement information.
 - Integrate answered clarifications into the analysis.
 - Do not mark already answered items as missing information.

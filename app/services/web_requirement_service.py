@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 from app.services.jira_requirement_service import (
     create_requirement_from_jira,
+    figma_enabled_by_default,
+    jira_subtasks_enabled_by_default,
+    parse_jira_ticket_ids,
 )
 from app.services.jira_delta_service import (
     build_and_save_latest_stored_jira_snapshot,
@@ -138,8 +141,30 @@ def _write_source_metadata(ticket_id: str, values: dict) -> None:
     )
 
 
-def _mark_web_jira_requirement(ticket_id: str, jira_key: str) -> None:
+def _mark_web_jira_requirement(
+    ticket_id: str,
+    jira_key: str,
+    supporting_ticket_ids: list[str] | None = None,
+    load_subtasks: bool | None = None,
+    load_figma: bool | None = None,
+) -> None:
     now = _now_iso()
+    supporting_ticket_ids = supporting_ticket_ids or []
+    import_options = {
+        "main_ticket_id": jira_key,
+        "supporting_ticket_ids": supporting_ticket_ids,
+        "all_ticket_ids": [jira_key, *supporting_ticket_ids],
+        "load_subtasks": (
+            jira_subtasks_enabled_by_default()
+            if load_subtasks is None
+            else load_subtasks
+        ),
+        "load_figma": (
+            figma_enabled_by_default()
+            if load_figma is None
+            else load_figma
+        ),
+    }
 
     ticket_file = _ticket_json_file(ticket_id)
     ticket_data = _read_json(ticket_file) or {}
@@ -152,6 +177,7 @@ def _mark_web_jira_requirement(ticket_id: str, jira_key: str) -> None:
             "imported_from_jira": True,
             "jira_key": jira_key,
             "updated_at": now,
+            **import_options,
         }
     )
     ticket_file.write_text(
@@ -169,6 +195,7 @@ def _mark_web_jira_requirement(ticket_id: str, jira_key: str) -> None:
             "imported_from_jira": True,
             "jira_key": jira_key,
             "updated_at": now,
+            **import_options,
         },
     )
 
@@ -330,16 +357,24 @@ def create_requirement_from_jira_and_sanitize(
     issue_key: str,
     jira_pat: str = "",
     refresh_existing: bool = False,
+    load_subtasks: bool | None = None,
+    load_figma: bool | None = None,
 ) -> str:
-    issue_key = issue_key.strip()
-    ticket_id = _safe_requirement_id(issue_key)
+    main_ticket_id, supporting_ticket_ids = parse_jira_ticket_ids(issue_key)
+    ticket_id = _safe_requirement_id(main_ticket_id)
 
     if requirement_is_complete(ticket_id) and not refresh_existing:
         logger.info(
             "Requirement exists and is complete, skipping Jira load. ticket_id=%s",
             ticket_id,
         )
-        _mark_web_jira_requirement(ticket_id, ticket_id)
+        _mark_web_jira_requirement(
+            ticket_id,
+            main_ticket_id,
+            supporting_ticket_ids=supporting_ticket_ids,
+            load_subtasks=load_subtasks,
+            load_figma=load_figma,
+        )
         if not has_jira_snapshot(ticket_id):
             try:
                 build_and_save_latest_stored_jira_snapshot(ticket_id)
@@ -359,12 +394,21 @@ def create_requirement_from_jira_and_sanitize(
         refresh_existing = True
 
     ticket_id = create_requirement_from_jira(
-        issue_key.strip(),
+        main_ticket_id,
         jira_pat=jira_pat.strip(),
         refresh_existing=refresh_existing,
         source_channel="web",
+        supporting_ticket_ids=supporting_ticket_ids,
+        load_subtasks=load_subtasks,
+        load_figma=load_figma,
     )
-    _mark_web_jira_requirement(ticket_id, ticket_id)
+    _mark_web_jira_requirement(
+        ticket_id,
+        main_ticket_id,
+        supporting_ticket_ids=supporting_ticket_ids,
+        load_subtasks=load_subtasks,
+        load_figma=load_figma,
+    )
 
     update_job_progress(
         current_step="Sanitizing requirement",

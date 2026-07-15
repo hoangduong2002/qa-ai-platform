@@ -28,7 +28,8 @@
     <h2>Load Requirement from Jira</h2>
 
     <p>
-        Enter a Jira ticket ID. The first time you load from Jira, you will be asked
+        Enter one or more Jira ticket IDs. The first ticket is the main requirement;
+        later tickets are supporting context. The first time you load from Jira, you will be asked
         to enter your Jira Personal Access Token. The token will be saved only in
         this browser local storage.
     </p>
@@ -39,18 +40,56 @@
         action="/portal/requirements/from-jira"
         data-loading="true"
         data-loading-title="Loading requirement from Jira..."
-        data-loading-message="Fetching Jira issue, comments, subtasks, and attachments."
+        data-loading-message="Fetching Jira issues, comments, selected sub-tasks, and attachments."
     >
         <label>
-            <b>Jira Ticket ID</b>
+            <b>Jira Ticket ID(s)</b>
         </label>
 
         <input
             type="text"
             name="issue_key"
-            placeholder="Example: EVNWCL-5221"
+            placeholder="Enter Jira ticket ID(s), comma-separated. First ticket is main. Example: EVNWCL-5175, EVNWCL-5176"
             required
         >
+
+        <p style="margin-top: -4px; color: #6b7280; font-size: 13px;">
+            Use commas to include supporting Jira tickets. The first ticket is the main requirement.
+        </p>
+
+        <input
+            type="hidden"
+            id="loadSubtasksField"
+            name="load_subtasks"
+            value="{{ 'true' if jira_load_subtasks_default else 'false' }}"
+        >
+        <input
+            type="hidden"
+            id="loadFigmaField"
+            name="load_figma"
+            value="{{ 'true' if jira_load_figma_default else 'false' }}"
+        >
+
+        <div class="mini-actions" style="margin-bottom: 14px;">
+            <label class="toggle-row">
+                <input
+                    type="checkbox"
+                    id="loadSubtasksCheckbox"
+                    {% if jira_load_subtasks_default %}checked{% endif %}
+                    onchange="syncJiraLoadOptions()"
+                >
+                Load sub-tasks
+            </label>
+            <label class="toggle-row">
+                <input
+                    type="checkbox"
+                    id="loadFigmaCheckbox"
+                    {% if jira_load_figma_default %}checked{% endif %}
+                    onchange="syncJiraLoadOptions()"
+                >
+                Load Figma
+            </label>
+        </div>
 
         <input
             type="hidden"
@@ -326,9 +365,71 @@
 
 <script>
     const JIRA_PAT_STORAGE_KEY = "qa_ai_platform_jira_pat";
+    const JIRA_LOAD_SUBTASKS_STORAGE_KEY = "qa_ai_platform_jira_load_subtasks";
+    const JIRA_LOAD_FIGMA_STORAGE_KEY = "qa_ai_platform_jira_load_figma";
 
     let pendingExistingRequirement = null;
     let bypassExistingCheck = false;
+
+    function readStoredCheckboxValue(storageKey, defaultValue) {
+        const storedValue = localStorage.getItem(storageKey);
+
+        if (storedValue === null) {
+            return defaultValue;
+        }
+
+        return storedValue === "true";
+    }
+
+    function initializeJiraLoadOptions() {
+        const subtaskCheckbox = document.getElementById("loadSubtasksCheckbox");
+        const figmaCheckbox = document.getElementById("loadFigmaCheckbox");
+
+        if (subtaskCheckbox) {
+            subtaskCheckbox.checked = readStoredCheckboxValue(
+                JIRA_LOAD_SUBTASKS_STORAGE_KEY,
+                subtaskCheckbox.checked,
+            );
+        }
+
+        if (figmaCheckbox) {
+            figmaCheckbox.checked = readStoredCheckboxValue(
+                JIRA_LOAD_FIGMA_STORAGE_KEY,
+                figmaCheckbox.checked,
+            );
+        }
+
+        syncJiraLoadOptions(false);
+    }
+
+    function syncJiraLoadOptions(savePreferences = true) {
+        const subtaskCheckbox = document.getElementById("loadSubtasksCheckbox");
+        const subtaskField = document.getElementById("loadSubtasksField");
+        const figmaCheckbox = document.getElementById("loadFigmaCheckbox");
+        const figmaField = document.getElementById("loadFigmaField");
+
+        if (subtaskCheckbox && subtaskField) {
+            subtaskField.value = subtaskCheckbox.checked ? "true" : "false";
+
+            if (savePreferences) {
+                localStorage.setItem(
+                    JIRA_LOAD_SUBTASKS_STORAGE_KEY,
+                    subtaskField.value,
+                );
+            }
+        }
+
+        if (figmaCheckbox && figmaField) {
+            figmaField.value = figmaCheckbox.checked ? "true" : "false";
+
+            if (savePreferences) {
+                localStorage.setItem(
+                    JIRA_LOAD_FIGMA_STORAGE_KEY,
+                    figmaField.value,
+                );
+            }
+        }
+    }
 
     function getSavedJiraPat() {
         return localStorage.getItem(JIRA_PAT_STORAGE_KEY) || "";
@@ -506,6 +607,8 @@
     }
 
     async function startJiraLoadJob(form) {
+        syncJiraLoadOptions();
+
         if (typeof showLoading === "function") {
             showLoading(
                 "Loading requirement from Jira...",
@@ -569,6 +672,7 @@
 
     document.addEventListener("DOMContentLoaded", function () {
         updateJiraPatStatus();
+        initializeJiraLoadOptions();
 
         const form = document.getElementById("jiraLoadForm");
 
@@ -588,7 +692,7 @@
             const issueKey = issueInput ? issueInput.value.trim() : "";
 
             if (!issueKey) {
-                alert("Please enter Jira Ticket ID.");
+                alert("Please enter at least one Jira Ticket ID.");
                 return;
             }
 

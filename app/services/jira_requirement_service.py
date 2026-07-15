@@ -154,6 +154,26 @@ def _safe_requirement_id(value: str) -> str:
     return value
 
 
+def parse_jira_ticket_ids(value: str) -> tuple[str, list[str]]:
+    """Parse a comma-separated Jira input into its main and supporting keys."""
+    ticket_ids: list[str] = []
+    seen: set[str] = set()
+
+    for item in (value or "").split(","):
+        ticket_id = item.strip().upper()
+
+        if not ticket_id or ticket_id in seen:
+            continue
+
+        ticket_ids.append(ticket_id)
+        seen.add(ticket_id)
+
+    if not ticket_ids:
+        raise ValueError("Please enter at least one Jira ticket ID.")
+
+    return ticket_ids[0], ticket_ids[1:]
+
+
 def _is_image_file(path: str | Path) -> bool:
     return Path(path).suffix.lower() in IMAGE_EXTENSIONS
 
@@ -294,13 +314,30 @@ def _verify_ssl() -> bool:
     ]
 
 
-def _include_subtasks() -> bool:
+def jira_subtasks_enabled_by_default() -> bool:
     return os.getenv("JIRA_INCLUDE_SUBTASKS", "true").lower() in [
         "1",
         "true",
         "yes",
         "y",
     ]
+
+
+def figma_enabled_by_default() -> bool:
+    return os.getenv("FIGMA_ENABLE_EXTRACTION", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _include_subtasks(load_subtasks: bool | None = None) -> bool:
+    if load_subtasks is not None:
+        return load_subtasks
+
+    return jira_subtasks_enabled_by_default()
 
 
 def _get_jira_client(
@@ -462,14 +499,18 @@ def _extract_figma_sources_safely(
     ticket_id: str,
     raw_sources: list[dict[str, str]],
     sanitized_texts: list[str] | None = None,
+    load_figma: bool | None = None,
 ) -> None:
-    figma_enabled = os.getenv("FIGMA_ENABLE_EXTRACTION", "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
-    }
+    figma_enabled = (
+        figma_enabled_by_default()
+        if load_figma is None
+        else load_figma
+    )
+
+    if not figma_enabled:
+        print(f"[INFO] Load Figma is disabled. Skipping Figma detection for {ticket_id}.")
+        return
+
     sanitized_texts = sanitized_texts or []
     raw_link_records = extract_figma_link_records_from_sources(
         raw_sources,
@@ -520,13 +561,6 @@ def _extract_figma_sources_safely(
         f"items={json.dumps(detected_summary, ensure_ascii=False)}"
     )
 
-    if not figma_enabled:
-        print(
-            f"[INFO] FIGMA_ENABLE_EXTRACTION=false. "
-            f"Skipping Figma extraction for {ticket_id}."
-        )
-        return
-
     if not raw_link_records:
         print(
             f"[INFO] No raw Figma links detected before sanitizer for {ticket_id}."
@@ -537,6 +571,7 @@ def _extract_figma_sources_safely(
         context = extract_figma_context_from_jira_texts(
             ticket_id=ticket_id,
             texts=[item.get("text", "") for item in raw_sources],
+            enabled=True,
         )
     except Exception as error:
         error_text = "".join(
@@ -568,6 +603,10 @@ def _write_refresh_metadata(
     issue_key: str,
     refresh_existing: bool,
     source_channel: str | None = None,
+    supporting_ticket_ids: list[str] | None = None,
+    load_subtasks: bool | None = None,
+    load_figma: bool | None = None,
+    supporting_ticket_warnings: list[str] | None = None,
 ) -> None:
     requirement_dir = REQUIREMENTS_ROOT / ticket_id
     metadata_file = requirement_dir / "metadata.json"
@@ -580,6 +619,16 @@ def _write_refresh_metadata(
     metadata["jira_key"] = issue_key
     metadata["source_channel"] = source_channel or metadata.get("source_channel") or "unknown"
     metadata["imported_from_jira"] = True
+    metadata["main_ticket_id"] = issue_key
+    metadata["supporting_ticket_ids"] = supporting_ticket_ids or []
+    metadata["all_ticket_ids"] = [issue_key, *(supporting_ticket_ids or [])]
+    metadata["load_subtasks"] = _include_subtasks(load_subtasks)
+    metadata["load_figma"] = (
+        figma_enabled_by_default()
+        if load_figma is None
+        else load_figma
+    )
+    metadata["supporting_ticket_warnings"] = supporting_ticket_warnings or []
 
     if refresh_existing:
         metadata["source_refreshed_at"] = _utc_now()
@@ -939,6 +988,7 @@ def _build_issue_markdown(
     comments: list,
     extracted_items: list,
     section_title: str,
+    heading_level: int = 2,
 ) -> str:
     fields = issue.get("fields", {})
 
@@ -956,7 +1006,8 @@ def _build_issue_markdown(
     )
     attachments = fields.get("attachment", []) or []
 
-    content = f"## {section_title}: {issue_key}\n\n"
+    heading = "#" * max(1, heading_level)
+    content = f"{heading} {section_title}: {issue_key}\n\n"
     content += f"### Title\n\n{summary}\n\n"
     content += f"### Issue Type\n\n{issue_type}\n\n"
     content += f"### Status\n\n{status}\n\n"
@@ -1059,13 +1110,153 @@ def _prepare_source_directory(
     return source_dir, jira_dir
 
 
+def _load_jira_issue_context(
+    *,
+    jira: Jira,
+    ticket_id: str,
+    issue_key: str,
+    jira_dir: Path,
+    jira_pat: str,
+    raw_figma_sources: list[dict[str, str]],
+    section_title: str,
+    source_prefix: str,
+    load_subtasks: bool,
+) -> tuple[str, dict]:
+    issue = jira.issue(
+        issue_key,
+        fields="summary,description,comment,attachment,subtasks,status,issuetype",
+    )
+    _write_json(jira_dir / f"{issue_key}_raw.json", issue)
+
+    comments = _get_issue_comments(jira, issue_key)
+    _append_raw_figma_source(
+        raw_figma_sources,
+        f"{source_prefix}:{issue_key}:description",
+        issue.get("fields", {}).get("description"),
+    )
+
+    for index, comment in enumerate(comments, start=1):
+        _append_raw_figma_source(
+            raw_figma_sources,
+            f"{source_prefix}:{issue_key}:comment:{index}",
+            comment.get("body"),
+        )
+
+    extracted_items = _download_and_extract_attachments(
+        jira=jira,
+        ticket_id=ticket_id,
+        issue_key=issue_key,
+        issue=issue,
+        comments=comments,
+        source_location=f"{section_title.lower()} attachment; related description/comments",
+        jira_pat=jira_pat,
+    )
+    content = _build_issue_markdown(
+        issue_key=issue_key,
+        issue=issue,
+        comments=comments,
+        extracted_items=extracted_items,
+        section_title=section_title,
+        heading_level=1,
+    )
+
+    if not load_subtasks:
+        return content + "## Sub-tasks\n\nSub-task loading is disabled.\n\n", issue
+
+    subtask_keys = _get_subtask_keys(issue)
+    content += f"## Sub-tasks for {issue_key}\n\n"
+
+    if not subtask_keys:
+        content += "No sub-tasks.\n\n"
+
+    for subtask_key in subtask_keys:
+        try:
+            sub_issue = jira.issue(
+                subtask_key,
+                fields="summary,description,comment,attachment,subtasks,status,issuetype",
+            )
+            _write_json(jira_dir / f"{subtask_key}_raw.json", sub_issue)
+            sub_comments = _get_issue_comments(jira, subtask_key)
+            _append_raw_figma_source(
+                raw_figma_sources,
+                f"{source_prefix}:{issue_key}:subtask:{subtask_key}:description",
+                sub_issue.get("fields", {}).get("description"),
+            )
+
+            for index, comment in enumerate(sub_comments, start=1):
+                _append_raw_figma_source(
+                    raw_figma_sources,
+                    f"{source_prefix}:{issue_key}:subtask:{subtask_key}:comment:{index}",
+                    comment.get("body"),
+                )
+
+            sub_extracted_items = _download_and_extract_attachments(
+                jira=jira,
+                ticket_id=ticket_id,
+                issue_key=subtask_key,
+                issue=sub_issue,
+                comments=sub_comments,
+                source_location=(
+                    f"sub-task of {issue_key}; related description/comments"
+                ),
+                jira_pat=jira_pat,
+            )
+            content += _build_issue_markdown(
+                issue_key=subtask_key,
+                issue=sub_issue,
+                comments=sub_comments,
+                extracted_items=sub_extracted_items,
+                section_title="Sub-task",
+                heading_level=3,
+            )
+        except Exception as error:
+            logger.warning(
+                "Could not load Jira sub-task. parent=%s subtask=%s error=%s",
+                issue_key,
+                subtask_key,
+                error,
+            )
+            content += (
+                f"### Sub-task: {subtask_key}\n\n"
+                f"Failed to fetch sub-task: {error}\n\n"
+            )
+
+    return content, issue
+
+
 def create_requirement_from_jira(
     issue_key: str,
     jira_pat: str = "",
     refresh_existing: bool = False,
     source_channel: str | None = None,
+    supporting_ticket_ids: list[str] | None = None,
+    load_subtasks: bool | None = None,
+    load_figma: bool | None = None,
 ) -> str:
-    issue_key = issue_key.strip().upper()
+    issue_key, parsed_supporting_ids = parse_jira_ticket_ids(issue_key)
+    requested_supporting_ids = [
+        *parsed_supporting_ids,
+        *(supporting_ticket_ids or []),
+    ]
+    normalized_supporting_ids: list[str] = []
+    seen_ticket_ids = {issue_key}
+
+    for supporting_id in requested_supporting_ids:
+        normalized_id = (supporting_id or "").strip().upper()
+
+        if not normalized_id or normalized_id in seen_ticket_ids:
+            continue
+
+        normalized_supporting_ids.append(normalized_id)
+        seen_ticket_ids.add(normalized_id)
+
+    supporting_ticket_ids = normalized_supporting_ids
+    should_load_subtasks = _include_subtasks(load_subtasks)
+    should_load_figma = (
+        figma_enabled_by_default()
+        if load_figma is None
+        else load_figma
+    )
     ticket_id = _safe_requirement_id(issue_key)
 
     requirement_dir = REQUIREMENTS_ROOT / ticket_id
@@ -1098,133 +1289,59 @@ def create_requirement_from_jira(
         refresh_existing=refresh_existing,
     )
 
-    main_issue = jira.issue(
-        issue_key,
-        fields="summary,description,comment,attachment,subtasks,status,issuetype",
-    )
-
-    raw_issue_file = jira_dir / f"{issue_key}_raw.json"
-
-    raw_issue_file.write_text(
-        json.dumps(
-            main_issue,
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-
-    main_comments = _get_issue_comments(
-        jira,
-        issue_key,
-    )
     raw_figma_sources: list[dict[str, str]] = []
-    _append_raw_figma_source(
-        raw_figma_sources,
-        "description",
-        main_issue.get("fields", {}).get("description"),
-    )
+    supporting_ticket_warnings: list[str] = []
 
-    for index, comment in enumerate(main_comments, start=1):
-        _append_raw_figma_source(
-            raw_figma_sources,
-            f"comment:{issue_key}:{index}",
-            comment.get("body"),
+    try:
+        markdown, main_issue = _load_jira_issue_context(
+            jira=jira,
+            ticket_id=ticket_id,
+            issue_key=issue_key,
+            jira_dir=jira_dir,
+            jira_pat=jira_pat,
+            raw_figma_sources=raw_figma_sources,
+            section_title="Main Jira Ticket",
+            source_prefix="main",
+            load_subtasks=should_load_subtasks,
         )
-
-    main_extracted_items = _download_and_extract_attachments(
-        jira=jira,
-        ticket_id=ticket_id,
-        issue_key=issue_key,
-        issue=main_issue,
-        comments=main_comments,
-        source_location="main issue attachment; related description/comments",
-        jira_pat=jira_pat,
-    )
+    except Exception as error:
+        raise RuntimeError(f"Failed to load main Jira ticket {issue_key}.") from error
 
     update_job_progress(
         current_step="Extracting attachments",
         message="Downloaded Jira attachments and extracted file contents.",
     )
 
-    markdown = f"# Jira Requirement: {issue_key}\n\n"
+    for supporting_id in supporting_ticket_ids:
+        markdown += "\n---\n\n"
 
-    markdown += _build_issue_markdown(
-        issue_key=issue_key,
-        issue=main_issue,
-        comments=main_comments,
-        extracted_items=main_extracted_items,
-        section_title="Main Ticket",
+        try:
+            supporting_markdown, _ = _load_jira_issue_context(
+                jira=jira,
+                ticket_id=ticket_id,
+                issue_key=supporting_id,
+                jira_dir=jira_dir,
+                jira_pat=jira_pat,
+                raw_figma_sources=raw_figma_sources,
+                section_title="Supporting Jira Ticket",
+                source_prefix="supporting",
+                load_subtasks=should_load_subtasks,
+            )
+            markdown += supporting_markdown
+        except Exception as error:
+            warning = (
+                f"Supporting ticket {supporting_id} could not be loaded and was skipped."
+            )
+            supporting_ticket_warnings.append(warning)
+            logger.warning("%s error=%s", warning, error)
+            markdown += f"# Supporting Jira Ticket: {supporting_id}\n\n> Warning: {warning}\n"
+
+    context_guidance = (
+        "The first/main Jira ticket is the primary requirement. Supporting Jira "
+        "tickets only enrich or clarify it and must not override it unless the "
+        "relationship is explicit."
     )
-
-    if _include_subtasks():
-        subtask_keys = _get_subtask_keys(main_issue)
-
-        markdown += "\n# Subtasks\n\n"
-
-        if not subtask_keys:
-            markdown += "No subtasks.\n\n"
-
-        for subtask_key in subtask_keys:
-            try:
-                sub_issue = jira.issue(
-                    subtask_key,
-                    fields="summary,description,comment,attachment,subtasks,status,issuetype",
-                )
-
-                sub_raw_file = jira_dir / f"{subtask_key}_raw.json"
-
-                sub_raw_file.write_text(
-                    json.dumps(
-                        sub_issue,
-                        indent=2,
-                        ensure_ascii=False,
-                    ),
-                    encoding="utf-8",
-                )
-
-                sub_comments = _get_issue_comments(
-                    jira,
-                    subtask_key,
-                )
-                _append_raw_figma_source(
-                    raw_figma_sources,
-                    f"subtask:{subtask_key}:description",
-                    sub_issue.get("fields", {}).get("description"),
-                )
-
-                for index, comment in enumerate(sub_comments, start=1):
-                    _append_raw_figma_source(
-                        raw_figma_sources,
-                        f"subtask:{subtask_key}:comment:{index}",
-                        comment.get("body"),
-                    )
-
-                sub_extracted_items = _download_and_extract_attachments(
-                    jira=jira,
-                    ticket_id=ticket_id,
-                    issue_key=subtask_key,
-                    issue=sub_issue,
-                    comments=sub_comments,
-                    source_location="subtask attachment; related subtask description/comments",
-                    jira_pat=jira_pat,
-                )
-
-                markdown += _build_issue_markdown(
-                    issue_key=subtask_key,
-                    issue=sub_issue,
-                    comments=sub_comments,
-                    extracted_items=sub_extracted_items,
-                    section_title="Subtask",
-                )
-
-            except Exception as error:
-                markdown += (
-                    f"## Subtask: {subtask_key}\n\n"
-                    f"Failed to fetch subtask: {error}\n\n"
-                )
-    else:
-        markdown += "\n# Subtasks\n\nSubtask loading is disabled.\n\n"
+    markdown = f"> {context_guidance}\n\n{markdown.strip()}\n"
 
     raw_markdown_file = jira_dir / f"{issue_key}_raw.md"
     markdown_file = jira_dir / f"{issue_key}.md"
@@ -1261,6 +1378,7 @@ def create_requirement_from_jira(
         ticket_id=ticket_id,
         raw_sources=raw_figma_sources,
         sanitized_texts=[markdown],
+        load_figma=should_load_figma,
     )
 
     update_job_progress(
@@ -1283,6 +1401,10 @@ def create_requirement_from_jira(
         issue_key=issue_key,
         refresh_existing=refresh_existing,
         source_channel=source_channel,
+        supporting_ticket_ids=supporting_ticket_ids,
+        load_subtasks=should_load_subtasks,
+        load_figma=should_load_figma,
+        supporting_ticket_warnings=supporting_ticket_warnings,
     )
 
     return ticket_id
