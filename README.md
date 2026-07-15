@@ -342,7 +342,46 @@ FIGMA_ALLOW_FIRST_PAGE_FALLBACK=false
 FIGMA_ACCESS_TOKEN=
 ```
 
-### 4.8 Telegram
+### 4.8 Knowledge System
+
+The Web Portal exposes `/portal/knowledge` as a directory of project-specific
+knowledge assistants and RAG systems. Enable it and select the project config
+file in `.env`:
+
+```env
+KNOWLEDGE_SYSTEM_ENABLED=true
+KNOWLEDGE_SYSTEM_LINK_TARGET=_blank
+KNOWLEDGE_SYSTEM_CONFIG_PATH=config/knowledge_projects.json
+KNOWLEDGE_SYSTEM_PROJECTS_JSON=
+KNOWLEDGE_SYSTEM_ALLOW_HTTP=false
+```
+
+Add assistants to `config/knowledge_projects.json`:
+
+```json
+[
+  {
+    "key": "weclever",
+    "name": "Weclever Business Knowledge Assistant",
+    "description": "RAG assistant for Weclever business knowledge and project information.",
+    "url": "https://chatgpt.com/g/g-6a54488069d081919d0131b19972abca-weclever-business-knowledge-assistant",
+    "enabled": true,
+    "tags": ["Business", "Requirement", "RAG"]
+  }
+]
+```
+
+If the config file is missing or not configured, the service can load the same
+JSON array from `KNOWLEDGE_SYSTEM_PROJECTS_JSON`. Disabled entries are omitted.
+HTTPS is required by default. Set `KNOWLEDGE_SYSTEM_ALLOW_HTTP=true` only for a
+trusted internal knowledge system that cannot use HTTPS.
+
+The portal only opens configured external links. It does not embed ChatGPT,
+scrape or automate its UI, or forward chat messages. Authentication and access
+remain controlled by ChatGPT or the external knowledge system. Do not include
+access tokens, credentials, or other secrets in assistant URLs.
+
+### 4.9 Telegram
 
 Required only when running Telegram Bot.
 

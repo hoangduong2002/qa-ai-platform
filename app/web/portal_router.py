@@ -78,6 +78,7 @@ from app.services.test_design_workflow_service import (
 from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
 from app.services.llm_router_service import test_all_llm_providers
+from app.services.knowledge_system_service import load_knowledge_system
 from app.services.portal_ai_mode_service import (
     get_current_portal_ai_mode,
     get_default_ai_mode,
@@ -186,6 +187,18 @@ async def chat_page(request: Request):
             "sessions": list_chat_sessions(),
             "portal_default_ai_mode": get_default_ai_mode(),
         },
+    )
+
+
+@router.get("/knowledge", response_class=HTMLResponse)
+async def knowledge_system_page(request: Request):
+    context = load_knowledge_system()
+    context["portal_default_ai_mode"] = get_default_ai_mode()
+
+    return templates.TemplateResponse(
+        request,
+        "knowledge_system.html",
+        context,
     )
 
 

@@ -1,0 +1,14 @@
+[
+  {
+    "key": "weclever",
+    "name": "Weclever Business Knowledge Assistant",
+    "description": "RAG assistant for Weclever business knowledge and project information.",
+    "url": "https://chatgpt.com/g/g-6a54488069d081919d0131b19972abca-weclever-business-knowledge-assistant",
+    "enabled": true,
+    "tags": [
+      "Business",
+      "Requirement",
+      "RAG"
+    ]
+  }
+]
