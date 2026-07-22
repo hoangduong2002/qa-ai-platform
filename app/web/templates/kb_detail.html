@@ -1,0 +1,105 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Knowledge Base: {{ kb.kb_id }}</h2>
+  <p>{{ kb.name }}</p>
+  <p class="small">{{ kb.description }}</p>
+  <p class="small">Enabled: {{ kb.enabled }}</p>
+  <p><a href="/portal/kb/{{ kb.kb_id }}/search">Open Search Playground</a></p>
+  {% if error_message %}
+    <div class="placeholder-box">{{ error_message }}</div>
+  {% endif %}
+  {% if not maintainer_configured %}
+    <div class="placeholder-box">Read-only access. Configure KNOWLEDGE_BASE_MAINTAINER_TOKEN on the server to enable management operations.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Index Health</h3>
+  <pre>{{ health | tojson(indent=2) }}</pre>
+  <form method="post" action="/portal/kb/{{ kb.kb_id }}/reindex">
+    <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+    <button type="submit">Rebuild Index</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Collections</h3>
+  <h4>Create Collection</h4>
+  <form method="post" action="/portal/kb/{{ kb.kb_id }}/collections">
+    <input type="text" name="collection_id" placeholder="collection_id" required />
+    <input type="text" name="name" placeholder="name" required />
+    <input type="text" name="description" placeholder="description" />
+    <input type="number" name="priority" value="100" />
+    <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+    <button type="submit">Create</button>
+  </form>
+
+  {% if collections %}
+    <ul>
+      {% for c in collections %}
+      <li>
+        {{ c.collection_id }} - {{ c.name }} (priority={{ c.priority }}, archived={{ c.archived }})
+        <form method="post" action="/portal/kb/{{ kb.kb_id }}/collections/{{ c.collection_id }}" style="margin-top: 6px;">
+          <input type="text" name="name" value="{{ c.name }}" required />
+          <input type="text" name="description" value="{{ c.description }}" />
+          <input type="number" name="priority" value="{{ c.priority }}" />
+          <label><input type="checkbox" name="archived" value="true" {% if c.archived %}checked{% endif %} /> archived</label>
+          <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+          <button type="submit">Update</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="placeholder-box">No collections yet.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Documents</h3>
+  <h4>Upload Document</h4>
+  <form method="post" action="/portal/kb/{{ kb.kb_id }}/documents/upload" enctype="multipart/form-data">
+    <input type="text" name="collection_id" placeholder="collection_id" required />
+    <input type="text" name="document_id" placeholder="document_id" required />
+    <input type="text" name="title" placeholder="title" required />
+    <input type="text" name="source_type" value="portal" />
+    <input type="text" name="external_id" placeholder="external_id" />
+    <input type="number" step="0.01" min="0" max="1" name="confidence" value="1.0" />
+    <input type="text" name="effective_from" placeholder="effective_from (ISO)" />
+    <input type="text" name="effective_to" placeholder="effective_to (ISO)" />
+    <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+    <input type="file" name="file" required />
+    <button type="submit">Upload + Validate Preview</button>
+  </form>
+
+  {% if documents %}
+    <ul>
+      {% for d in documents %}
+      <li>
+        {{ d.document_id }} - {{ d.title }} (status={{ d.status }}, version={{ d.version }})
+        <details>
+          <summary>Preview</summary>
+          <pre>{{ d.parsing_preview | tojson(indent=2) }}</pre>
+        </details>
+        <form method="post" action="/portal/kb/{{ kb.kb_id }}/documents/{{ d.document_id }}/publish" style="display: inline-block;">
+          <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+          <button type="submit">Publish</button>
+        </form>
+        <form method="post" action="/portal/kb/{{ kb.kb_id }}/documents/{{ d.document_id }}/archive" style="display: inline-block;">
+          <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+          <button type="submit">Archive</button>
+        </form>
+        <form method="post" action="/portal/kb/{{ kb.kb_id }}/documents/{{ d.document_id }}/supersede" style="display: inline-block;">
+          <input type="text" name="replacement_document_id" placeholder="replacement_document_id" required />
+          <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+          <button type="submit">Supersede</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="placeholder-box">No documents yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

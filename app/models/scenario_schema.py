@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class TestScenario(TypedDict):
@@ -12,3 +12,5 @@ class TestScenario(TypedDict):
     description: str
 
     related_requirements: list[str]
+
+    coverage_ids: NotRequired[list[str]]

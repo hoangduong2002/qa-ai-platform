@@ -39,6 +39,20 @@ def save_analysis(
     )
 
 
+def save_structured_analysis(
+    ticket_id: str,
+    analysis: dict,
+):
+
+    return save_json(
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "structured_analysis.json",
+        analysis,
+    )
+
+
 def save_requirement_items(
     ticket_id: str,
     requirement_items: list
@@ -334,5 +348,86 @@ def save_analysis_error(
     )
 
     return str(output_file)
+
+    return str(output_file)
+
+
+def save_structured_analysis_raw_response(
+    ticket_id: str,
+    content: str,
+    attempt: int = 1,
+):
+
+    suffix = "" if attempt <= 1 else f"_attempt{attempt}"
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / f"structured_analysis_raw_response{suffix}.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        content,
+        encoding="utf-8"
+    )
+
+    return str(output_file)
+
+
+def save_structured_analysis_parse_error(
+    ticket_id: str,
+    error_content: str,
+    attempt: int = 1,
+):
+
+    suffix = "" if attempt <= 1 else f"_attempt{attempt}"
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / f"structured_analysis_parse_error{suffix}.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        error_content,
+        encoding="utf-8"
+    )
+
+    return str(output_file)
+
+
+def save_structured_analysis_error(
+    ticket_id: str,
+    error_content: str,
+):
+
+    output_file = (
+        Path("requirements")
+        / ticket_id
+        / "analysis"
+        / "structured_analysis_error.txt"
+    )
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file.write_text(
+        error_content,
+        encoding="utf-8"
+    )
 
     return str(output_file)

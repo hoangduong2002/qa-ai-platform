@@ -17,6 +17,26 @@ app = FastAPI(
 
 app.include_router(portal_router)
 
+
+def _kb_enabled() -> bool:
+    import os
+
+    return os.getenv("KNOWLEDGE_BASE_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+if _kb_enabled():
+    from knowledge.api.router import router as knowledge_api_router
+    from knowledge.api.ui_router import router as knowledge_ui_router
+
+    app.include_router(knowledge_api_router)
+    app.include_router(knowledge_ui_router)
+
 @app.get("/")
 async def root():
     return RedirectResponse(

@@ -10,6 +10,7 @@ from app.services.llm_router_service import (
     call_text_llm,
 )
 from app.services.portal_ai_mode_service import get_current_portal_ai_mode
+from app.services.coverage_model.service import build_scenario_coverage_context
 from app.utils.prompt_loader import load_prompt
 from app.utils.llm_json import parse_json
 from app.utils.file_writer import save_scenarios, save_raw_response
@@ -752,11 +753,39 @@ def _deduplicate_scenarios(scenarios: list) -> list:
     return result
 
 
+def _inject_coverage_model_context(
+    prompt: str,
+    active_coverage_model: dict | None,
+) -> str:
+    if not active_coverage_model:
+        return prompt
+
+    coverage_context = build_scenario_coverage_context(active_coverage_model)
+    marker = "Approved Test Case Structure Batch:"
+    guidance = (
+        "COVERAGE MODEL (enabled mode only):\n"
+        "- Cover applicable mandatory, boundary, negative, integration, permission, "
+        "state-transition, and regression-risk conditions below.\n"
+        "- Do not generate scenarios for excluded or out-of-scope combinations.\n"
+        "- Do not treat uncovered questions as confirmed behavior.\n"
+        "- Add an optional coverage_ids array to a scenario when it implements listed "
+        "coverage conditions.\n"
+        "- Do not expand dimensions into a full Cartesian product.\n"
+        f"{json.dumps(coverage_context, indent=2, ensure_ascii=False)}\n\n"
+    )
+
+    if marker not in prompt:
+        return f"{prompt.rstrip()}\n\n{guidance}"
+
+    return prompt.replace(marker, f"{guidance}{marker}", 1)
+
+
 def _generate_scenarios_for_structure_batch(
     ticket_id: str,
     requirement_summary: dict,
     test_scope: dict,
     requirement_items: list,
+    active_coverage_model: dict | None,
     approved_structure: dict,
     structure_batch: dict,
     ai_mode: str | None = None,
@@ -770,7 +799,10 @@ def _generate_scenarios_for_structure_batch(
         batch_id,
     )
 
-    prompt = load_prompt("prompts/generate_structure_batch_scenarios.md")
+    prompt = _inject_coverage_model_context(
+        load_prompt("prompts/generate_structure_batch_scenarios.md").rstrip("\r\n"),
+        active_coverage_model,
+    )
 
     final_prompt = (
         prompt
@@ -947,6 +979,7 @@ def generate_scenarios(state):
                 state.get("requirement_summary", {}),
                 state.get("test_scope", {}),
                 state.get("analysis", {}).get("requirement_items", []),
+                state.get("active_coverage_model"),
                 approved_structure,
                 structure_batch,
                 ai_mode,

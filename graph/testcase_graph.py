@@ -4,8 +4,10 @@ from app.models.state import QAState
 
 from graph.nodes.load_requirement import load_requirement
 from graph.nodes.analyze_requirement import analyze_requirement
+from graph.nodes.enrich_requirement_analysis import enrich_requirement_analysis
 from graph.nodes.generate_clarifications import generate_clarifications
 from graph.nodes.generate_test_scope import generate_test_scope
+from graph.nodes.build_coverage_model import build_coverage_model
 from graph.nodes.generate_scenarios import generate_scenarios
 from graph.nodes.generate_testcases import generate_testcases
 from graph.nodes.review_coverage import review_coverage
@@ -26,6 +28,11 @@ builder.add_node(
 )
 
 builder.add_node(
+    "enrich_requirement_analysis",
+    enrich_requirement_analysis
+)
+
+builder.add_node(
     "generate_clarifications",
     generate_clarifications
 )
@@ -33,6 +40,11 @@ builder.add_node(
 builder.add_node(
     "generate_test_scope",
     generate_test_scope
+)
+
+builder.add_node(
+    "build_coverage_model",
+    build_coverage_model
 )
 
 builder.add_node(
@@ -71,6 +83,11 @@ builder.add_edge(
 
 builder.add_edge(
     "analyze_requirement",
+    "enrich_requirement_analysis"
+)
+
+builder.add_edge(
+    "enrich_requirement_analysis",
     "generate_clarifications"
 )
 
@@ -81,6 +98,11 @@ builder.add_edge(
 
 builder.add_edge(
     "generate_test_scope",
+    "build_coverage_model"
+)
+
+builder.add_edge(
+    "build_coverage_model",
     "generate_scenarios"
 )
 

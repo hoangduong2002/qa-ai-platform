@@ -1571,8 +1571,17 @@ def generate_testcases(state):
         manifest_file,
     )
 
+    # Phase 8 rollout runs V2 only after the complete V1 result has been
+    # produced and persisted. In shadow mode the rollout explicitly returns
+    # this V1 list as production output, so legacy review/export paths remain
+    # unchanged.
+    from app.services.test_case_generator_v2.service import run_generator_rollout
+
+    rollout = run_generator_rollout(state, merged_testcases)
+
     return {
-        "testcases": merged_testcases,
+        "testcases": rollout.pop("production_testcases"),
         "function_testcase_results": function_results,
         "function_generation_manifest_file": manifest_file,
+        **rollout,
     }

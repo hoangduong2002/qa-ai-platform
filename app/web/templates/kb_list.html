@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Knowledge Bases</h2>
+  <p class="small">File-based knowledge bases for production operations.</p>
+  {% if error_message %}
+    <div class="placeholder-box">{{ error_message }}</div>
+  {% endif %}
+  {% if not maintainer_configured %}
+    <div class="placeholder-box">Read-only access. Configure KNOWLEDGE_BASE_MAINTAINER_TOKEN on the server to enable management operations.</div>
+  {% endif %}
+  {% if kbs %}
+    <ul>
+      {% for kb in kbs %}
+      <li><a href="/portal/kb/{{ kb.kb_id }}">{{ kb.kb_id }} - {{ kb.name }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="placeholder-box">No knowledge bases found.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Create Knowledge Base</h3>
+  {% if maintainer_configured %}
+  <form method="post" action="/portal/kb">
+    <input type="text" name="kb_id" placeholder="Knowledge Base ID" required />
+    <input type="text" name="name" placeholder="Name" required />
+    <input type="text" name="description" placeholder="Description" />
+    <input type="password" name="maintainer_token_value" placeholder="Maintainer token" required />
+    <button type="submit">Create</button>
+  </form>
+  {% else %}
+    <p class="small">Maintainer access is required to create a Knowledge Base.</p>
+  {% endif %}
+</div>
+{% endblock %}

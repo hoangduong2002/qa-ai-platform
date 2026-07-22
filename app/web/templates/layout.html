@@ -93,6 +93,9 @@
         <a class="header-link" href="/portal">Requirements</a>
         <a class="header-link" href="/portal/chat">AI Chat</a>
         <a class="header-link" href="/portal/knowledge">Knowledge System</a>
+        {% if knowledge_base_enabled is defined and knowledge_base_enabled() %}
+        <a class="header-link" href="/portal/kb">Knowledge Base</a>
+        {% endif %}
     </div>
     <div class="header-controls">
         <label class="header-ai-mode" for="portalAiModeSelect">

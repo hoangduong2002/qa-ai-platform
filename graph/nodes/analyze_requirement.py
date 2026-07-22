@@ -9,6 +9,12 @@ from app.services.llm_router_service import (
 from app.services.portal_ai_mode_service import (
     get_current_portal_ai_mode,
 )
+from app.services.structured_requirement_analysis_service import (
+    run_structured_requirement_analysis_shadow,
+)
+from app.services.requirement_quality.service import (
+    run_requirement_quality_gate,
+)
 from app.utils.prompt_loader import load_prompt
 from app.utils.file_writer import (
     save_analysis,
@@ -182,6 +188,21 @@ def analyze_requirement(state):
             f"Check raw response at {raw_response_path}."
         ) from error
 
+    shadow_updates = run_structured_requirement_analysis_shadow(
+        state,
+    )
+
+    structured_analysis = shadow_updates.get("structured_analysis")
+    quality_updates = run_requirement_quality_gate(
+        ticket_id=state["ticket_id"],
+        structured_analysis=structured_analysis,
+        ai_mode=ai_mode,
+    )
+
     return {
-        "analysis": analysis
+        "analysis": analysis,
+        **shadow_updates,
+        "quality_gate": quality_updates,
+        "quality_report": quality_updates.get("quality_report"),
+        "quality_report_error": quality_updates.get("error"),
     }

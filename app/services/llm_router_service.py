@@ -43,6 +43,8 @@ TASK_SCENARIO_COVERAGE_REVIEW = "scenario_coverage_review"
 TASK_SCENARIO_IMPROVEMENT = "scenario_improvement"
 TASK_TESTCASE_IMPROVEMENT = "testcase_improvement"
 TASK_FINAL_REVIEW = "final_review"
+TASK_TEST_QUALITY_REVIEW = "test_quality_review"
+TASK_TEST_QUALITY_CORRECTION = "test_quality_correction"
 TASK_CLARIFICATION_GENERATION = "clarification_generation"
 TASK_CHAT = "chat"
 TASK_COMPACT_CONTEXT = "compact_context"
@@ -76,6 +78,8 @@ TEXT_REASONING_TASK_TYPES = {
     TASK_SCENARIO_IMPROVEMENT,
     TASK_TESTCASE_IMPROVEMENT,
     TASK_FINAL_REVIEW,
+    TASK_TEST_QUALITY_REVIEW,
+    TASK_TEST_QUALITY_CORRECTION,
     TASK_CLARIFICATION_GENERATION,
     TASK_CHAT,
 }
@@ -493,6 +497,7 @@ def _call_deepseek(
     system_prompt: str | None,
     response_format: Any | None,
     timeout: float | None = None,
+    model_override: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     assert_deepseek_allowed()
 
@@ -504,7 +509,7 @@ def _call_deepseek(
     if _env_bool("FORCE_DISABLE_DEEPSEEK", False):
         raise RuntimeError("DeepSeek is disabled by FORCE_DISABLE_DEEPSEEK=true.")
 
-    model = _provider_model(PROVIDER_DEEPSEEK)
+    model = (model_override or "").strip() or _provider_model(PROVIDER_DEEPSEEK)
     _assert_deepseek_model_allowed(model)
 
     payload: dict[str, Any] = {
@@ -543,6 +548,7 @@ def _call_copilot(
     system_prompt: str | None = None,
     response_format: Any | None = None,
     timeout: float | None = None,
+    model_override: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     if _env_bool("FORCE_DISABLE_COPILOT", False):
         raise RuntimeError(
@@ -560,7 +566,7 @@ def _call_copilot(
         headers["Authorization"] = f"Bearer {api_key}"
 
     payload: dict[str, Any] = {
-        "model": _provider_model(PROVIDER_COPILOT),
+        "model": (model_override or "").strip() or _provider_model(PROVIDER_COPILOT),
         "messages": _messages(prompt, system_prompt),
     }
 
@@ -613,7 +619,7 @@ def _call_LOCAL(
         raise RuntimeError("LOCAL_BASE_URL is missing for local AI provider.")
 
     payload: dict[str, Any] = {
-        "model": _provider_model(provider),
+        "model": (kwargs.get("model_override") or "").strip() or _provider_model(provider),
         "messages": _messages(prompt, system_prompt),
         "stream": False,
         "options": {
@@ -656,6 +662,7 @@ def _call_provider(
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
     timeout = kwargs.pop("timeout", None)
+    model_override = kwargs.pop("model_override", None)
 
     if provider == PROVIDER_DEEPSEEK:
         return _call_deepseek(
@@ -663,6 +670,7 @@ def _call_provider(
             system_prompt,
             response_format,
             timeout=timeout,
+            model_override=model_override,
         )
 
     if provider == PROVIDER_COPILOT:
@@ -671,6 +679,7 @@ def _call_provider(
             system_prompt,
             response_format,
             timeout=timeout,
+            model_override=model_override,
         )
 
     return _call_LOCAL(
@@ -679,6 +688,7 @@ def _call_provider(
         system_prompt,
         response_format,
         timeout=timeout,
+        model_override=model_override,
         **kwargs,
     )
 
@@ -1141,7 +1151,8 @@ def call_text_llm(
     )
     resolution = resolve_provider_for_task(task_type, effective_ai_mode)
     provider = resolution["provider"]
-    model = resolution.get("model", "")
+    model_override = str(kwargs.pop("model_override", "") or "").strip()
+    model = model_override or resolution.get("model", "")
     provider_status = "success"
     input_chars = len(prompt or "") + len(system_prompt or "")
     started = time.time()
@@ -1154,6 +1165,8 @@ def call_text_llm(
     json_output_task = task_type in {
         TASK_REQUIREMENT_ANALYSIS,
         TASK_CLARIFICATION_GENERATION,
+        TASK_TEST_QUALITY_REVIEW,
+        TASK_TEST_QUALITY_CORRECTION,
     }
 
     if json_output_task and provider in {
@@ -1173,6 +1186,7 @@ def call_text_llm(
             system_prompt=system_prompt,
             response_format=kwargs.get("response_format"),
             temperature=kwargs.get("temperature", 0),
+            model_override=model_override,
         )
 
         duration_ms = int((time.time() - started) * 1000)
@@ -1247,6 +1261,7 @@ def call_llm_with_fallback(
     response_format: Any | None = None,
     ai_mode: str | None = None,
     source_channel: str | None = None,
+    model_override: str | None = None,
 ) -> LLMRouterResponse:
     effective_ai_mode = _resolve_effective_ai_mode(
         ai_mode,
@@ -1254,7 +1269,7 @@ def call_llm_with_fallback(
     )
     resolution = resolve_provider_for_task(task_type, effective_ai_mode)
     provider = resolution["provider"]
-    model = resolution.get("model", "")
+    model = (model_override or "").strip() or resolution.get("model", "")
     input_chars = len(prompt or "") + len(system_prompt or "")
     started = time.time()
 
@@ -1266,6 +1281,7 @@ def call_llm_with_fallback(
             prompt=prompt,
             system_prompt=system_prompt,
             response_format=response_format,
+            model_override=model_override,
         )
         duration = time.time() - started
     except Exception as error:

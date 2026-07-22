@@ -461,7 +461,15 @@ def get_requirement_detail(
     clarifications_file = analysis_dir / "clarifications.json"
     clarification_snapshot_file = analysis_dir / "clarification_questions_snapshot.json"
     clarification_answers_file = analysis_dir / "clarification_answers.json"
+    clarification_questions_v2_file = analysis_dir / "clarification_questions_v2.json"
     requirement_summary_file = analysis_dir / "requirement_summary.json"
+    quality_report_file = analysis_dir / "quality_report.json"
+    quality_report_error_file = analysis_dir / "quality_report_error.txt"
+    knowledge_dir = base_dir / "knowledge"
+    selected_references_file = knowledge_dir / "selected_references.json"
+    rejected_references_file = knowledge_dir / "rejected_references.json"
+    knowledge_conflicts_file = knowledge_dir / "conflicts.json"
+    reference_context_file = knowledge_dir / "reference_context.md"
 
     if not base_dir.exists():
         raise FileNotFoundError(
@@ -510,6 +518,27 @@ def get_requirement_detail(
         requirement_summary_file
     )
 
+    quality_report = _read_json(
+        quality_report_file
+    )
+
+    clarification_questions_v2_raw = _read_json(
+        clarification_questions_v2_file
+    )
+    clarification_questions_v2 = []
+    if isinstance(clarification_questions_v2_raw, dict):
+        questions = clarification_questions_v2_raw.get("questions", [])
+        if isinstance(questions, list):
+            clarification_questions_v2 = questions
+    elif isinstance(clarification_questions_v2_raw, list):
+        clarification_questions_v2 = clarification_questions_v2_raw
+
+    quality_report_error = _read_text(quality_report_error_file)
+    selected_references = _read_json(selected_references_file) or []
+    rejected_references = _read_json(rejected_references_file) or []
+    knowledge_conflicts = _read_json(knowledge_conflicts_file) or []
+    reference_context = _read_text(reference_context_file)
+
     analysis_error_file = analysis_dir / "analyze_error.txt"
     analysis_error = _read_text(analysis_error_file)
     incremental_requirement_items = _read_latest_versioned_json(
@@ -553,6 +582,13 @@ def get_requirement_detail(
             0,
         ),
         "requirement_summary": requirement_summary,
+        "quality_report": quality_report,
+        "quality_report_error": quality_report_error,
+        "clarification_questions_v2": clarification_questions_v2,
+        "selected_references": selected_references,
+        "rejected_references": rejected_references,
+        "knowledge_conflicts": knowledge_conflicts,
+        "reference_context": reference_context,
         "change_impact_report": load_latest_change_impact_report(ticket_id),
         "regeneration_plan": load_latest_regeneration_plan(ticket_id),
         "incremental_requirement_items": incremental_requirement_items,
@@ -565,6 +601,10 @@ def get_requirement_detail(
         "has_items": requirement_items_file.exists(),
         "has_summary": requirement_summary_file.exists(),
         "has_clarifications": len(clarifications_with_answers) > 0,
+        "has_quality_report": bool(quality_report),
+        "has_clarifications_v2": len(clarification_questions_v2) > 0,
+        "has_selected_references": len(selected_references) > 0,
+        "has_knowledge_conflicts": len(knowledge_conflicts) > 0,
         "has_incremental_testcases": has_incremental_testcases,
     }
 

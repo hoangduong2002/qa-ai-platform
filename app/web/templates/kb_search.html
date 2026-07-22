@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Search Playground: {{ kb.kb_id }}</h2>
+  <form method="get" action="/portal/kb/{{ kb.kb_id }}/search">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search query" required style="width: 60%;" />
+    <select name="collection_id">
+      <option value="">All collections</option>
+      {% for c in collections %}
+      <option value="{{ c.collection_id }}" {% if selected_collection_id == c.collection_id %}selected{% endif %}>{{ c.collection_id }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="top_k" min="1" max="100" value="{{ top_k }}" />
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Results</h3>
+  {% if search_results %}
+    <ul>
+      {% for item in search_results %}
+      <li>
+        <b>{{ item.document_id }}</b> / {{ item.collection_id }} / score={{ item.score }}
+        <br/>
+        <small>{{ item.source_citation }}</small>
+        <pre>{{ item.content }}</pre>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="placeholder-box">No results.</div>
+  {% endif %}
+</div>
+{% endblock %}

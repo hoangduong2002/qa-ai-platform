@@ -18,6 +18,7 @@ from app.utils.review_session import save_review_session
 from app.utils.test_structure_store import load_approved_test_case_structure
 from graph.nodes.generate_scenarios import generate_scenarios
 from graph.nodes.generate_test_scope import generate_test_scope
+from graph.nodes.build_coverage_model import build_coverage_model
 from graph.nodes.generate_testcases import generate_testcases
 from graph.test_generation_graph import test_generation_graph
 
@@ -244,6 +245,7 @@ def generate_scope_and_scenarios(
     _apply_ai_state(state, ai_mode, source_channel)
 
     state.update(generate_test_scope(state))
+    state.update(build_coverage_model(state))
     state.update(generate_scenarios(state))
 
     scenarios = state.get("scenarios", [])
@@ -346,6 +348,15 @@ def export_generated_testcases_excel(
         result.get("approved_test_case_structure")
         or artifacts.get("approved_test_case_structure")
         or {}
+    )
+
+    from app.services.traceability_gate.export_guard import guard_export
+
+    guard_export(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        testcase_version=version or "latest",
+        export_format="function_based_xlsx",
     )
 
     excel_file = export_function_based_testcases_to_excel(

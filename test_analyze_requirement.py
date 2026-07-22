@@ -1,4 +1,4 @@
-from dotenv import load_dotenv
+from app.config.env_loader import load_project_env
 
 from graph.nodes.load_requirement import (
     load_requirement,
@@ -13,7 +13,7 @@ from app.services.requirement_sanitization_service import (
 )
 
 
-load_dotenv()
+load_project_env()
 
 state = {
     "ticket_id": "EVNWCL-5221",

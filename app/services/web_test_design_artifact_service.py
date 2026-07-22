@@ -623,6 +623,15 @@ def export_testcases_excel(ticket_id: str, version: str) -> Path:
     if not testcases:
         raise ValueError("No test cases found.")
 
+    from app.services.traceability_gate.export_guard import guard_export
+
+    guard_export(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        testcase_version=version,
+        export_format="function_based_xlsx",
+    )
+
     excel_file = export_function_based_testcases_to_excel(
         ticket_id=ticket_id,
         testcases=testcases,
@@ -662,11 +671,9 @@ def _latest_versioned_json(
     return _read_json_file(latest_path, default=default)
 
 
-def export_incremental_testcases_excel(ticket_id: str) -> Path:
+def get_incremental_testcases(ticket_id: str) -> list:
     root = _root(ticket_id)
     generated_dir = root / "generated"
-    analysis_dir = root / "analysis"
-
     testcases = _read_json_file(
         generated_dir / "latest_testcases.json",
         default=[],
@@ -680,8 +687,25 @@ def export_incremental_testcases_excel(ticket_id: str) -> Path:
             [],
         )
 
+    return testcases
+
+
+def export_incremental_testcases_excel(ticket_id: str) -> Path:
+    root = _root(ticket_id)
+    analysis_dir = root / "analysis"
+    testcases = get_incremental_testcases(ticket_id)
+
     if not testcases:
         raise ValueError("No incremental test cases found.")
+
+    from app.services.traceability_gate.export_guard import guard_export
+
+    guard_export(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        testcase_version="incremental-latest",
+        export_format="incremental_xlsx",
+    )
 
     merge_report = _latest_versioned_json(
         analysis_dir,

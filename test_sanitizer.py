@@ -1,11 +1,11 @@
-from dotenv import load_dotenv
+from app.config.env_loader import load_project_env
 from pathlib import Path
 
 from app.services.requirement_sanitization_service import (
     sanitize_requirement_for_analysis,
 )
 
-load_dotenv()
+load_project_env()
 
 ticket_id = "TEST-SANITIZE"
 

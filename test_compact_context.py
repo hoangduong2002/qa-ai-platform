@@ -1,13 +1,13 @@
 import sys
 
-from dotenv import load_dotenv
+from app.config.env_loader import load_project_env
 
 from app.services.requirement_compact_context_service import (
     build_compact_requirement_context,
 )
 
 
-load_dotenv()
+load_project_env()
 
 
 ticket_id = sys.argv[1] if len(sys.argv) > 1 else "TEST-FIGMA"

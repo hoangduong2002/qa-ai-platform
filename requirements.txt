@@ -60,6 +60,10 @@ requests==2.34.2
 PyYAML==6.0.3
 orjson==3.11.9
 tqdm==4.67.3
+filelock==3.18.0
+jsonlines==4.0.0
+markdown-it-py==4.0.0
+charset-normalizer==3.4.3
 
 # =========================
 # Jira (MVP2)

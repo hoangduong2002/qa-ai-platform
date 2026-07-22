@@ -348,7 +348,7 @@ def _get_jira_client(
     verify_ssl = _verify_ssl()
 
     if not jira_url:
-        raise ValueError("JIRA_SERVER_URL is missing in .env")
+        raise ValueError("JIRA_SERVER_URL is missing from the layered environment configuration")
 
     jira_url = jira_url.rstrip("/")
     jira_pat = (jira_pat or "").strip()
@@ -366,7 +366,7 @@ def _get_jira_client(
         if not token:
             raise ValueError(
                 "Jira PAT is missing. Please enter PAT in Web Portal "
-                "or set JIRA_PAT/JIRA_API_TOKEN in .env."
+                "or set JIRA_PAT/JIRA_API_TOKEN in .env.secrets or the process environment."
             )
 
         return Jira(
@@ -380,7 +380,7 @@ def _get_jira_client(
 
     if not username or not password:
         raise ValueError(
-            "JIRA_USERNAME and JIRA_PASSWORD/JIRA_API_TOKEN are missing in .env"
+            "JIRA_USERNAME and JIRA_PASSWORD/JIRA_API_TOKEN are missing from .env.secrets or the process environment"
         )
 
     return Jira(

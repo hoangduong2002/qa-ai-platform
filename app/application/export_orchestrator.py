@@ -64,6 +64,15 @@ def export_generation_result_to_excel(
         or {}
     )
 
+    from app.services.traceability_gate.export_guard import guard_export
+
+    guard_export(
+        ticket_id=ticket_id,
+        testcases=testcases,
+        testcase_version=version or "latest",
+        export_format="function_based_xlsx",
+    )
+
     excel_file = export_function_based_testcases_to_excel(
         ticket_id=ticket_id,
         testcases=testcases,

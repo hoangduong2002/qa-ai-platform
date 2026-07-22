@@ -17,10 +17,13 @@ python -m venv .venv
 
 pip install -r requirements.txt
 copy .env.example .env
-New-Item .env.secrets -ItemType File
-````
+copy .env.ai.example .env.ai
+copy .env.qa.example .env.qa
+copy .env.secrets.example .env.secrets
+```
 
-Update `.env` and `.env.secrets`, then run Web Portal:
+Update the four local files, run `python -m app.config.check`, then start the
+Web Portal:
 
 ```powershell
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -72,34 +75,37 @@ pip install -r requirements-dev.txt
 
 ## 3. Environment Setup
 
-Create `.env` from the template:
+Create the four local layers from their templates:
 
 ```powershell
 copy .env.example .env
+copy .env.ai.example .env.ai
+copy .env.qa.example .env.qa
+copy .env.secrets.example .env.secrets
 ```
 
-Create `.env.secrets` for real API keys and tokens:
-
-```powershell
-New-Item .env.secrets -ItemType File
-```
-
-Recommended rule:
+The loader applies this deterministic precedence (rightmost wins):
 
 ```text
-.env          = non-secret runtime configuration
-.env.secrets  = API keys, tokens, credentials only
-.env.example  = safe template committed to Git
+.env < .env.ai < .env.qa < .env.secrets < process environment
 ```
 
-Do not commit `.env` or `.env.secrets`.
+All four files are optional. `.env` owns base runtime settings, `.env.ai` owns
+provider/routing settings, `.env.qa` owns QA workflow feature flags, and
+`.env.secrets` owns credentials. Do not commit local layers; commit only their
+matching `*.example` files.
 
 If they were already tracked:
 
 ```powershell
 git rm --cached .env
+git rm --cached .env.ai
+git rm --cached .env.qa
 git rm --cached .env.secrets
 ```
+
+See `docs/environment_configuration.md` for ownership, deployment injection,
+validation, and migration details.
 
 ---
 
@@ -111,7 +117,7 @@ At minimum, configure one AI provider.
 
 Use this when running `PRODUCTION_HYBRID_DEEPSEEK` or `DEEPSEEK_ONLY`.
 
-`.env`:
+`.env.ai`:
 
 ```env
 TELEGRAM_AI_MODE=PRODUCTION_HYBRID_DEEPSEEK
@@ -134,14 +140,17 @@ DEEPSEEK_API_KEY=
 
 Use this when running `PRODUCTION_HYBRID_COPILOT` or `COPILOT_ONLY`.
 
+Place these non-secret settings in `.env.ai`:
+
 ```env
 COPILOT_BASE_URL=http://localhost:3100/v1/chat/completions
 COPILOT_MODEL=claude-sonnet-4.6
 COPILOT_TIMEOUT=120
-COPILOT_API_KEY=
 FORCE_DISABLE_COPILOT=false
 MAX_CONCURRENT_COPILOT_CALLS=2
 ```
+
+Store `COPILOT_API_KEY` in `.env.secrets`.
 
 Smoke-test the Copilot-compatible endpoint:
 
@@ -381,7 +390,140 @@ scrape or automate its UI, or forward chat messages. Authentication and access
 remain controlled by ChatGPT or the external knowledge system. Do not include
 access tokens, credentials, or other secrets in assistant URLs.
 
-### 4.9 Telegram
+### 4.9 Coverage Model Builder (Phase 7)
+
+Phase 7 builds a deterministic structured coverage model between test-scope
+generation and scenario generation:
+
+```env
+COVERAGE_MODEL_MODE=off
+```
+
+Allowed modes are `off`, `shadow`, and `enabled`. `off` preserves the legacy
+scenario path without writing coverage artifacts. `shadow` writes
+`requirements/<ticket>/test-design/coverage_model.json` and
+`coverage_analysis.md` but does not alter scenario prompts. `enabled` adds a
+concise coverage context to the existing scenario generator. The legacy
+`COVERAGE_MODEL_ENABLED` setting remains supported for backward compatibility,
+but new configuration should use `COVERAGE_MODEL_MODE`.
+
+### 4.10 Test Case Generator V2 (Phase 8)
+
+Phase 8 adds a source-grounded V2 generator behind a versioned rollout setting:
+
+```env
+TEST_CASE_GENERATOR_VERSION=v1
+```
+
+Supported values are `v1`, `v2-shadow`, `v2-manual`, and `v2`. Use
+`v2-shadow` for the Phase 8 rollout. It runs V1 and V2 independently, keeps V1
+as the production/UI/export result, and writes these comparison artifacts:
+
+- `requirements/<ticket>/test-design/testcases_v1.json`
+- `requirements/<ticket>/test-design/testcases_v2.json`
+- `requirements/<ticket>/test-design/generator_comparison.json`
+
+V2 only receives the Jira source, structured or explicitly approved enriched
+analysis, ACCEPTED Knowledge Base references, unresolved conflicts, the Phase 7
+coverage model, approved scenarios, and scope/output constraints. Unsupported
+expected behavior is rejected unless it is explicitly recorded as an assumption
+or unresolved question. Set the flag back to `v1` for immediate rollback.
+
+### 4.11 Independent Test Quality Review (Phase 9)
+
+Phase 9 adds deterministic validation followed by an independent reviewer and
+a bounded correction cycle:
+
+```text
+Generator V2 -> Reviewer -> Corrector -> Reviewer
+```
+
+There are at most two review attempts and one correction attempt. Enable the
+Phase 9 warning rollout with:
+
+```env
+TEST_QUALITY_REVIEW_ENABLED=true
+TEST_QUALITY_REVIEW_MODE=warn
+```
+
+Modes are `off`, `warn`, and `block_export`. Warning mode records blockers but
+does not change the current export. `block_export` rejects export while the
+final report status is `NEEDS_QA_REVIEW`.
+
+The reviewer and corrector have separate task types and prompts. They may also
+use provider/model profiles independent from generation:
+
+```env
+TEST_QUALITY_REVIEW_AI_MODE=
+TEST_QUALITY_REVIEW_MODEL=
+TEST_QUALITY_CORRECTOR_AI_MODE=
+TEST_QUALITY_CORRECTOR_MODEL=
+```
+
+Phase 9 writes `test_quality_report.json`, `correction_history.json`, and
+`testcases_v2_reviewed.json` under `requirements/<ticket>/test-design/`.
+
+### 4.12 Traceability Gate and Export Protection (Phase 10)
+
+Phase 10 builds `requirements/<ticket>/traceability.json`, connecting Jira
+sections, acceptance criteria, business rules, approved Knowledge Base
+references, coverage conditions, scenarios, test cases, and expected results.
+Edges are emitted only when both endpoint objects exist; stale references are
+reported as validation issues.
+
+Progressive rollout starts with report-only traceability and a warning guard:
+
+```env
+TRACEABILITY_GATE_ENABLED=true
+EXPORT_QUALITY_GATE_ENABLED=true
+EXPORT_QUALITY_GATE_MODE=warn
+```
+
+Change `EXPORT_QUALITY_GATE_MODE` to `block` to enforce configured rules. Each
+rule can be controlled independently with the `EXPORT_GATE_BLOCK_*` settings in
+`.env.qa.example`. The guard wraps the existing full and incremental XLSX
+exporters; it does not duplicate workbook generation.
+
+Authorized QA Lead overrides require a named identity, reason, scope, timestamp,
+and all affected blocker IDs:
+
+```env
+EXPORT_GATE_QA_LEAD_IDS=qa.lead@example.com
+```
+
+Overrides are appended to
+`requirements/<ticket>/audit/export_overrides.jsonl`. Setting both Phase 10
+feature flags to `false` restores the previous export path.
+
+### 4.13 QA Feedback and Continuous Evaluation (Phase 11)
+
+The testcase page can record authorized accept, edit, reject, quality, coverage,
+and reference decisions. Events are appended under
+`requirements/<ticket>/feedback/testcase_feedback.jsonl`; testcase bodies are
+represented by canonical SHA-256 hashes, and aggregate reports contain no Jira
+or testcase body text.
+
+```env
+QA_FEEDBACK_REVIEWER_IDS=qa.user@example.com
+GOLDEN_DATASET_REVIEWER_IDS=qa.lead@example.com
+```
+
+Golden dataset changes are explicit reviewer actions. They anonymize the ticket,
+create an immutable version under `evaluation/datasets/<dataset>/versions/`, and
+record the approval, reason, versions, and hashes in `manifest.json`. Existing
+expectations cannot be replaced without an expectation-change reason. No
+production ticket is added automatically and no model training occurs.
+
+Run deterministic, credential-free regression evaluation with:
+
+```powershell
+python -m evaluation.run --dataset weclever_golden --deterministic --compare-baseline evaluation/baselines/weclever_golden.json --thresholds evaluation/critical_thresholds.json --fail-on-regression
+```
+
+See `evaluation/README.md` for prompt/model/retrieval/ranking comparisons,
+per-domain reports, privacy-safe trend reports, and the controlled golden CLI.
+
+### 4.14 Telegram
 
 Required only when running Telegram Bot.
 
@@ -390,6 +532,17 @@ Required only when running Telegram Bot.
 ```env
 TELEGRAM_BOT_TOKEN=
 ```
+
+### 4.15 Production rollout and rollback
+
+Use `config/production-rollout.env` for the conservative Phase 0–11 rollout and
+`config/rollback.env` for code-free restoration of the original analysis, V1
+generator, reviewer-off mode, and original exporter. Validate either profile
+with `python -m app.services.rollout_readiness`.
+
+The complete setup, FTS5, backup, restore, index rebuild, interrupted-publish,
+rollout, rollback and troubleshooting procedures are in
+`docs/production_rollout.md`.
 
 ---
 
@@ -489,10 +642,12 @@ pytest test_figma_export.py
 
 ### 5.4 Check Effective Environment
 
-Use this when the app appears to read old `.env` values.
+Use this when the app appears to read stale or unexpected layered values. The
+report masks credentials and identifies duplicate, misplaced, unknown, and
+deprecated keys.
 
 ```powershell
-python -c "from app.config.env_loader import load_project_env; import os; load_project_env(); print('PWD=', os.getcwd()); print('TELEGRAM_AI_MODE=', os.getenv('TELEGRAM_AI_MODE')); print('PORTAL_DEFAULT_AI_MODE=', os.getenv('PORTAL_DEFAULT_AI_MODE')); print('DEEPSEEK_MODEL=', os.getenv('DEEPSEEK_MODEL')); print('LOCAL_BASE_URL=', os.getenv('LOCAL_BASE_URL'))"
+python -m app.config.check
 ```
 
 ### 5.5 Stop Existing Python Processes

@@ -61,6 +61,8 @@
                 <button class="side-action" type="submit">Generate Summary</button>
             </form>
 
+            <a class="side-action" href="/portal/requirements/{{ ticket_id }}/knowledge-review">Review Knowledge References</a>
+
             {% if has_analysis %}
                 <a class="side-action" href="/portal/requirements/{{ ticket_id }}/analysis/excel">Download Analysis Excel</a>
             {% endif %}
@@ -74,8 +76,10 @@
                 <a class="side-link" href="#requirement-info">Requirement Info</a>
                 <a class="side-link" href="#sanitized-requirement">Sanitized Requirement</a>
                 <a class="side-link" href="#requirement-analysis">Requirement Analysis</a>
+                <a class="side-link" href="#requirement-quality">Requirement Quality</a>
                 <a class="side-link" href="#requirement-items">Requirement Items</a>
                 <a class="side-link" href="#clarifications">Clarifications</a>
+                <a class="side-link" href="#clarifications-v2">Clarification Questions v2</a>
                 <a class="side-link" href="#requirement-summary">Requirement Summary</a>
                 <a class="side-link" href="#raw-source-data">Raw Source Data</a>
             </details>
@@ -213,6 +217,7 @@
                 {% if has_sanitized %}<span class="status ok">Sanitized</span>{% else %}<span class="status missing">Not Sanitized</span>{% endif %}
                 {% if has_analysis %}<span class="status ok">Analysis Ready</span>{% else %}<span class="status missing">No Analysis</span>{% endif %}
                 {% if has_clarifications %}<span class="status ok">Clarifications Ready</span>{% else %}<span class="status missing">No Clarifications</span>{% endif %}
+                {% if has_quality_report %}<span class="status ok">Quality Report Ready</span>{% else %}<span class="status missing">No Quality Report</span>{% endif %}
                 {% if has_summary %}<span class="status ok">Summary Ready</span>{% else %}<span class="status missing">No Summary</span>{% endif %}
             </div>
 
@@ -362,6 +367,27 @@
 
             <div id="incremental-export-links" class="card">
                 <h3>Export Links</h3>
+                {% if incremental_export_gate_status %}
+                    <div class="section-block">
+                        <div class="section-title">Incremental Export Readiness</div>
+                        <div class="status {% if incremental_export_gate_status.status in ['ALLOWED', 'OVERRIDDEN'] %}ok{% elif incremental_export_gate_status.status == 'BLOCKED' %}missing{% endif %}">{{ incremental_export_gate_status.status }}</div>
+                        {% if incremental_export_gate_status.error %}<div class="placeholder-box">{{ incremental_export_gate_status.error }}</div>{% endif %}
+                        {% if incremental_export_gate_status.blockers %}
+                            <ul>{% for blocker in incremental_export_gate_status.blockers %}<li><code>{{ blocker.blocker_id }}</code> — {{ blocker.explanation }}</li>{% endfor %}</ul>
+                        {% endif %}
+                        {% if incremental_export_gate_status.status == 'BLOCKED' and export_override_available %}
+                            <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/export-override">
+                                <input type="hidden" name="testcase_version" value="incremental-latest">
+                                <input type="hidden" name="export_format" value="incremental_xlsx">
+                                <input type="hidden" name="scope" value="incremental_xlsx:incremental-latest">
+                                <input type="hidden" name="affected_blocker_ids" value="{{ incremental_export_gate_status.blockers | map(attribute='blocker_id') | join(',') }}">
+                                <label>QA Lead identity</label><input type="text" name="user_identity" required>
+                                <label>Override reason</label><textarea name="reason" rows="3" required></textarea>
+                                <button type="submit" class="warning">Override Incremental Export Blockers</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                {% endif %}
                 <div class="mini-actions">
                     <a class="button" href="/portal/requirements/{{ ticket_id }}/testcases/incremental-excel">Export Incremental Excel</a>
                     {% if selected_testcases_json %}
@@ -422,6 +448,69 @@
                     {% endfor %}
                 {% else %}
                     <p>No requirement analysis output found.</p>
+                {% endif %}
+            </div>
+
+            <div id="requirement-quality" class="card">
+                <h3>Requirement Quality Gate</h3>
+                {% if quality_report %}
+                    <div class="summary-grid">
+                        <div class="metric-card"><div class="metric-label">Mode</div><div class="metric-value">{{ quality_report.mode or "warn" }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Quality Score</div><div class="metric-value">{{ quality_report.score if quality_report.score is not none else "N/A" }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Ready For Test Design</div><div class="metric-value">{% if quality_report.ready_for_test_design %}Yes{% else %}No{% endif %}</div></div>
+                        <div class="metric-card"><div class="metric-label">Blockers</div><div class="metric-value">{{ quality_report.blocking_issues | length if quality_report.blocking_issues else 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Warnings</div><div class="metric-value">{{ quality_report.warnings | length if quality_report.warnings else 0 }}</div></div>
+                        <div class="metric-card"><div class="metric-label">Missing Information</div><div class="metric-value">{{ quality_report.missing_information | length if quality_report.missing_information else 0 }}</div></div>
+                    </div>
+
+                    {% if quality_report.blocking_issues and quality_report.blocking_issues | length > 0 %}
+                        <div class="section-block">
+                            <div class="section-title">Blocking Issues</div>
+                            <table class="visual-table">
+                                <thead><tr><th>Issue ID</th><th>Type</th><th>Field</th><th>Explanation</th><th>Question</th></tr></thead>
+                                <tbody>
+                                    {% for issue in quality_report.blocking_issues %}
+                                        <tr>
+                                            <td><b>{{ issue.issue_id }}</b></td>
+                                            <td>{{ issue.issue_type }}</td>
+                                            <td>{{ issue.affected_field }}</td>
+                                            <td>{{ issue.explanation }}</td>
+                                            <td>{{ issue.proposed_question }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+
+                    {% if quality_report.warnings and quality_report.warnings | length > 0 %}
+                        <div class="section-block">
+                            <div class="section-title">Warnings</div>
+                            <table class="visual-table">
+                                <thead><tr><th>Issue ID</th><th>Type</th><th>Field</th><th>Explanation</th><th>Question</th></tr></thead>
+                                <tbody>
+                                    {% for issue in quality_report.warnings %}
+                                        <tr>
+                                            <td><b>{{ issue.issue_id }}</b></td>
+                                            <td>{{ issue.issue_type }}</td>
+                                            <td>{{ issue.affected_field }}</td>
+                                            <td>{{ issue.explanation }}</td>
+                                            <td>{{ issue.proposed_question }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p>No requirement quality report found.</p>
+                {% endif %}
+
+                {% if quality_report_error %}
+                    <div class="card alert error">
+                        <h4>Quality Gate Error</h4>
+                        <pre>{{ quality_report_error }}</pre>
+                    </div>
                 {% endif %}
             </div>
 
@@ -528,6 +617,28 @@
                     </form>
                 {% else %}
                     <p>No clarification questions found.</p>
+                {% endif %}
+            </div>
+
+            <div id="clarifications-v2" class="card">
+                <h3>Clarification Questions v2 (Issue-linked)</h3>
+                {% if clarification_questions_v2 and clarification_questions_v2 | length > 0 %}
+                    <table class="visual-table">
+                        <thead><tr><th>Question ID</th><th>Issue ID</th><th>Severity</th><th>Affected Field</th><th>Question</th></tr></thead>
+                        <tbody>
+                            {% for item in clarification_questions_v2 %}
+                                <tr>
+                                    <td><b>{{ item.question_id or ("Q2-" ~ loop.index) }}</b></td>
+                                    <td>{{ item.issue_id or "N/A" }}</td>
+                                    <td>{{ item.severity or "WARNING" }}</td>
+                                    <td>{{ item.affected_field or "analysis" }}</td>
+                                    <td>{{ item.question or "" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No v2 clarification questions found.</p>
                 {% endif %}
             </div>
 
@@ -721,6 +832,37 @@
                         </a>
                     {% endif %}
                 </div>
+                {% if export_gate_status %}
+                    <div class="section-block">
+                        <div class="section-title">Export Readiness</div>
+                        <div class="status {% if export_gate_status.status in ['ALLOWED', 'OVERRIDDEN'] %}ok{% elif export_gate_status.status == 'BLOCKED' %}missing{% endif %}">{{ export_gate_status.status }}</div>
+                        {% if export_gate_status.error %}<div class="placeholder-box">{{ export_gate_status.error }}</div>{% endif %}
+                        <div class="metric-grid compact">
+                            <div class="metric-card"><div class="metric-label">Blockers</div><div class="metric-value">{{ export_gate_status.blockers | length }}</div></div>
+                            <div class="metric-card"><div class="metric-label">Uncovered Requirements</div><div class="metric-value">{{ export_gate_status.uncovered_requirements | length }}</div></div>
+                            <div class="metric-card"><div class="metric-label">Unsupported Results</div><div class="metric-value">{{ export_gate_status.unsupported_results | length }}</div></div>
+                            <div class="metric-card"><div class="metric-label">Conflicts</div><div class="metric-value">{{ export_gate_status.conflicts | length }}</div></div>
+                        </div>
+                        <div class="ai-mode-status">QA approval: {% if export_gate_status.approval_status.gate_disabled %}Gate disabled{% elif export_gate_status.approval_status.approved %}Approved{% else %}Missing for selected version{% endif %}</div>
+                        {% if export_gate_status.blockers %}
+                            <ul>{% for blocker in export_gate_status.blockers %}<li><code>{{ blocker.blocker_id }}</code> — {{ blocker.explanation }}</li>{% endfor %}</ul>
+                        {% endif %}
+                        {% if export_gate_status.warnings %}
+                            <details><summary>Warnings ({{ export_gate_status.warnings | length }})</summary><ul>{% for warning in export_gate_status.warnings %}<li><code>{{ warning.blocker_id }}</code> — {{ warning.explanation }}</li>{% endfor %}</ul></details>
+                        {% endif %}
+                        {% if export_gate_status.status == 'BLOCKED' and export_override_available %}
+                            <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/export-override">
+                                <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
+                                <input type="hidden" name="export_format" value="function_based_xlsx">
+                                <input type="hidden" name="scope" value="function_based_xlsx:{{ testcase_version }}">
+                                <input type="hidden" name="affected_blocker_ids" value="{{ export_gate_status.blockers | map(attribute='blocker_id') | join(',') }}">
+                                <label>QA Lead identity</label><input type="text" name="user_identity" required>
+                                <label>Override reason</label><textarea name="reason" rows="3" required></textarea>
+                                <button type="submit" class="warning">Override Export Blockers</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                {% endif %}
                 <div class="version-toolbar">
                     <form method="get" action="/portal/requirements/{{ ticket_id }}">
                         <input type="hidden" name="tab" value="design">
@@ -774,6 +916,42 @@
                     <div class="placeholder-box">No test cases match the selected execution type.</div>
                 {% else %}
                     <div class="placeholder-box">No test cases found.</div>
+                {% endif %}
+
+                {% if selected_testcases %}
+                    <div class="section-block">
+                        <div class="section-title">QA Feedback</div>
+                        {% if quality_feedback_available %}
+                            <form method="post" action="/portal/requirements/{{ ticket_id }}/testcases/feedback">
+                                <input type="hidden" name="testcase_version" value="{{ testcase_version }}">
+                                <label>Test case</label>
+                                <select name="test_case_id" required>
+                                    {% for testcase in selected_testcases %}
+                                        {% set case_id = testcase.test_case_id or testcase.testcase_id or testcase.id %}
+                                        {% if case_id %}<option value="{{ case_id }}">{{ case_id }} — {{ testcase.title or testcase.test_case or '' }}</option>{% endif %}
+                                    {% endfor %}
+                                </select>
+                                <label>Decision</label>
+                                <select name="action" required>{% for action in quality_feedback_actions %}<option value="{{ action }}">{{ action | replace('_', ' ') | title }}</option>{% endfor %}</select>
+                                <label>Reason</label>
+                                <select name="reason_code"><option value="">No additional reason</option>{% for reason in quality_feedback_reasons %}<option value="{{ reason }}">{{ reason | replace('_', ' ') | title }}</option>{% endfor %}</select>
+                                <label>Reviewer identity</label><input type="text" name="user_identity" required>
+                                <label>Optional comment</label><textarea name="comment" rows="2"></textarea>
+                                <label>Edited test case JSON (required only for Accepted With Edit)</label><textarea name="edited_testcase_json" rows="4"></textarea>
+                                <button type="submit" class="success">Record Feedback</button>
+                            </form>
+                        {% else %}
+                            <div class="placeholder-box">Configure QA_FEEDBACK_REVIEWER_IDS to enable feedback submission.</div>
+                        {% endif %}
+                        {% set feedback_summary = quality_feedback_dashboard.summary %}
+                        <div class="metric-grid compact">
+                            <div class="metric-card"><div class="metric-label">Review Decisions</div><div class="metric-value">{{ feedback_summary.event_count or 0 }}</div></div>
+                            <div class="metric-card"><div class="metric-label">QA Edit Rate</div><div class="metric-value">{{ '%.1f%%' | format((feedback_summary.metrics.test_design.qa_edit_rate or 0) * 100) }}</div></div>
+                            <div class="metric-card"><div class="metric-label">QA Rejection Rate</div><div class="metric-value">{{ '%.1f%%' | format((feedback_summary.metrics.test_design.qa_rejection_rate or 0) * 100) }}</div></div>
+                            <div class="metric-card"><div class="metric-label">Missing Coverage</div><div class="metric-value">{{ quality_feedback_dashboard.missing_coverage | length }}</div></div>
+                        </div>
+                        {% if quality_feedback_dashboard.missing_coverage %}<details><summary>Missing coverage report</summary><pre>{{ quality_feedback_dashboard.missing_coverage | tojson(indent=2) }}</pre></details>{% endif %}
+                    </div>
                 {% endif %}
             </div>
 

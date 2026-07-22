@@ -54,6 +54,7 @@ from app.services.web_test_design_artifact_service import (
     get_coverage_review_json,
     get_final_review,
     get_final_review_json,
+    get_incremental_testcases,
     get_scenarios_json,
     get_testcases,
     get_testcases_json,
@@ -79,6 +80,13 @@ from app.services.report_service import generate_system_report
 from app.services.web_report_preview_service import build_report_preview
 from app.services.llm_router_service import test_all_llm_providers
 from app.services.knowledge_system_service import load_knowledge_system
+from knowledge.services.config import knowledge_base_enabled
+from app.services.knowledge_reference_review.service import (
+    create_review_request,
+    load_review_dashboard,
+    review_reference_decision,
+)
+from app.services.knowledge_reference_review.models import RequestedDecision
 from app.services.portal_ai_mode_service import (
     get_current_portal_ai_mode,
     get_default_ai_mode,
@@ -125,6 +133,17 @@ from app.services.impact_mapping_service import (
     build_and_save_regeneration_plan,
     load_latest_regeneration_plan,
 )
+from app.services.traceability_gate.config import authorized_qa_leads
+from app.services.traceability_gate.export_guard import (
+    create_export_override,
+    evaluate_export,
+)
+from app.services.quality_feedback.models import FeedbackAction, FeedbackReason
+from app.services.quality_feedback.service import (
+    authorized_feedback_reviewers,
+    record_testcase_feedback,
+    ticket_quality_dashboard,
+)
 from fastapi.responses import JSONResponse
 
 
@@ -135,6 +154,7 @@ router = APIRouter(prefix="/portal", tags=["Web Portal"])
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 templates.env.globals["portal_default_ai_mode"] = get_default_ai_mode()
+templates.env.globals["knowledge_base_enabled"] = knowledge_base_enabled
 
 JIRA_SYNC_NOT_AVAILABLE = (
     "This requirement was not imported from Jira. Jira sync is not available."
@@ -558,6 +578,43 @@ async def requirement_detail(
         ),
     }
     selected_final_review = get_final_review(ticket_id, testcase_version)
+    incremental_testcases = get_incremental_testcases(ticket_id)
+    try:
+        export_gate_status = evaluate_export(
+            ticket_id=ticket_id,
+            testcases=selected_testcases,
+            testcase_version=testcase_version,
+            export_format="function_based_xlsx",
+        ).model_dump(mode="json")
+    except Exception as gate_error:
+        logger.exception("Failed to evaluate export gate. ticket_id=%s", ticket_id)
+        export_gate_status = {
+            "status": "UNAVAILABLE",
+            "gate_enabled": True,
+            "blockers": [],
+            "warnings": [],
+            "uncovered_requirements": [],
+            "unsupported_results": [],
+            "conflicts": [],
+            "approval_status": {},
+            "error": str(gate_error),
+        }
+    incremental_export_gate_status = None
+    if incremental_testcases:
+        try:
+            incremental_export_gate_status = evaluate_export(
+                ticket_id=ticket_id,
+                testcases=incremental_testcases,
+                testcase_version="incremental-latest",
+                export_format="incremental_xlsx",
+            ).model_dump(mode="json")
+        except Exception as gate_error:
+            incremental_export_gate_status = {
+                "status": "UNAVAILABLE",
+                "blockers": [],
+                "warnings": [],
+                "error": str(gate_error),
+            }
 
     detail.update(
         {
@@ -586,7 +643,15 @@ async def requirement_detail(
                 scenario_version,
             ),
             "selected_testcases_json": selected_testcases_json,
+            "selected_testcases": selected_testcases,
+            "quality_feedback_dashboard": ticket_quality_dashboard(ticket_id),
+            "quality_feedback_available": bool(authorized_feedback_reviewers()),
+            "quality_feedback_actions": [item.value for item in FeedbackAction],
+            "quality_feedback_reasons": [item.value for item in FeedbackReason],
             "selected_final_review": selected_final_review,
+            "export_gate_status": export_gate_status,
+            "export_override_available": bool(authorized_qa_leads()),
+            "incremental_export_gate_status": incremental_export_gate_status,
             "selected_final_review_json": get_final_review_json(
                 ticket_id,
                 testcase_version,
@@ -843,6 +908,103 @@ async def generate_summary(
         ),
     )
     return _redirect_detail(ticket_id)
+
+
+@router.get("/requirements/{ticket_id}/knowledge-review", response_class=HTMLResponse)
+async def knowledge_reference_review_page(request: Request, ticket_id: str, error: str = "", success: str = ""):
+    detail = get_requirement_detail(ticket_id)
+    dashboard = load_review_dashboard(ticket_id)
+    detail.update(
+        {
+            "error": error,
+            "success": success,
+            "review_dashboard": dashboard,
+        }
+    )
+    return templates.TemplateResponse(request, "knowledge_reference_review.html", detail)
+
+
+@router.post("/requirements/{ticket_id}/knowledge-review/search")
+async def search_knowledge_reference_candidates(
+    ticket_id: str,
+    reviewer_id: str = Form(""),
+    kb_id: str = Form(...),
+    query: str = Form(...),
+    retrieval_need: str = Form(""),
+    jira_issue_being_clarified: str = Form(""),
+):
+    try:
+        create_review_request(
+            ticket_id=ticket_id,
+            kb_id=kb_id,
+            query=query,
+            retrieval_need=retrieval_need or "General requirement clarification",
+            jira_issue_being_clarified=jira_issue_being_clarified or "General Jira statement",
+            reviewer_id=reviewer_id,
+            top_k=10,
+        )
+    except PermissionError as error:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error={str(error)}",
+            status_code=303,
+        )
+    except Exception as error:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error={str(error)}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}/knowledge-review?success=Candidate references retrieved.",
+        status_code=303,
+    )
+
+
+@router.post("/requirements/{ticket_id}/knowledge-review/decision")
+async def review_knowledge_reference_decision(
+    ticket_id: str,
+    source_result_id: str = Form(...),
+    requested_decision: str = Form(...),
+    decision_reason: str = Form(""),
+    review_note: str = Form(""),
+    reviewed_by: str = Form(""),
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
+
+    try:
+        decision = RequestedDecision(requested_decision)
+    except Exception:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error=Invalid review decision.",
+            status_code=303,
+        )
+
+    try:
+        review_reference_decision(
+            ticket_id=ticket_id,
+            source_result_id=source_result_id,
+            requested_decision=decision,
+            decision_reason=decision_reason or "Reviewer decision",
+            review_note=review_note,
+            reviewed_by=reviewed_by,
+            ai_mode=ai_mode,
+        )
+    except PermissionError as error:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error={str(error)}",
+            status_code=303,
+        )
+    except Exception as error:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error={str(error)}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}/knowledge-review?success=Reference review decision saved.",
+        status_code=303,
+    )
 
 
 @router.get("/requirements/{ticket_id}/analysis/excel")
@@ -1214,12 +1376,101 @@ async def approve_testcases_for_web(
     return _redirect_detail(ticket_id, tab="design", testcase_version="approved")
 
 
+@router.post("/requirements/{ticket_id}/testcases/feedback")
+async def submit_testcase_feedback(
+    ticket_id: str,
+    testcase_version: str = Form(...),
+    test_case_id: str = Form(...),
+    action: str = Form(...),
+    reason_code: str = Form(""),
+    user_identity: str = Form(...),
+    comment: str = Form(""),
+    edited_testcase_json: str = Form(""),
+):
+    cases = get_testcases(ticket_id, testcase_version)
+    original = next(
+        (
+            item for item in cases
+            if str(item.get("test_case_id") or item.get("testcase_id") or item.get("id") or "") == test_case_id
+        ),
+        None,
+    )
+    if original is None:
+        return _redirect_detail(ticket_id, tab="design", testcase_version=testcase_version, error=f"Test case {test_case_id!r} was not found in the selected version.")
+    try:
+        edited = json.loads(edited_testcase_json) if edited_testcase_json.strip() else None
+        record_testcase_feedback(
+            ticket_id=ticket_id,
+            test_case_id=test_case_id,
+            testcase_version=testcase_version,
+            action=action,
+            original_content=original,
+            edited_content=edited,
+            user=user_identity,
+            reason_codes=[reason_code] if reason_code else [],
+            comment=comment or None,
+        )
+    except (PermissionError, ValueError, json.JSONDecodeError) as error:
+        return _redirect_detail(ticket_id, tab="design", testcase_version=testcase_version, error=str(error))
+    return _redirect_detail(ticket_id, tab="design", testcase_version=testcase_version, success="QA feedback recorded.")
+
+
+@router.post("/requirements/{ticket_id}/testcases/export-override")
+async def override_testcase_export_gate(
+    ticket_id: str,
+    testcase_version: str = Form(...),
+    export_format: str = Form("function_based_xlsx"),
+    reason: str = Form(...),
+    user_identity: str = Form(...),
+    affected_blocker_ids: str = Form(...),
+    scope: str = Form(...),
+):
+    testcases = (
+        get_incremental_testcases(ticket_id)
+        if export_format == "incremental_xlsx"
+        else get_testcases(ticket_id, testcase_version)
+    )
+    try:
+        create_export_override(
+            ticket_id=ticket_id,
+            testcases=testcases,
+            testcase_version=testcase_version,
+            export_format=export_format,
+            reason=reason,
+            user_identity=user_identity,
+            affected_blocker_ids=[
+                item.strip() for item in affected_blocker_ids.split(",") if item.strip()
+            ],
+            scope=scope,
+        )
+    except (PermissionError, ValueError) as error:
+        return _redirect_detail(
+            ticket_id,
+            tab="analysis" if export_format == "incremental_xlsx" else "design",
+            testcase_version=(
+                "latest" if export_format == "incremental_xlsx" else testcase_version
+            ),
+            error=str(error),
+        )
+    return _redirect_detail(
+        ticket_id,
+        tab="analysis" if export_format == "incremental_xlsx" else "design",
+        testcase_version=(
+            "latest" if export_format == "incremental_xlsx" else testcase_version
+        ),
+        success="Export override recorded.",
+    )
+
+
 @router.get("/requirements/{ticket_id}/testcases/excel")
 async def download_testcases_excel(
     ticket_id: str,
     testcase_version: str = "latest",
 ):
-    excel_file = export_testcases_excel(ticket_id, testcase_version)
+    try:
+        excel_file = export_testcases_excel(ticket_id, testcase_version)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return FileResponse(
         path=str(excel_file),
         filename=excel_file.name,

@@ -159,6 +159,15 @@ def _build_clarification_answer_context(
     return "\n".join(lines).strip()
 
 
+def _build_enrichment_context(state: dict) -> str:
+    active_enrichment = state.get("active_enriched_analysis")
+
+    if not isinstance(active_enrichment, dict) or not active_enrichment:
+        return "Enrichment not active for this ticket (off/shadow/unapproved manual mode)."
+
+    return json.dumps(active_enrichment, indent=2, ensure_ascii=False)
+
+
 def generate_requirement_summary(
     state: dict,
 ) -> dict:
@@ -208,6 +217,7 @@ def generate_requirement_summary(
             clarification_answer_items
         )
     )
+    enrichment_context = _build_enrichment_context(state)
 
     logger.info(
         "Text reasoning node task_type=%s ai_mode=%s context_source=%s",
@@ -287,6 +297,9 @@ Requirement Items:
 
 Clarification Answers:
 {clarification_answer_context}
+
+Approved Enrichment Context (only if active):
+{enrichment_context}
 """
 
     content = call_text_llm(

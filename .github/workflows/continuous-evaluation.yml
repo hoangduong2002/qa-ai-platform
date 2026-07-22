@@ -1,0 +1,56 @@
+name: Continuous evaluation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "evaluation/**"
+      - "prompts/**"
+      - "app/services/quality_feedback/**"
+      - "app/services/test_case_generator_v2/**"
+      - "app/services/test_quality_review/**"
+
+jobs:
+  deterministic-evaluation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Deterministic tests
+        run: pytest -q tests/evaluation tests/test_quality_feedback.py tests/test_golden_dataset_management.py
+      - name: Deterministic golden evaluation
+        run: >-
+          python -m evaluation.run
+          --dataset weclever_golden
+          --deterministic
+          --compare-baseline evaluation/baselines/weclever_golden.json
+          --thresholds evaluation/critical_thresholds.json
+          --fail-on-regression
+          --output-dir reports/evaluation/ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deterministic-evaluation-report
+          path: reports/evaluation/ci
+
+  live-evaluation:
+    if: ${{ vars.ENABLE_LIVE_LLM_EVALUATION == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Optional live evaluation
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python -m evaluation.run --dataset weclever_golden --skip-live-without-credentials --output-dir reports/evaluation/live

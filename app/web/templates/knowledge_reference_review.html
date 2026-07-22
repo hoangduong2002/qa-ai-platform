@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+    <h2>Knowledge Reference Review: {{ ticket_id }}</h2>
+    <p>Review required: {% if review_dashboard.review_required %}<b>Yes</b>{% else %}<b>No</b>{% endif %}</p>
+    <div class="mini-actions">
+        <a class="button" href="/portal/requirements/{{ ticket_id }}?tab=analysis">Back to Requirement</a>
+    </div>
+</div>
+
+{% if error %}
+<div class="card alert error">
+    <h3>Error</h3>
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+
+{% if success %}
+<div class="card alert success">
+    <p>{{ success }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Retrieve Candidate References</h3>
+    <form method="post" action="/portal/requirements/{{ ticket_id }}/knowledge-review/search">
+        <label><b>Reviewer ID</b></label>
+        <input type="text" name="reviewer_id" placeholder="qa.user" required>
+
+        <label><b>Knowledge Base ID</b></label>
+        <input type="text" name="kb_id" placeholder="KB1" required>
+
+        <label><b>Retrieval Need</b></label>
+        <input type="text" name="retrieval_need" placeholder="Clarify settlement rounding rule" required>
+
+        <label><b>Jira issue being clarified</b></label>
+        <input type="text" name="jira_issue_being_clarified" placeholder="Is fee rounded up or half-up?" required>
+
+        <label><b>Search Query</b></label>
+        <input type="text" name="query" placeholder="rounding rule settlement fee" required>
+
+        <button class="success" type="submit">Retrieve Candidates</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Review Requests</h3>
+    {% if review_dashboard.requests and review_dashboard.requests | length > 0 %}
+        <table class="visual-table">
+            <thead><tr><th>Request</th><th>Need</th><th>Jira Clarification</th><th>Query</th><th>Status</th><th>Candidates</th></tr></thead>
+            <tbody>
+            {% for request in review_dashboard.requests %}
+                <tr>
+                    <td>{{ request.request_id }}</td>
+                    <td>{{ request.retrieval_need }}</td>
+                    <td>{{ request.jira_issue_being_clarified }}</td>
+                    <td>{{ request.query }}</td>
+                    <td>{{ request.status }}</td>
+                    <td>{{ request.result_ids | length if request.result_ids else 0 }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No review requests yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Candidate References</h3>
+    {% if review_dashboard.candidates and review_dashboard.candidates | length > 0 %}
+        {% for item in review_dashboard.candidates %}
+            <div class="question-card">
+                <div class="section-header">
+                    <div class="question-id">{{ item.result_id }}</div>
+                    {% if item.review and item.review.classification %}
+                        <span class="status ok">{{ item.review.classification }}</span>
+                    {% else %}
+                        <span class="status missing">Pending</span>
+                    {% endif %}
+                </div>
+
+                <p><b>Retrieval Need:</b> {{ item.retrieval_need }}</p>
+                <p><b>Jira Issue:</b> {{ item.jira_issue_being_clarified }}</p>
+                <p><b>Source:</b> {{ item.kb_id }} / {{ item.collection_id }} / {{ item.document_id }} / v{{ item.version }} / chunk {{ item.chunk_index }}</p>
+                <p><b>Metadata:</b> confidence={{ item.confidence }}, status={{ item.status }}, effective={{ item.effective_from or "N/A" }} -> {{ item.effective_to or "N/A" }}, source_type={{ item.source_type }}</p>
+                <p><b>Citation:</b> {{ item.citation }}</p>
+                <p><b>Excerpt</b></p>
+                <pre>{{ item.excerpt }}</pre>
+
+                {% if item.review and item.review.conflicts and item.review.conflicts | length > 0 %}
+                    <div class="card alert error">
+                        <h4>Conflict warnings</h4>
+                        <ul class="info-list">
+                            {% for conflict in item.review.conflicts %}
+                                <li>
+                                    <b>{{ conflict.conflict_type }}</b> | severity={{ conflict.severity }} | authoritative={{ conflict.authoritative_source }}
+                                    <br>{{ conflict.recommended_action }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="post" action="/portal/requirements/{{ ticket_id }}/knowledge-review/decision">
+                    <input type="hidden" name="source_result_id" value="{{ item.result_id }}">
+
+                    <label><b>Reviewer ID</b></label>
+                    <input type="text" name="reviewed_by" placeholder="qa.user" required>
+
+                    <label><b>Decision</b></label>
+                    <select name="requested_decision" required>
+                        <option value="ACCEPT">Accept</option>
+                        <option value="REJECT">Reject</option>
+                        <option value="MARK_OUTDATED">Mark outdated</option>
+                        <option value="MARK_HISTORICAL">Mark historical</option>
+                    </select>
+
+                    <label><b>Decision reason</b></label>
+                    <input type="text" name="decision_reason" placeholder="Aligned with current Jira acceptance criteria" required>
+
+                    <label><b>Review note</b></label>
+                    <textarea name="review_note" rows="3" placeholder="Optional note"></textarea>
+
+                    <button class="success" type="submit">Save Decision</button>
+                </form>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>No candidate references found. Run a retrieval request first.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Reference Artifacts</h3>
+    <div class="summary-grid">
+        <div class="metric-card"><div class="metric-label">Accepted</div><div class="metric-value">{{ selected_references | length if selected_references else 0 }}</div></div>
+        <div class="metric-card"><div class="metric-label">Rejected/Outdated</div><div class="metric-value">{{ rejected_references | length if rejected_references else 0 }}</div></div>
+        <div class="metric-card"><div class="metric-label">Conflicts</div><div class="metric-value">{{ knowledge_conflicts | length if knowledge_conflicts else 0 }}</div></div>
+    </div>
+
+    {% if reference_context %}
+        <h4>Accepted Reference Context</h4>
+        <pre>{{ reference_context }}</pre>
+    {% else %}
+        <p>No accepted reference context yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

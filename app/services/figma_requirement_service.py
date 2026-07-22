@@ -168,7 +168,7 @@ def _get_figma_token() -> str:
     if not token:
         raise ValueError(
             "FIGMA_ACCESS_TOKEN is missing. "
-            "Please create a Figma access token and set it in .env."
+            "Please create a Figma access token and set FIGMA_ACCESS_TOKEN in .env.secrets or the process environment."
         )
 
     return token
