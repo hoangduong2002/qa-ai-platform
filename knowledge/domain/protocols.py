@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
-from typing import Any
+from typing import Any, Iterable
 
 from knowledge.domain.models import (
     ChunkRecord,
@@ -29,6 +29,10 @@ class KnowledgeStorage(ABC):
 
     @abstractmethod
     def update_kb(self, kb_id: str, patch: dict[str, Any]) -> KnowledgeBaseMetadata:
+        raise NotImplementedError
+
+    @abstractmethod
+    def acquire_kb_metadata_lock(self) -> AbstractContextManager[None]:
         raise NotImplementedError
 
     @abstractmethod
@@ -64,7 +68,7 @@ class KnowledgeStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def save_published_chunks(self, kb_id: str, document_id: str, version: int, chunks: list[ChunkRecord]) -> str:
+    def save_published_chunks(self, kb_id: str, document_id: str, version: int, chunks: Iterable[ChunkRecord]) -> str:
         raise NotImplementedError
 
     @abstractmethod

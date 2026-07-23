@@ -221,6 +221,40 @@
                 {% if has_summary %}<span class="status ok">Summary Ready</span>{% else %}<span class="status missing">No Summary</span>{% endif %}
             </div>
 
+            <div id="knowledge-context" class="card">
+                <h3>Knowledge Context</h3>
+                <p><b>Jira Project:</b> {{ knowledge_snapshot.jira_project_key or "Not available" }}</p>
+                <p><b>Knowledge Base:</b>
+                    {% if knowledge_snapshot.knowledge_base_id %}
+                        {{ knowledge_snapshot.knowledge_base_name or knowledge_snapshot.knowledge_base_id }} (`{{ knowledge_snapshot.knowledge_base_id }}`)
+                    {% else %}
+                        Not mapped
+                    {% endif %}
+                </p>
+                <p><b>Retrieval Status:</b> {{ knowledge_snapshot.status or "not_attempted" }}</p>
+                <p>{{ knowledge_snapshot.status_message }}</p>
+                <p><b>References Used:</b> {{ knowledge_references_used_count or 0 }}</p>
+                {% if knowledge_snapshot.warnings %}
+                    <ul class="info-list">
+                        {% for warning in knowledge_snapshot.warnings %}<li>{{ warning }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+                {% if knowledge_snapshot.status == "no_mapping" and knowledge_base_enabled() %}
+                    <a class="button" href="/portal/kb">Configure Knowledge Base Mapping</a>
+                {% endif %}
+                <a class="button" href="/portal/requirements/{{ ticket_id }}/knowledge-review">Review Knowledge References</a>
+                {% if knowledge_snapshot.references %}
+                    <details>
+                        <summary>Top references used</summary>
+                        <ul class="info-list">
+                            {% for reference in knowledge_snapshot.references if reference.used_in_prompt %}
+                                <li>{{ reference.reference_id }} — {{ reference.title }} ({{ reference.collection_id }})</li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                {% endif %}
+            </div>
+
             {% if can_sync_jira %}
             <div id="change-impact-report" class="card">
                 <div class="section-header">

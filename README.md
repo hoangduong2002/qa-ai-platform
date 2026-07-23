@@ -544,6 +544,16 @@ The complete setup, FTS5, backup, restore, index rebuild, interrupted-publish,
 rollout, rollback and troubleshooting procedures are in
 `docs/production_rollout.md`.
 
+Bulk ZIP/folder Knowledge Base import, package rules, security limits and the
+preview/import workflow are documented in `docs/knowledge_package_import.md`.
+
+Knowledge Base Jira Project Key metadata, uniqueness rules, Portal management,
+and REST resolution are documented in `docs/jira_project_key_mapping.md`.
+
+Automatic Jira-to-Knowledge resolution, bounded retrieval, Analysis snapshots,
+optional reference review and reviewed reruns are documented in
+`docs/automatic_knowledge_retrieval.md`.
+
 ---
 
 ## 5. Run Commands

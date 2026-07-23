@@ -22,6 +22,9 @@ Rules:
 - Do not mark already answered items as missing information.
 - Do not invent business rules.
 - Only extract what is stated or clearly implied.
+- When a conclusion depends on Knowledge Base content, preserve its [REF-xxx] marker in the relevant output text.
+- Treat previous tests as coverage evidence and previous defects as historical evidence, not current requirements.
+- Explicitly report material Jira/Knowledge contradictions under risks or missing information.
 - Requirement IDs must be stable and readable.
 
 Expected JSON object:
@@ -54,3 +57,6 @@ Expected JSON object:
 
 Requirement:
 {requirement_context}
+
+Knowledge Context:
+{knowledge_context}

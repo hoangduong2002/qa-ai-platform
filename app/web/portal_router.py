@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.services.requirement_workflow_service import (
+    create_jira_requirement_and_run_analysis,
     run_incremental_requirement_questions,
     run_incremental_scenarios,
     run_incremental_testcases,
@@ -33,7 +34,6 @@ from app.services.web_design_artifact_service import (
 )
 from app.services.web_requirement_service import (
     create_manual_requirement,
-    create_requirement_from_jira_and_sanitize,
     delete_requirement,
     export_requirement_analysis_to_excel,
     export_requirement_summary_to_excel,
@@ -450,12 +450,14 @@ async def create_requirement_from_jira(
         ticket_id=ticket_id,
         action="create_requirement_from_jira",
         ai_mode_context=get_current_portal_ai_mode(),
-        job_callable=lambda: create_requirement_from_jira_and_sanitize(
+        job_callable=lambda: create_jira_requirement_and_run_analysis(
             issue_key=issue_key,
             jira_pat=jira_pat,
             refresh_existing=refresh_existing.lower() == "true",
             load_subtasks=load_subtasks,
             load_figma=load_figma,
+            ai_mode=(get_current_portal_ai_mode() or {}).get("ai_mode"),
+            source_channel="web",
         ),
         job_id=job_id,
     )
@@ -924,6 +926,23 @@ async def knowledge_reference_review_page(request: Request, ticket_id: str, erro
     return templates.TemplateResponse(request, "knowledge_reference_review.html", detail)
 
 
+@router.get("/requirements/{ticket_id}/knowledge-references")
+async def requirement_knowledge_references(ticket_id: str):
+    detail = get_requirement_detail(ticket_id)
+    dashboard = load_review_dashboard(ticket_id)
+    return JSONResponse(
+        {
+            "ticket_id": ticket_id,
+            "knowledge": detail.get("knowledge_snapshot"),
+            "review": {
+                "review_required": dashboard.get("review_required", False),
+                "review_count": dashboard.get("review_count", 0),
+                "candidates": dashboard.get("candidates", []),
+            },
+        }
+    )
+
+
 @router.post("/requirements/{ticket_id}/knowledge-review/search")
 async def search_knowledge_reference_candidates(
     ticket_id: str,
@@ -1003,6 +1022,36 @@ async def review_knowledge_reference_decision(
 
     return RedirectResponse(
         url=f"/portal/requirements/{ticket_id}/knowledge-review?success=Reference review decision saved.",
+        status_code=303,
+    )
+
+
+@router.post("/requirements/{ticket_id}/knowledge-review/rerun")
+async def rerun_analysis_with_reviewed_knowledge(
+    ticket_id: str,
+    reviewed_by: str = Form(""),
+    _: None = Depends(portal_ai_mode_dependency),
+):
+    ai_mode = (get_current_portal_ai_mode() or {}).get("ai_mode")
+    try:
+        await _run_ticket_job(
+            ticket_id=ticket_id,
+            action="rerun_analysis_with_reviewed_knowledge",
+            job_callable=lambda: run_requirement_questions(
+                ticket_id=ticket_id,
+                ai_mode=ai_mode,
+                source_channel="web",
+                use_reviewed_references=True,
+                adjusted_by=reviewed_by or "reviewer",
+            ),
+        )
+    except Exception as error:
+        return RedirectResponse(
+            url=f"/portal/requirements/{ticket_id}/knowledge-review?error={str(error)}",
+            status_code=303,
+        )
+    return RedirectResponse(
+        url=f"/portal/requirements/{ticket_id}/knowledge-review?success=Analysis re-run with reviewed references.",
         status_code=303,
     )
 

@@ -5,12 +5,84 @@
   <p>{{ kb.name }}</p>
   <p class="small">{{ kb.description }}</p>
   <p class="small">Enabled: {{ kb.enabled }}</p>
+  <h3>Jira Project Keys</h3>
+  {% if kb.jira_project_keys %}
+    <ul>
+      {% for project_key in kb.jira_project_keys %}
+        <li>{{ project_key }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="small">No Jira Project Keys assigned.</p>
+  {% endif %}
+  {% if maintainer_configured %}
+    <form method="post" action="/portal/kb/{{ kb.kb_id }}/jira-project-keys">
+      <label for="edit-jira-project-keys">Edit Jira Project Keys</label>
+      <input id="edit-jira-project-keys" type="text" name="jira_project_keys" value="{{ kb.jira_project_keys | join(', ') }}" placeholder="WEC, WECDEV" />
+      <p class="small">Use a comma-separated list. Leave empty to remove all assignments.</p>
+      <input type="password" name="maintainer_token_value" placeholder="Maintainer token" required />
+      <button type="submit">Update Jira Project Keys</button>
+    </form>
+  {% endif %}
   <p><a href="/portal/kb/{{ kb.kb_id }}/search">Open Search Playground</a></p>
   {% if error_message %}
     <div class="placeholder-box">{{ error_message }}</div>
   {% endif %}
   {% if not maintainer_configured %}
     <div class="placeholder-box">Read-only access. Configure KNOWLEDGE_BASE_MAINTAINER_TOKEN on the server to enable management operations.</div>
+  {% endif %}
+</div>
+
+<div class="card" id="knowledge-package-import">
+  <h3>Import Knowledge Package</h3>
+  <p class="small">
+    Upload a ZIP package (recommended) or select a folder. Direct child folders
+    become collections; supported files below them become documents. Inspecting
+    a package never changes the Knowledge Base.
+  </p>
+  {% if maintainer_configured %}
+  <div class="section-block">
+    <h4>1. Inspect package</h4>
+    <form method="post" action="/portal/kb/{{ kb.kb_id }}/packages/inspect" enctype="multipart/form-data">
+      <label>ZIP package</label>
+      <input type="file" name="zip_file" accept=".zip,application/zip" />
+      <label>Or folder</label>
+      <input type="file" name="folder_files" multiple webkitdirectory directory />
+      <label>Conflict mode</label>
+      <select name="conflict_mode">
+        <option value="skip" selected>Skip existing</option>
+        <option value="fail">Fail before mutation</option>
+      </select>
+      <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+      <button type="submit">Inspect Package</button>
+    </form>
+  </div>
+  <div class="section-block">
+    <h4>2. Confirm import</h4>
+    <p class="small">For security, select the same package again before importing.</p>
+    <form method="post" action="/portal/kb/{{ kb.kb_id }}/packages/import" enctype="multipart/form-data">
+      <label>ZIP package</label>
+      <input type="file" name="zip_file" accept=".zip,application/zip" />
+      <label>Or folder</label>
+      <input type="file" name="folder_files" multiple webkitdirectory directory />
+      <label>Conflict mode</label>
+      <select name="conflict_mode">
+        <option value="skip" selected>Skip existing</option>
+        <option value="fail">Fail before mutation</option>
+      </select>
+      <label class="toggle-row"><input type="checkbox" name="dry_run" value="true" /> Dry run only</label>
+      <label class="toggle-row"><input type="checkbox" name="auto_publish" value="true" /> Auto-publish imported documents</label>
+      <input type="password" name="maintainer_token_value" placeholder="maintainer token" required />
+      <button type="submit">Import Package</button>
+    </form>
+  </div>
+  {% else %}
+    <div class="placeholder-box">Maintainer access is required to inspect or import a Knowledge Package.</div>
+  {% endif %}
+
+  {% if package_result %}
+    <h4>Package result</h4>
+    <pre>{{ package_result | tojson(indent=2) }}</pre>
   {% endif %}
 </div>
 

@@ -373,6 +373,8 @@ def review_reference_decision(
 
 
 def load_review_dashboard(ticket_id: str) -> dict:
+    from app.services.automatic_knowledge_context.artifacts import load_latest_snapshot
+
     candidates = [item for item in read_candidate_references(ticket_id) if isinstance(item, dict)]
     requests = [item for item in read_review_requests(ticket_id) if isinstance(item, dict)]
     records = [item for item in read_review_records(ticket_id) if isinstance(item, dict)]
@@ -388,12 +390,16 @@ def load_review_dashboard(ticket_id: str) -> dict:
             }
         )
 
+    snapshot = load_latest_snapshot(ticket_id)
     return {
         "ticket_id": ticket_id,
         "review_required": reference_review_required(),
         "requests": requests,
         "candidates": rows,
         "review_count": len(records),
+        "knowledge_snapshot": (
+            snapshot.model_dump(mode="json") if snapshot is not None else None
+        ),
     }
 
 

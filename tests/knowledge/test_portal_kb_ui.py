@@ -25,7 +25,14 @@ class _KnowledgeService:
     def list_kbs(self):
         return [_Record({"kb_id": "qa", "name": "QA", "description": "", "enabled": True})]
 
-    def create_kb(self, kb_id: str, name: str, description: str, actor: str):
+    def create_kb(
+        self,
+        kb_id: str,
+        name: str,
+        description: str,
+        actor: str,
+        jira_project_keys=None,
+    ):
         self.created.append((kb_id, name, actor))
         return _Record({"kb_id": kb_id, "name": name, "description": description, "enabled": True})
 

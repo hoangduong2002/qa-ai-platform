@@ -12,7 +12,14 @@
   {% if kbs %}
     <ul>
       {% for kb in kbs %}
-      <li><a href="/portal/kb/{{ kb.kb_id }}">{{ kb.kb_id }} - {{ kb.name }}</a></li>
+      <li>
+        <a href="/portal/kb/{{ kb.kb_id }}">{{ kb.kb_id }} - {{ kb.name }}</a>
+        {% if kb.jira_project_keys %}
+          <div class="small">
+            Jira: {{ kb.jira_project_keys[:2] | join(', ') }}{% if kb.jira_project_keys | length > 2 %}, +{{ (kb.jira_project_keys | length) - 2 }} more{% endif %}
+          </div>
+        {% endif %}
+      </li>
       {% endfor %}
     </ul>
   {% else %}
@@ -27,6 +34,9 @@
     <input type="text" name="kb_id" placeholder="Knowledge Base ID" required />
     <input type="text" name="name" placeholder="Name" required />
     <input type="text" name="description" placeholder="Description" />
+    <label for="create-jira-project-keys">Jira Project Keys</label>
+    <input id="create-jira-project-keys" type="text" name="jira_project_keys" placeholder="WEC, WECDEV, WECSUP" />
+    <p class="small">Optional. Enter one or more Jira project keys separated by commas. Each key can be assigned to only one Knowledge Base.</p>
     <input type="password" name="maintainer_token_value" placeholder="Maintainer token" required />
     <button type="submit">Create</button>
   </form>

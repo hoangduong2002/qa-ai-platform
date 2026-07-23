@@ -49,3 +49,28 @@ def max_upload_size_bytes() -> int:
 
 def default_top_k() -> int:
     return max(_env_int("KNOWLEDGE_BASE_DEFAULT_TOP_K", 10), 1)
+
+
+def package_max_compressed_size_bytes() -> int:
+    return max(_env_int("KB_PACKAGE_MAX_COMPRESSED_SIZE_BYTES", 50 * 1024 * 1024), 1024)
+
+
+def package_max_uncompressed_size_bytes() -> int:
+    return max(_env_int("KB_PACKAGE_MAX_UNCOMPRESSED_SIZE_BYTES", 200 * 1024 * 1024), 1024)
+
+
+def package_max_file_count() -> int:
+    return max(_env_int("KB_PACKAGE_MAX_FILE_COUNT", 2000), 1)
+
+
+def package_max_directory_depth() -> int:
+    return max(_env_int("KB_PACKAGE_MAX_DIRECTORY_DEPTH", 12), 2)
+
+
+def package_max_compression_ratio() -> int:
+    return max(_env_int("KB_PACKAGE_MAX_COMPRESSION_RATIO", 100), 1)
+
+
+def package_allowed_archive_types() -> set[str]:
+    raw = os.getenv("KB_PACKAGE_ALLOWED_ARCHIVE_TYPES", "zip")
+    return {item.strip().lower().lstrip(".") for item in raw.split(",") if item.strip()}

@@ -40,6 +40,7 @@ from app.services.llm_router_service import (
     resolve_provider_for_task,
 )
 from app.services.portal_job_service import update_job_progress
+from app.services.jira_project_key_service import extract_jira_project_key
 
 
 REQUIREMENTS_ROOT = Path("requirements")
@@ -1045,6 +1046,7 @@ def _write_ticket_snapshot(
         "source_channel": source_channel or existing.get("source_channel") or "unknown",
         "imported_from_jira": True,
         "jira_key": issue_key,
+        "jira_project_key": extract_jira_project_key(issue, issue_key),
         "summary": fields.get("summary") or issue_key,
         "status": (
             fields
@@ -1056,6 +1058,16 @@ def _write_ticket_snapshot(
             .get("issuetype", {})
             .get("name", "")
         ),
+        "components": [
+            str(item.get("name") or "").strip()
+            for item in (fields.get("components") or [])
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ],
+        "labels": [
+            str(item).strip()
+            for item in (fields.get("labels") or [])
+            if str(item).strip()
+        ],
         "updated_at": _utc_now(),
     }
 
@@ -1124,7 +1136,7 @@ def _load_jira_issue_context(
 ) -> tuple[str, dict]:
     issue = jira.issue(
         issue_key,
-        fields="summary,description,comment,attachment,subtasks,status,issuetype",
+        fields="summary,description,comment,attachment,subtasks,status,issuetype,project,components,labels",
     )
     _write_json(jira_dir / f"{issue_key}_raw.json", issue)
 
@@ -1173,7 +1185,7 @@ def _load_jira_issue_context(
         try:
             sub_issue = jira.issue(
                 subtask_key,
-                fields="summary,description,comment,attachment,subtasks,status,issuetype",
+                fields="summary,description,comment,attachment,subtasks,status,issuetype,project,components,labels",
             )
             _write_json(jira_dir / f"{subtask_key}_raw.json", sub_issue)
             sub_comments = _get_issue_comments(jira, subtask_key)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from knowledge.domain.errors import KnowledgeNotFoundError, KnowledgePermissionError, KnowledgeValidationError
+from knowledge.domain.errors import (
+    KnowledgeConflictError,
+    KnowledgeValidationError,
+)
 from knowledge.domain.models import (
     ChunkRecord,
     CollectionMetadata,
@@ -15,8 +18,13 @@ from knowledge.domain.models import (
     utc_now_iso,
 )
 from knowledge.ingestion.parser_registry import ParserRegistry
+from knowledge.ingestion.streaming_package_parsers import StreamingPackageParserRegistry
 from knowledge.search.sqlite_fts_retriever import SQLiteFTSKnowledgeRetriever
 from knowledge.services.config import default_top_k, max_upload_size_bytes
+from knowledge.services.jira_project_keys import (
+    normalize_jira_project_key,
+    normalize_jira_project_keys,
+)
 from knowledge.storage.filesystem_storage import FileSystemKnowledgeStorage
 from knowledge.storage.utils import content_checksum, validate_identifier
 
@@ -25,21 +33,36 @@ class KnowledgeServiceFacade:
     def __init__(self, root: Path):
         self.storage = FileSystemKnowledgeStorage(root)
         self.parsers = ParserRegistry()
+        self.package_parsers = StreamingPackageParserRegistry()
         self.retriever = SQLiteFTSKnowledgeRetriever(self.storage.index_db_path)
 
-    def create_kb(self, kb_id: str, name: str, description: str, actor: str) -> KnowledgeBaseMetadata:
+    def create_kb(
+        self,
+        kb_id: str,
+        name: str,
+        description: str,
+        actor: str,
+        jira_project_keys: Iterable[str] | None = None,
+    ) -> KnowledgeBaseMetadata:
+        normalized_keys = self.normalize_jira_project_keys(jira_project_keys)
+        normalized_name = (name or "").strip()
+        if not normalized_name:
+            raise KnowledgeValidationError("Knowledge Base name is required.")
         now = utc_now_iso()
         kb = KnowledgeBaseMetadata(
             kb_id=validate_identifier(kb_id, "kb_id"),
-            name=name.strip(),
-            description=description.strip(),
+            name=normalized_name,
+            description=(description or "").strip(),
+            jira_project_keys=normalized_keys,
             enabled=True,
             created_at=now,
             updated_at=now,
             created_by=actor,
             updated_by=actor,
         )
-        created = self.storage.create_kb(kb)
+        with self.storage.acquire_kb_metadata_lock():
+            self.ensure_jira_project_keys_available(normalized_keys)
+            created = self.storage.create_kb(kb)
         self.storage.append_audit_event(
             kb_id,
             {
@@ -58,19 +81,72 @@ class KnowledgeServiceFacade:
         return self.storage.get_kb(kb_id)
 
     def update_kb(self, kb_id: str, patch: dict[str, Any], actor: str):
-        patch["updated_by"] = actor
-        patch["updated_at"] = utc_now_iso()
-        updated = self.storage.update_kb(kb_id, patch)
+        safe_patch = dict(patch)
+        if "jira_project_keys" in safe_patch:
+            safe_patch["jira_project_keys"] = self.normalize_jira_project_keys(
+                safe_patch["jira_project_keys"]
+            )
+        if "name" in safe_patch:
+            safe_patch["name"] = str(safe_patch["name"] or "").strip()
+            if not safe_patch["name"]:
+                raise KnowledgeValidationError("Knowledge Base name is required.")
+        if "description" in safe_patch:
+            safe_patch["description"] = str(safe_patch["description"] or "").strip()
+        safe_patch["updated_by"] = actor
+        safe_patch["updated_at"] = utc_now_iso()
+        with self.storage.acquire_kb_metadata_lock():
+            self.storage.get_kb(kb_id)
+            if "jira_project_keys" in safe_patch:
+                self.ensure_jira_project_keys_available(
+                    safe_patch["jira_project_keys"],
+                    current_kb_id=kb_id,
+                )
+            updated = self.storage.update_kb(kb_id, safe_patch)
         self.storage.append_audit_event(
             kb_id,
             {
                 "ts": utc_now_iso(),
                 "event": "kb_updated",
                 "actor": actor,
-                "patch": patch,
+                "patch": safe_patch,
             },
         )
         return updated
+
+    @staticmethod
+    def normalize_jira_project_keys(values: Iterable[str] | None) -> list[str]:
+        """Normalize, validate, and deduplicate Jira project keys."""
+        return normalize_jira_project_keys(values)
+
+    def find_kb_by_jira_project_key(self, project_key: str) -> KnowledgeBaseMetadata | None:
+        """Find the Knowledge Base assigned to a normalized Jira project key."""
+        normalized = normalize_jira_project_key(project_key)
+        for kb in self.storage.list_kbs():
+            if normalized in self.normalize_jira_project_keys(kb.jira_project_keys):
+                return kb
+        return None
+
+    def ensure_jira_project_keys_available(
+        self,
+        project_keys: Iterable[str],
+        current_kb_id: str | None = None,
+    ) -> None:
+        """Reject Jira keys already assigned to another Knowledge Base."""
+        normalized_keys = self.normalize_jira_project_keys(project_keys)
+        requested = set(normalized_keys)
+        for kb in self.storage.list_kbs():
+            if current_kb_id is not None and kb.kb_id == current_kb_id:
+                continue
+            for project_key in self.normalize_jira_project_keys(kb.jira_project_keys):
+                if project_key in requested:
+                    raise KnowledgeConflictError(
+                        f'Jira project key "{project_key}" is already assigned '
+                        f'to Knowledge Base "{kb.kb_id}".'
+                    )
+
+    def resolve_kb_by_jira_project_key(self, project_key: str) -> KnowledgeBaseMetadata | None:
+        """Resolve a Jira project key without changing Jira requirement workflows."""
+        return self.find_kb_by_jira_project_key(project_key)
 
     def kb_health(self, kb_id: str) -> dict[str, Any]:
         storage_health = self.storage.kb_health(kb_id)
@@ -166,6 +242,75 @@ class KnowledgeServiceFacade:
         self.storage.append_audit_event(kb_id, {"ts": utc_now_iso(), "event": "document_uploaded", "actor": actor, "document_id": document.document_id})
         return doc
 
+    def ingest_package_document(
+        self,
+        *,
+        kb_id: str,
+        collection_id: str,
+        document_id: str,
+        title: str,
+        source_type: str,
+        external_id: str | None,
+        confidence: float,
+        effective_from: str | None,
+        effective_to: str | None,
+        content_stream,
+        content_checksum_value: str,
+        extension: str,
+        actor: str,
+    ) -> DocumentMetadata:
+        """Package-only streaming ingestion; manual upload limits do not apply."""
+        self.package_parsers.validate_extension(extension)
+        self._validate_no_duplicate(kb_id, external_id, content_checksum_value)
+        now = utc_now_iso()
+        document = DocumentMetadata(
+            kb_id=kb_id,
+            collection_id=collection_id,
+            document_id=validate_identifier(document_id, "document_id"),
+            title=title.strip(),
+            status=DocumentStatus.UPLOADED,
+            version=1,
+            checksum=content_checksum_value,
+            effective_from=effective_from,
+            effective_to=effective_to,
+            confidence=confidence,
+            source_type=source_type,
+            external_id=external_id,
+            created_by=actor,
+            updated_by=actor,
+            created_at=now,
+            updated_at=now,
+        )
+        doc = self.storage.save_document_stream(
+            document,
+            content_stream,
+            extension,
+            content_checksum_value,
+        )
+        with self.storage.open_original_stream(kb_id, document.document_id, document.version) as stream:
+            preview = self.package_parsers.inspect(stream, extension)
+        doc = self.storage.update_document(
+            kb_id,
+            document.document_id,
+            {
+                "status": DocumentStatus.READY_FOR_REVIEW,
+                "parsing_preview": preview,
+                "updated_at": utc_now_iso(),
+                "updated_by": actor,
+            },
+        )
+        self.storage.save_preview(kb_id, document.document_id, preview)
+        self.storage.append_audit_event(
+            kb_id,
+            {
+                "ts": utc_now_iso(),
+                "event": "package_document_ingested",
+                "actor": actor,
+                "document_id": document.document_id,
+            },
+        )
+        return doc
+
     def preview_document(self, kb_id: str, document_id: str, actor: str) -> dict[str, Any]:
         document = self.storage.get_document(kb_id, document_id)
         self.storage.update_document(kb_id, document_id, {"status": DocumentStatus.VALIDATING, "updated_at": utc_now_iso(), "updated_by": actor})
@@ -194,32 +339,36 @@ class KnowledgeServiceFacade:
     def list_documents(self, kb_id: str, collection_id: str | None = None):
         return self.storage.list_documents(kb_id, collection_id)
 
-    def _build_chunks(self, document: DocumentMetadata) -> list[ChunkRecord]:
+    def _build_chunks(self, document: DocumentMetadata):
+        extension = self.storage.original_extension(document.kb_id, document.document_id, document.version)
+        if (document.parsing_preview or {}).get("streaming") is True:
+            with self.storage.open_original_stream(
+                document.kb_id, document.document_id, document.version
+            ) as stream:
+                parts = self.package_parsers.iter_chunks(stream, extension)
+                yield from self._chunk_records(document, parts)
+            return
         raw_bytes = self.storage.read_original_bytes(document.kb_id, document.document_id, document.version)
         decoded = self.parsers.decode_bytes(raw_bytes)
-        extension = self.storage.original_extension(document.kb_id, document.document_id, document.version)
         parser = self.parsers.parser_for(extension)
-        parts = parser.parse(decoded)
+        yield from self._chunk_records(document, parser.parse(decoded))
 
-        chunks: list[ChunkRecord] = []
+    def _chunk_records(self, document: DocumentMetadata, parts):
         for index, part in enumerate(parts, start=1):
-            chunks.append(
-                ChunkRecord(
-                    kb_id=document.kb_id,
-                    collection_id=document.collection_id,
-                    document_id=document.document_id,
-                    version=document.version,
-                    chunk_index=index,
-                    content=part,
-                    confidence=document.confidence,
-                    effective_from=document.effective_from,
-                    effective_to=document.effective_to,
-                    checksum=document.checksum,
-                    source_citation=f"{document.document_id}:v{document.version}:chunk{index}",
-                    is_active=document.status != DocumentStatus.SUPERSEDED,
-                )
+            yield ChunkRecord(
+                kb_id=document.kb_id,
+                collection_id=document.collection_id,
+                document_id=document.document_id,
+                version=document.version,
+                chunk_index=index,
+                content=part,
+                confidence=document.confidence,
+                effective_from=document.effective_from,
+                effective_to=document.effective_to,
+                checksum=document.checksum,
+                source_citation=f"{document.document_id}:v{document.version}:chunk{index}",
+                is_active=document.status != DocumentStatus.SUPERSEDED,
             )
-        return chunks
 
     def publish_document(self, kb_id: str, document_id: str, actor: str) -> dict[str, Any]:
         with self.storage.acquire_write_lock(kb_id):

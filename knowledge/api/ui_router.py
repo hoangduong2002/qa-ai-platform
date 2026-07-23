@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -9,8 +10,17 @@ from fastapi.templating import Jinja2Templates
 
 from knowledge.api.deps import require_kb_enabled
 from knowledge.domain.models import SearchRequest
-from knowledge.domain.errors import KnowledgeError
+from knowledge.domain.errors import (
+    KnowledgeConflictError,
+    KnowledgeError,
+    KnowledgeNotFoundError,
+    KnowledgePackageError,
+    KnowledgePackageSecurityError,
+    KnowledgePermissionError,
+    KnowledgeValidationError,
+)
 from knowledge.services.config import knowledge_base_enabled, maintainer_token
+from knowledge.services.package_importer import KnowledgePackageImporter
 from knowledge.services.runtime import get_knowledge_service
 
 
@@ -19,12 +29,13 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["knowledge_base_enabled"] = knowledge_base_enabled
 
 router = APIRouter(prefix="/portal/kb", tags=["Knowledge Base UI"])
+logger = logging.getLogger(__name__)
 
 
 def _assert_ui_maintainer(provided_token: str) -> None:
     expected = maintainer_token()
     if not expected or provided_token != expected:
-        raise KnowledgeError("Maintainer token is invalid for write operation.")
+        raise KnowledgePermissionError("Maintainer token is invalid for write operation.")
 
 
 def _maintainer_error_message(error_code: str) -> str:
@@ -39,12 +50,38 @@ def _write_error_redirect(path: str) -> RedirectResponse:
     return RedirectResponse(url=f"{path}{separator}{query}", status_code=303)
 
 
-@router.get("", response_class=HTMLResponse)
-@router.get("/", response_class=HTMLResponse)
-def kb_list_page(
+def _render_kb_detail(
     request: Request,
-    error: str = "",
-    _: None = Depends(require_kb_enabled),
+    kb_id: str,
+    *,
+    error_message: str = "",
+    package_result: dict | None = None,
+    status_code: int = 200,
+):
+    service = get_knowledge_service()
+    return templates.TemplateResponse(
+        request,
+        "kb_detail.html",
+        {
+            "kb": service.get_kb(kb_id).model_dump(),
+            "collections": [item.model_dump() for item in service.list_collections(kb_id)],
+            "documents": [item.model_dump() for item in service.list_documents(kb_id)],
+            "health": service.kb_health(kb_id),
+            "search_results": [],
+            "query": "",
+            "maintainer_configured": bool(maintainer_token()),
+            "error_message": error_message,
+            "package_result": package_result,
+        },
+        status_code=status_code,
+    )
+
+
+def _render_kb_list(
+    request: Request,
+    *,
+    error_message: str = "",
+    status_code: int = 200,
 ):
     service = get_knowledge_service()
     return templates.TemplateResponse(
@@ -53,25 +90,92 @@ def kb_list_page(
         {
             "kbs": [kb.model_dump() for kb in service.list_kbs()],
             "maintainer_configured": bool(maintainer_token()),
-            "error_message": _maintainer_error_message(error),
+            "error_message": error_message,
         },
+        status_code=status_code,
+    )
+
+
+async def _inspect_portal_package(
+    *,
+    kb_id: str,
+    conflict_mode: str,
+    zip_file: UploadFile | None,
+    folder_files: list[UploadFile],
+):
+    importer = KnowledgePackageImporter(get_knowledge_service())
+    if zip_file and zip_file.filename:
+        return importer.inspect_zip_stream(
+            kb_id=kb_id,
+            stream=zip_file.file,
+            filename=zip_file.filename,
+            conflict_mode=conflict_mode,
+            compressed_size=importer._stream_size(zip_file.file),
+        )
+    if folder_files:
+        files = [
+            (item.filename or "", item.file, importer._stream_size(item.file))
+            for item in folder_files
+            if item.filename
+        ]
+        return importer.inspect_folder_streams(
+            kb_id=kb_id,
+            files=files,
+            package_name="folder-upload",
+            conflict_mode=conflict_mode,
+        )
+    raise KnowledgePackageError("Select a ZIP package or folder files.")
+
+
+@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+def kb_list_page(
+    request: Request,
+    error: str = "",
+    _: None = Depends(require_kb_enabled),
+):
+    return _render_kb_list(
+        request,
+        error_message=_maintainer_error_message(error),
     )
 
 
 @router.post("")
 @router.post("/")
 async def kb_create_page(
+    request: Request,
     kb_id: str = Form(...),
     name: str = Form(...),
     description: str = Form(""),
+    jira_project_keys: str = Form(""),
     maintainer_token_value: str = Form(""),
     _: None = Depends(require_kb_enabled),
 ):
     try:
         _assert_ui_maintainer(maintainer_token_value)
-        get_knowledge_service().create_kb(kb_id, name, description, actor="portal")
-    except KnowledgeError:
+        values = [] if not jira_project_keys.strip() else jira_project_keys.split(",")
+        get_knowledge_service().create_kb(
+            kb_id,
+            name,
+            description,
+            actor="portal",
+            jira_project_keys=values,
+        )
+    except KnowledgePermissionError:
         return _write_error_redirect("/portal/kb")
+    except KnowledgeConflictError as error:
+        return _render_kb_list(request, error_message=str(error), status_code=409)
+    except KnowledgeValidationError as error:
+        return _render_kb_list(request, error_message=str(error), status_code=400)
+    except KnowledgeNotFoundError as error:
+        return _render_kb_list(request, error_message=str(error), status_code=404)
+    except Exception:
+        logger.exception("Unexpected Knowledge Base creation failure for kb_id=%s", kb_id)
+        return _render_kb_list(
+            request,
+            error_message="Unable to create the Knowledge Base.",
+            status_code=500,
+        )
     return RedirectResponse(url=f"/portal/kb/{kb_id}", status_code=303)
 
 
@@ -82,26 +186,124 @@ def kb_detail_page(
     error: str = "",
     _: None = Depends(require_kb_enabled),
 ):
-    service = get_knowledge_service()
-    kb = service.get_kb(kb_id).model_dump()
-    collections = [item.model_dump() for item in service.list_collections(kb_id)]
-    documents = [item.model_dump() for item in service.list_documents(kb_id)]
-    health = service.kb_health(kb_id)
-
-    return templates.TemplateResponse(
+    return _render_kb_detail(
         request,
-        "kb_detail.html",
-        {
-            "kb": kb,
-            "collections": collections,
-            "documents": documents,
-            "health": health,
-            "search_results": [],
-            "query": "",
-            "maintainer_configured": bool(maintainer_token()),
-            "error_message": _maintainer_error_message(error),
-        },
+        kb_id,
+        error_message=_maintainer_error_message(error),
     )
+
+
+@router.post("/{kb_id}/jira-project-keys", response_class=HTMLResponse)
+async def kb_update_jira_project_keys(
+    request: Request,
+    kb_id: str,
+    jira_project_keys: str = Form(""),
+    maintainer_token_value: str = Form(""),
+    _: None = Depends(require_kb_enabled),
+):
+    try:
+        _assert_ui_maintainer(maintainer_token_value)
+        values = [] if not jira_project_keys.strip() else jira_project_keys.split(",")
+        get_knowledge_service().update_kb(
+            kb_id,
+            {"jira_project_keys": values},
+            actor="portal",
+        )
+        return RedirectResponse(url=f"/portal/kb/{kb_id}", status_code=303)
+    except KnowledgePermissionError:
+        return _write_error_redirect(f"/portal/kb/{kb_id}")
+    except KnowledgeConflictError as error:
+        return _render_kb_detail(request, kb_id, error_message=str(error), status_code=409)
+    except KnowledgeValidationError as error:
+        return _render_kb_detail(request, kb_id, error_message=str(error), status_code=400)
+    except KnowledgeNotFoundError as error:
+        return _render_kb_list(request, error_message=str(error), status_code=404)
+    except Exception:
+        logger.exception("Unexpected Jira project-key update failure for kb_id=%s", kb_id)
+        return _render_kb_detail(
+            request,
+            kb_id,
+            error_message="Unable to update Jira Project Keys.",
+            status_code=500,
+        )
+
+
+@router.post("/{kb_id}/packages/inspect", response_class=HTMLResponse)
+async def kb_inspect_package(
+    request: Request,
+    kb_id: str,
+    conflict_mode: str = Form("skip"),
+    maintainer_token_value: str = Form(""),
+    zip_file: UploadFile | None = File(None),
+    folder_files: list[UploadFile] = File(default=[]),
+    _: None = Depends(require_kb_enabled),
+):
+    try:
+        _assert_ui_maintainer(maintainer_token_value)
+        plan = await _inspect_portal_package(
+            kb_id=kb_id,
+            conflict_mode=conflict_mode,
+            zip_file=zip_file,
+            folder_files=folder_files,
+        )
+        return _render_kb_detail(request, kb_id, package_result={"status": "inspection", "plan": plan.to_dict()})
+    except KnowledgePermissionError:
+        return _render_kb_detail(request, kb_id, error_message="Maintainer authorization failed.", status_code=403)
+    except KnowledgePackageSecurityError as error:
+        return _render_kb_detail(request, kb_id, error_message=f"Archive security violation: {error}", status_code=400)
+    except KnowledgePackageError as error:
+        return _render_kb_detail(request, kb_id, error_message=f"Package validation failed: {error}", status_code=400)
+    except Exception:
+        logger.exception("Unexpected Knowledge Package inspection failure for kb_id=%s", kb_id)
+        return _render_kb_detail(request, kb_id, error_message="Unexpected package inspection error.", status_code=500)
+
+
+@router.post("/{kb_id}/packages/import", response_class=HTMLResponse)
+async def kb_import_package(
+    request: Request,
+    kb_id: str,
+    conflict_mode: str = Form("skip"),
+    auto_publish: bool = Form(False),
+    dry_run: bool = Form(False),
+    maintainer_token_value: str = Form(""),
+    zip_file: UploadFile | None = File(None),
+    folder_files: list[UploadFile] = File(default=[]),
+    _: None = Depends(require_kb_enabled),
+):
+    try:
+        _assert_ui_maintainer(maintainer_token_value)
+        plan = await _inspect_portal_package(
+            kb_id=kb_id,
+            conflict_mode=conflict_mode,
+            zip_file=zip_file,
+            folder_files=folder_files,
+        )
+        if dry_run:
+            result = {"status": "dry_run", "plan": plan.to_dict()}
+        elif not plan.can_execute:
+            return _render_kb_detail(
+                request,
+                kb_id,
+                error_message="Package import is blocked by validation errors or conflicts.",
+                package_result={"status": "blocked", "plan": plan.to_dict()},
+                status_code=409,
+            )
+        else:
+            result = KnowledgePackageImporter(get_knowledge_service()).execute_import(
+                plan,
+                auto_publish=auto_publish,
+                actor="portal",
+            )
+        return _render_kb_detail(request, kb_id, package_result=result)
+    except KnowledgePermissionError:
+        return _render_kb_detail(request, kb_id, error_message="Maintainer authorization failed.", status_code=403)
+    except KnowledgePackageSecurityError as error:
+        return _render_kb_detail(request, kb_id, error_message=f"Archive security violation: {error}", status_code=400)
+    except KnowledgePackageError as error:
+        return _render_kb_detail(request, kb_id, error_message=f"Package validation failed: {error}", status_code=400)
+    except Exception:
+        logger.exception("Unexpected Knowledge Package import failure for kb_id=%s", kb_id)
+        return _render_kb_detail(request, kb_id, error_message="Unexpected package import error.", status_code=500)
 
 
 @router.post("/{kb_id}/collections")

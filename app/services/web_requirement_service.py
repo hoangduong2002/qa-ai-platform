@@ -29,6 +29,7 @@ from app.services.portal_job_service import update_job_progress
 from app.services.requirement_sanitization_service import (
     sanitize_requirement_for_analysis,
 )
+from app.services.jira_project_key_service import extract_jira_project_key
 from app.utils.clarification_answers import (
     count_matched_clarification_answers,
     get_clarification_answer_text,
@@ -176,6 +177,10 @@ def _mark_web_jira_requirement(
             "source_channel": "web",
             "imported_from_jira": True,
             "jira_key": jira_key,
+            "jira_project_key": (
+                ticket_data.get("jira_project_key")
+                or extract_jira_project_key(None, jira_key)
+            ),
             "updated_at": now,
             **import_options,
         }
@@ -470,6 +475,8 @@ def get_requirement_detail(
     rejected_references_file = knowledge_dir / "rejected_references.json"
     knowledge_conflicts_file = knowledge_dir / "conflicts.json"
     reference_context_file = knowledge_dir / "reference_context.md"
+    latest_knowledge_snapshot_file = knowledge_dir / "latest_snapshot.json"
+    latest_analysis_run_file = analysis_dir / "latest_analysis_run.json"
 
     if not base_dir.exists():
         raise FileNotFoundError(
@@ -538,6 +545,23 @@ def get_requirement_detail(
     rejected_references = _read_json(rejected_references_file) or []
     knowledge_conflicts = _read_json(knowledge_conflicts_file) or []
     reference_context = _read_text(reference_context_file)
+    knowledge_snapshot = _read_json(latest_knowledge_snapshot_file) or {
+        "status": "not_attempted",
+        "status_message": "Knowledge retrieval has not been attempted.",
+        "jira_project_key": ticket_data.get("jira_project_key"),
+        "knowledge_base_id": ticket_data.get("knowledge_base_id"),
+        "retrieved_count": 0,
+        "selected_count": 0,
+        "references": [],
+        "queries": [],
+        "warnings": [],
+    }
+    latest_analysis_run = _read_json(latest_analysis_run_file) or {}
+    knowledge_references_used_count = sum(
+        1
+        for item in knowledge_snapshot.get("references", [])
+        if isinstance(item, dict) and item.get("used_in_prompt")
+    )
 
     analysis_error_file = analysis_dir / "analyze_error.txt"
     analysis_error = _read_text(analysis_error_file)
@@ -589,6 +613,9 @@ def get_requirement_detail(
         "rejected_references": rejected_references,
         "knowledge_conflicts": knowledge_conflicts,
         "reference_context": reference_context,
+        "knowledge_snapshot": knowledge_snapshot,
+        "latest_analysis_run": latest_analysis_run,
+        "knowledge_references_used_count": knowledge_references_used_count,
         "change_impact_report": load_latest_change_impact_report(ticket_id),
         "regeneration_plan": load_latest_regeneration_plan(ticket_id),
         "incremental_requirement_items": incremental_requirement_items,
@@ -605,6 +632,7 @@ def get_requirement_detail(
         "has_clarifications_v2": len(clarification_questions_v2) > 0,
         "has_selected_references": len(selected_references) > 0,
         "has_knowledge_conflicts": len(knowledge_conflicts) > 0,
+        "has_knowledge_snapshot": latest_knowledge_snapshot_file.exists(),
         "has_incremental_testcases": has_incremental_testcases,
     }
 

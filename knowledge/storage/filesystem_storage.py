@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
+from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 import jsonlines
 from filelock import FileLock
@@ -30,9 +33,6 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         self.root = root
         self.config_dir = self.root / "_config"
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        mappings = self.config_dir / "jira_project_mappings.json"
-        if not mappings.exists():
-            atomic_write_json(mappings, {})
 
     def _kb_dir(self, kb_id: str) -> Path:
         kb_id = validate_identifier(kb_id, "kb_id")
@@ -120,6 +120,13 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         atomic_write_json(self._kb_meta_file(kb_id), updated.model_dump())
         return updated
 
+    @contextmanager
+    def acquire_kb_metadata_lock(self) -> Iterator[None]:
+        self.root.mkdir(parents=True, exist_ok=True)
+        lock = FileLock(str(self.root / ".knowledge-base-metadata.lock"))
+        with lock:
+            yield
+
     def create_collection(self, collection: CollectionMetadata) -> CollectionMetadata:
         self._ensure_kb_layout(collection.kb_id)
         file_path = self._collection_file(collection.kb_id, collection.collection_id)
@@ -175,6 +182,52 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         atomic_write_json(self._document_file(document.kb_id, document.document_id), document.model_dump())
         return document
 
+    def save_document_stream(
+        self,
+        document: DocumentMetadata,
+        source,
+        ext: str,
+        expected_checksum: str,
+    ) -> DocumentMetadata:
+        """Persist a package document without materializing its content in memory."""
+        self._ensure_kb_layout(document.kb_id)
+        doc_dir = self._document_dir(document.kb_id, document.document_id)
+        if self._document_file(document.kb_id, document.document_id).exists():
+            raise KnowledgeValidationError(f"Document already exists: {document.document_id}")
+        original_dir = doc_dir / "original"
+        preview_dir = doc_dir / "preview"
+        published_dir = doc_dir / "published"
+        original_dir.mkdir(parents=True, exist_ok=True)
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        published_dir.mkdir(parents=True, exist_ok=True)
+        target = original_dir / f"v{document.version}{ext}"
+        digest = hashlib.sha256()
+        temp_name = ""
+        try:
+            with NamedTemporaryFile("wb", delete=False, dir=str(original_dir)) as temp_file:
+                temp_name = temp_file.name
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    temp_file.write(chunk)
+            if digest.hexdigest() != expected_checksum:
+                raise KnowledgeValidationError("Package content changed during ingestion.")
+            os.replace(temp_name, target)
+            temp_name = ""
+            atomic_write_json(
+                self._document_file(document.kb_id, document.document_id),
+                document.model_dump(),
+            )
+            return document
+        finally:
+            if temp_name:
+                try:
+                    os.unlink(temp_name)
+                except FileNotFoundError:
+                    pass
+
     def get_document(self, kb_id: str, document_id: str) -> DocumentMetadata:
         file_path = self._document_file(kb_id, document_id)
         if not file_path.exists():
@@ -216,7 +269,7 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         atomic_write_json(file_path, preview)
         return str(file_path)
 
-    def save_published_chunks(self, kb_id: str, document_id: str, version: int, chunks: list[ChunkRecord]) -> str:
+    def save_published_chunks(self, kb_id: str, document_id: str, version: int, chunks: Iterable[ChunkRecord]) -> str:
         file_path = self._document_dir(kb_id, document_id) / "published" / f"chunks_v{version}.jsonl"
 
         if file_path.exists():
@@ -314,6 +367,15 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
             raise KnowledgeNotFoundError("Original document content not found.")
 
         return candidates[0].read_bytes()
+
+    @contextmanager
+    def open_original_stream(self, kb_id: str, document_id: str, version: int):
+        original_dir = self._document_dir(kb_id, document_id) / "original"
+        candidates = sorted(original_dir.glob(f"v{version}.*"))
+        if not candidates:
+            raise KnowledgeNotFoundError("Original document content not found.")
+        with candidates[0].open("rb") as stream:
+            yield stream
 
     def published_exists(self, kb_id: str, document_id: str, version: int) -> bool:
         return (self._document_dir(kb_id, document_id) / "published" / f"chunks_v{version}.jsonl").exists()

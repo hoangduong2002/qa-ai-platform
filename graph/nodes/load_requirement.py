@@ -13,6 +13,15 @@ from app.utils.requirement_context_loader import (
 def load_requirement(state):
     ticket_id = state["ticket_id"]
 
+    if state.get("requirement_context"):
+        return {
+            "requirement_context": state["requirement_context"],
+            "requirement_context_metadata": state.get(
+                "requirement_context_metadata",
+                {},
+            ),
+        }
+
     compact_requirement_context, context_metadata = load_requirement_context_for_llm(
         ticket_id
     )

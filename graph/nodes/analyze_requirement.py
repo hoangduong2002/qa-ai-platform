@@ -105,6 +105,13 @@ def analyze_requirement(state):
         "{requirement_context}",
         state.get("requirement_context", "")
     )
+    final_prompt = final_prompt.replace(
+        "{knowledge_context}",
+        state.get(
+            "knowledge_context",
+            "No Knowledge Base references were included for this Analysis run.",
+        ),
+    )
 
     try:
         content = call_text_llm(

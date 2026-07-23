@@ -6,6 +6,15 @@ class QAState(TypedDict):
 
     requirement_context: NotRequired[str]
     requirement_context_metadata: NotRequired[dict]
+    jira_issue_key: NotRequired[str]
+    jira_project_key: NotRequired[str]
+    knowledge_base_id: NotRequired[str]
+    knowledge_snapshot_id: NotRequired[str]
+    knowledge_retrieval_status: NotRequired[str]
+    knowledge_context: NotRequired[str]
+    knowledge_references: NotRequired[list[dict]]
+    knowledge_warnings: NotRequired[list[str]]
+    analysis_run_id: NotRequired[str]
 
     analysis: NotRequired[dict]
     structured_analysis: NotRequired[dict]

@@ -23,6 +23,7 @@ class KnowledgeBaseMetadata(BaseModel):
     kb_id: str
     name: str
     description: str = ""
+    jira_project_keys: list[str] = Field(default_factory=list)
     enabled: bool = True
     created_at: str
     updated_at: str

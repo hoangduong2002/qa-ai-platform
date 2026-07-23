@@ -8,6 +8,30 @@
     </div>
 </div>
 
+{% if review_dashboard.knowledge_snapshot %}
+<div class="card">
+    <h3>Automatic Retrieval Snapshot</h3>
+    <p><b>Snapshot:</b> {{ review_dashboard.knowledge_snapshot.snapshot_id }}</p>
+    <p><b>Jira Project:</b> {{ review_dashboard.knowledge_snapshot.jira_project_key or "N/A" }}</p>
+    <p><b>Knowledge Base:</b> {{ review_dashboard.knowledge_snapshot.knowledge_base_id or "Not mapped" }}</p>
+    <p><b>Status:</b> {{ review_dashboard.knowledge_snapshot.status }}</p>
+    <p><b>Retrieved:</b> {{ review_dashboard.knowledge_snapshot.retrieved_count }} | <b>Selected:</b> {{ review_dashboard.knowledge_snapshot.selected_count }}</p>
+    {% if review_dashboard.knowledge_snapshot.queries %}
+        <h4>Queries</h4>
+        <ul class="info-list">
+            {% for query in review_dashboard.knowledge_snapshot.queries %}
+                <li>{{ query.category }}{% if query.collection_id %} / {{ query.collection_id }}{% endif %}: {{ query.query }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    <form method="post" action="/portal/requirements/{{ ticket_id }}/knowledge-review/rerun" data-loading="true" data-ai-action="true">
+        <label><b>Reviewer ID</b></label>
+        <input type="text" name="reviewed_by" placeholder="qa.user" required>
+        <button class="success" type="submit">Re-run Analysis with Reviewed Selection</button>
+    </form>
+</div>
+{% endif %}
+
 {% if error %}
 <div class="card alert error">
     <h3>Error</h3>
@@ -84,6 +108,9 @@
                 <p><b>Jira Issue:</b> {{ item.jira_issue_being_clarified }}</p>
                 <p><b>Source:</b> {{ item.kb_id }} / {{ item.collection_id }} / {{ item.document_id }} / v{{ item.version }} / chunk {{ item.chunk_index }}</p>
                 <p><b>Metadata:</b> confidence={{ item.confidence }}, status={{ item.status }}, effective={{ item.effective_from or "N/A" }} -> {{ item.effective_to or "N/A" }}, source_type={{ item.source_type }}</p>
+                {% if item.score is defined %}
+                    <p><b>Retrieval:</b> score={{ item.score }}, authority={{ item.authority }}, selected={{ item.selected }}, used_in_prompt={{ item.used_in_prompt }}</p>
+                {% endif %}
                 <p><b>Citation:</b> {{ item.citation }}</p>
                 <p><b>Excerpt</b></p>
                 <pre>{{ item.excerpt }}</pre>

@@ -44,22 +44,33 @@ class JsonlDocumentParser(DocumentParser):
         return extension.lower() == ".jsonl"
 
     def parse(self, content: str) -> list[str]:
-        lines = [line for line in content.splitlines() if line.strip()]
+        chunks: list[str] = []
 
-        if not lines:
-            raise KnowledgeValidationError("JSONL content is empty.")
-
-        parsed_lines: list[str] = []
-
-        for index, line in enumerate(lines, start=1):
+        for index, line in enumerate(content.splitlines(), start=1):
+            if not line.strip():
+                continue
             try:
                 value = json.loads(line)
             except json.JSONDecodeError as error:
                 raise KnowledgeValidationError(f"Malformed JSONL at line {index}: {error}") from error
 
-            parsed_lines.append(json.dumps(value, ensure_ascii=False))
+            if isinstance(value, dict) and "content" in value:
+                record_text = value["content"]
+                if not isinstance(record_text, str) or not record_text.strip():
+                    raise KnowledgeValidationError(
+                        f"Malformed JSONL at line {index}: content must be a non-empty string."
+                    )
+            else:
+                record_text = json.dumps(value, ensure_ascii=False)
 
-        return _split_text("\n".join(parsed_lines))
+            # Keep record boundaries. A single large record may still be split,
+            # but records are never joined into one opaque document-sized blob.
+            chunks.extend(_split_text(record_text))
+
+        if not chunks:
+            raise KnowledgeValidationError("JSONL content is empty.")
+
+        return chunks
 
 
 class TextDocumentParser(DocumentParser):
