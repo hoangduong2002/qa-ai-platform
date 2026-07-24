@@ -109,6 +109,7 @@ from app.services.chat_service import (
 from app.services.portal_job_service import (
     PortalConcurrencyError,
     PortalJobBusyError,
+    PortalJobMetadataInvalidError,
     check_provider_safety,
     create_job,
     get_job_status,
@@ -474,10 +475,28 @@ async def create_requirement_from_jira(
 
 @router.get("/jobs/{job_id}/status")
 async def portal_job_status(job_id: str):
-    job_status = get_job_status(job_id)
-
-    if not job_status:
+    try:
+        job_status = get_job_status(job_id)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Job not found.")
+    except PortalJobMetadataInvalidError:
+        logger.exception("Portal job metadata is invalid. job_id=%s", job_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Job status is temporarily unavailable.",
+        )
+    except PermissionError:
+        logger.exception("Portal job metadata permission error. job_id=%s", job_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Job status is temporarily unavailable.",
+        )
+    except OSError:
+        logger.exception("Portal job metadata read error. job_id=%s", job_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Job status is temporarily unavailable.",
+        )
 
     ticket_id = job_status.get("ticket_id") or ""
     job_status["detail_url"] = f"/portal/requirements/{ticket_id}" if ticket_id else None

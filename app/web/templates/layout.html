@@ -2,14 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>QA AI Platform</title>
+    <script>
+        (() => {
+            const root = document.documentElement;
+            const valid = value => value === "true" || value === "false";
+            let pinned = "true";
+            let expanded = "true";
+            try {
+                const storedPinned = localStorage.getItem("qa-ai-platform.sidebar.pinned");
+                const storedExpanded = localStorage.getItem("qa-ai-platform.sidebar.expanded");
+                if (valid(storedPinned)) pinned = storedPinned;
+                if (valid(storedExpanded)) expanded = storedExpanded;
+            } catch (_error) {
+                // Safe defaults keep navigation usable when storage is unavailable.
+            }
+            root.dataset.sidebarPinned = pinned;
+            root.dataset.sidebarExpanded = expanded;
+        })();
+    </script>
     <style>
-        body{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#111827}
-        header{height:44px;background:#111827;color:white;position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 16px;box-sizing:border-box}
+        :root{--portal-header-height:44px;--portal-sidebar-expanded:260px;--portal-sidebar-collapsed:68px;--portal-nav-duration:240ms;--portal-bg:#f5f7fb;--portal-surface:#fff;--portal-text:#111827;--portal-muted:#6b7280;--portal-border:#e5e7eb;--portal-hover:#f3f4f6;--portal-accent:#2563eb;--portal-header:#111827}
+        *{scrollbar-color:#9ca3af transparent}
+        body{font-family:Arial,sans-serif;margin:0;background:var(--portal-bg);color:var(--portal-text);overflow-x:hidden}
+        body.navigation-open{overflow:hidden}
+        header{height:var(--portal-header-height);background:var(--portal-header);color:white;position:fixed;top:0;left:0;right:0;z-index:1200;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 16px;box-sizing:border-box}
         header h1{font-size:17px;margin:0}
         .header-title{display:flex;align-items:center;gap:12px;min-width:0}
-        .header-link{color:#dbeafe;text-decoration:none;font-size:13px;font-weight:bold;white-space:nowrap}
-        .header-link:hover{color:white;text-decoration:underline}
+        .header-brand-link{display:inline-flex;align-items:center;min-width:0;border-radius:6px;color:inherit;text-decoration:none;cursor:pointer;transition:opacity 160ms ease}
+        .header-brand-link:hover{opacity:.86}
+        .header-brand-link:focus-visible,.app-sidebar-brand:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+        .navigation-toggle,.sidebar-icon-button{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:1px solid transparent;border-radius:8px;background:transparent;color:inherit;cursor:pointer;flex:0 0 auto}
+        .navigation-toggle:hover,.sidebar-icon-button:hover{background:rgba(255,255,255,.12)}
+        .navigation-toggle:focus-visible,.sidebar-icon-button:focus-visible,.primary-navigation-link:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+        .navigation-toggle svg,.sidebar-icon-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
         .header-controls{display:flex;align-items:center;gap:10px;min-width:0}
         .header-ai-mode{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}
         .header-ai-mode select{font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid #374151;background:#f9fafb;color:#111827;max-width:190px}
@@ -29,7 +56,41 @@
         .llm-status.failed{background:#fee2e2;color:#991b1b}
         .llm-status.skipped{background:#e5e7eb;color:#374151}
         .llm-status.disabled{background:#fef3c7;color:#92400e}
-        main{padding:56px 12px 18px}
+        .app-sidebar{position:fixed;top:var(--portal-header-height);left:0;bottom:0;width:var(--portal-sidebar-expanded);z-index:1100;background:var(--portal-surface);border-right:1px solid var(--portal-border);box-shadow:4px 0 18px rgba(17,24,39,.08);box-sizing:border-box;transform:translateX(-105%);transition:width var(--portal-nav-duration) ease,transform var(--portal-nav-duration) ease;display:flex;flex-direction:column;overflow:visible}
+        .app-sidebar.open{transform:translateX(0)}
+        html[data-sidebar-pinned="true"] .app-sidebar{transform:translateX(0)}
+        html[data-sidebar-expanded="false"] .app-sidebar{width:var(--portal-sidebar-collapsed)}
+        .app-sidebar-header{height:56px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--portal-border);box-sizing:border-box;white-space:nowrap}
+        .app-sidebar-brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1;border-radius:7px;color:var(--portal-text);font-weight:700;text-decoration:none;cursor:pointer}
+        .app-sidebar-brand:hover{color:var(--portal-accent)}
+        .app-sidebar-logo{width:34px;height:34px;border-radius:9px;background:var(--portal-accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:.02em;flex:0 0 auto}
+        .app-sidebar-name,.primary-navigation-label{overflow:hidden;opacity:1;max-width:180px;transition:opacity 160ms ease,max-width var(--portal-nav-duration) ease}
+        .sidebar-icon-button{color:#4b5563}
+        .sidebar-close-button{display:none}
+        .sidebar-collapse-button svg,.sidebar-pin-button svg{transition:transform var(--portal-nav-duration) ease}
+        html[data-sidebar-expanded="false"] .sidebar-collapse-button svg{transform:rotate(180deg)}
+        html[data-sidebar-pinned="true"] .sidebar-pin-button{background:#dbeafe;color:#1d4ed8}
+        .primary-navigation{display:flex;flex-direction:column;gap:5px;padding:12px 9px;overflow:visible}
+        .primary-navigation-link{position:relative;display:flex;align-items:center;gap:12px;min-height:42px;padding:7px 11px;border-radius:9px;color:#374151;text-decoration:none;font-size:14px;font-weight:600;box-sizing:border-box;transition:background-color 180ms ease,color 180ms ease}
+        .primary-navigation-link:hover{background:var(--portal-hover);color:var(--portal-text)}
+        .primary-navigation-link.disabled{color:#9ca3af;cursor:not-allowed}
+        .primary-navigation-link.disabled:hover{background:transparent;color:#9ca3af}
+        .primary-navigation-link.active{background:#dbeafe;color:#1d4ed8;font-weight:700}
+        .primary-navigation-link.active::before{content:"";position:absolute;left:-9px;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:var(--portal-accent)}
+        .primary-navigation-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px}
+        .primary-navigation-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+        html[data-sidebar-expanded="false"] .app-sidebar-name,html[data-sidebar-expanded="false"] .primary-navigation-label{opacity:0;max-width:0;pointer-events:none}
+        html[data-sidebar-expanded="false"] .app-sidebar-header{padding-left:8px;padding-right:8px}
+        html[data-sidebar-expanded="false"] .app-sidebar-brand{display:flex}
+        html[data-sidebar-expanded="false"] .sidebar-pin-button,html[data-sidebar-expanded="false"] .sidebar-collapse-button{display:none}
+        html[data-sidebar-expanded="false"] .primary-navigation-link{justify-content:center;padding-left:0;padding-right:0}
+        html[data-sidebar-expanded="false"] .primary-navigation-link::after{content:attr(data-tooltip);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%) translateX(-4px);padding:6px 9px;border-radius:6px;background:#111827;color:white;font-size:12px;font-weight:600;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2);transition:opacity 150ms ease,transform 150ms ease;z-index:1300}
+        html[data-sidebar-expanded="false"] .primary-navigation-link:hover::after,html[data-sidebar-expanded="false"] .primary-navigation-link:focus-visible::after{opacity:1;visibility:visible;transform:translateY(-50%) translateX(0)}
+        .navigation-backdrop{position:fixed;inset:var(--portal-header-height) 0 0;background:rgba(17,24,39,.54);z-index:1050;opacity:0;visibility:hidden;transition:opacity var(--portal-nav-duration) ease,visibility var(--portal-nav-duration) ease}
+        body.navigation-open .navigation-backdrop{opacity:1;visibility:visible}
+        main{padding:56px 12px 18px;transition:margin-left var(--portal-nav-duration) ease;min-width:0}
+        html[data-sidebar-pinned="true"][data-sidebar-expanded="true"] main{margin-left:var(--portal-sidebar-expanded)}
+        html[data-sidebar-pinned="true"][data-sidebar-expanded="false"] main{margin-left:var(--portal-sidebar-collapsed)}
         .portal-layout{display:grid;grid-template-columns:232px minmax(0,1fr);gap:12px;align-items:start}
         .sidebar{position:sticky;top:56px;height:calc(100vh - 68px);overflow-y:auto;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px;box-shadow:0 1px 5px rgba(0,0,0,.07);box-sizing:border-box}
         .content-area{min-width:0}
@@ -46,8 +107,8 @@
         details.side-details{margin-top:8px}
         details.side-details summary{cursor:pointer;font-size:12px;font-weight:bold;color:#6b7280;text-transform:uppercase;margin:8px 6px}
         .danger-link,.danger-action{color:#991b1b!important}
-        .card{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 5px rgba(0,0,0,.06)}
-        .section-header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+        .card{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 5px rgba(0,0,0,.06);box-sizing:border-box;max-width:100%}
+        .section-header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
         .section-header h3{margin:0}
         .section-block{border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;padding:12px;margin:10px 0}
         .section-title{font-weight:bold;margin-bottom:8px}
@@ -83,19 +144,59 @@
         .loading-box{background:#111827;padding:24px 32px;border-radius:12px;text-align:center;min-width:300px}
         .spinner{width:38px;height:38px;border:4px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;margin:0 auto 14px;animation:spin .9s linear infinite}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @media(max-width:900px){.portal-layout{grid-template-columns:1fr}.sidebar{position:relative;top:0;height:auto}}
+        @media(max-width:900px){
+            header{padding:0 10px}
+            header h1{font-size:15px}
+            .header-ai-mode{font-size:0}
+            .header-ai-mode select{max-width:145px}
+            .header-ai-status{display:none}
+            .header-test-button{display:none}
+            .app-sidebar,html[data-sidebar-expanded="false"] .app-sidebar{width:min(86vw,320px);transform:translateX(-105%)}
+            .app-sidebar.open{transform:translateX(0)}
+            html[data-sidebar-pinned="true"] .app-sidebar{transform:translateX(-105%)}
+            html[data-sidebar-pinned="true"] .app-sidebar.open{transform:translateX(0)}
+            html[data-sidebar-expanded="false"] .app-sidebar-brand{display:flex}
+            html[data-sidebar-expanded="false"] .app-sidebar-name,html[data-sidebar-expanded="false"] .primary-navigation-label{opacity:1;max-width:180px;pointer-events:auto}
+            html[data-sidebar-expanded="false"] .primary-navigation-link{justify-content:flex-start;padding:7px 11px}
+            html[data-sidebar-expanded="false"] .primary-navigation-link::after{display:none}
+            .sidebar-collapse-button,.sidebar-pin-button{display:none}
+            .sidebar-close-button{display:inline-flex;color:#4b5563}
+            main,html[data-sidebar-pinned="true"][data-sidebar-expanded="true"] main,html[data-sidebar-pinned="true"][data-sidebar-expanded="false"] main{margin-left:0}
+            .card{overflow-x:auto}
+            .portal-layout{grid-template-columns:1fr}
+            .sidebar{position:relative;top:0;height:auto}
+        }
+        @media(max-width:560px){
+            header h1{max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .header-controls{gap:5px}
+            .header-ai-mode select{max-width:126px;font-size:11px}
+        }
+        @media(prefers-reduced-motion:reduce){
+            *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+        }
     </style>
 </head>
 <body>
 <header>
     <div class="header-title">
-        <h1>QA AI Platform - Web Portal</h1>
-        <a class="header-link" href="/portal">Requirements</a>
-        <a class="header-link" href="/portal/chat">AI Chat</a>
-        <a class="header-link" href="/portal/knowledge">Knowledge System</a>
-        {% if knowledge_base_enabled is defined and knowledge_base_enabled() %}
-        <a class="header-link" href="/portal/kb">Knowledge Base</a>
-        {% endif %}
+        <button
+            id="navigationToggle"
+            class="navigation-toggle"
+            type="button"
+            aria-label="Open navigation menu"
+            aria-expanded="false"
+            aria-controls="appSidebar"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <a
+            id="portalHeaderBrand"
+            class="header-brand-link"
+            href="/portal"
+            aria-label="QA AI Platform - Web Portal home"
+        >
+            <h1>QA AI Platform - Web Portal</h1>
+        </a>
     </div>
     <div class="header-controls">
         <label class="header-ai-mode" for="portalAiModeSelect">
@@ -114,7 +215,50 @@
     </div>
 </header>
 <div id="llmTestPanel" class="llm-test-panel" aria-live="polite"></div>
-<main>{% block content %}{% endblock %}</main>
+<aside id="appSidebar" class="app-sidebar" aria-label="Application navigation" tabindex="-1">
+    <div class="app-sidebar-header">
+        <a
+            id="portalSidebarBrand"
+            class="app-sidebar-brand"
+            href="/portal"
+            aria-label="QA AI Platform home"
+        >
+            <span class="app-sidebar-logo" aria-hidden="true">QA</span>
+            <span class="app-sidebar-name">QA AI Platform</span>
+        </a>
+        <button
+            id="sidebarPinButton"
+            class="sidebar-icon-button sidebar-pin-button"
+            type="button"
+            aria-label="Unpin sidebar"
+            aria-pressed="true"
+            title="Pin or unpin sidebar"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4 6 6-3 1-4 4-1 5-2-2-4-4-2-2 5-1 4-4 1-3Z"/></svg>
+        </button>
+        <button
+            id="sidebarCollapseButton"
+            class="sidebar-icon-button sidebar-collapse-button"
+            type="button"
+            aria-label="Collapse sidebar"
+            aria-expanded="true"
+            title="Collapse or expand sidebar"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button
+            id="sidebarCloseButton"
+            class="sidebar-icon-button sidebar-close-button"
+            type="button"
+            aria-label="Close navigation menu"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+    </div>
+    {% include "_portal_navigation.html" %}
+</aside>
+<div id="navigationBackdrop" class="navigation-backdrop" aria-hidden="true"></div>
+<main id="portalMainContent">{% block content %}{% endblock %}</main>
 <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-box">
         <div class="spinner"></div>
@@ -125,6 +269,190 @@
 <script>
 const PORTAL_AI_MODE_KEY = "portal_ai_mode";
 const PORTAL_DEFAULT_AI_MODE = "{{ portal_default_ai_mode|default('NO_LLM') }}";
+const SIDEBAR_PINNED_KEY = "qa-ai-platform.sidebar.pinned";
+const SIDEBAR_EXPANDED_KEY = "qa-ai-platform.sidebar.expanded";
+
+function initializePortalNavigation() {
+    const root = document.documentElement;
+    const body = document.body;
+    const sidebar = document.getElementById("appSidebar");
+    const toggle = document.getElementById("navigationToggle");
+    const closeButton = document.getElementById("sidebarCloseButton");
+    const collapseButton = document.getElementById("sidebarCollapseButton");
+    const pinButton = document.getElementById("sidebarPinButton");
+    const backdrop = document.getElementById("navigationBackdrop");
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+
+    if (!sidebar || !toggle || !backdrop) {
+        return;
+    }
+
+    const state = {
+        pinned: root.dataset.sidebarPinned !== "false",
+        expanded: root.dataset.sidebarExpanded !== "false",
+        open: false,
+    };
+    let wasMobile = mediaQuery.matches;
+
+    function savePreference(key, value) {
+        try {
+            localStorage.setItem(key, String(Boolean(value)));
+        } catch (_error) {
+            // Persistence is optional; navigation state remains functional.
+        }
+    }
+
+    function isTemporary() {
+        return mediaQuery.matches || !state.pinned;
+    }
+
+    function isVisible() {
+        return (!mediaQuery.matches && state.pinned) || state.open;
+    }
+
+    function applyState() {
+        const mobile = mediaQuery.matches;
+        root.dataset.sidebarPinned = String(state.pinned);
+        root.dataset.sidebarExpanded = String(state.expanded);
+        sidebar.classList.toggle("open", isVisible());
+        const temporaryOpen = state.open && isTemporary();
+        body.classList.toggle("navigation-open", temporaryOpen);
+        backdrop.setAttribute("aria-hidden", String(!temporaryOpen));
+        toggle.setAttribute("aria-expanded", String(isVisible()));
+        toggle.setAttribute(
+            "aria-label",
+            temporaryOpen ? "Close navigation menu" : "Open navigation menu"
+        );
+
+        if (collapseButton) {
+            collapseButton.setAttribute("aria-expanded", String(state.expanded));
+            collapseButton.setAttribute(
+                "aria-label",
+                state.expanded ? "Collapse sidebar" : "Expand sidebar"
+            );
+        }
+        if (pinButton) {
+            pinButton.setAttribute("aria-pressed", String(state.pinned));
+            pinButton.setAttribute(
+                "aria-label",
+                state.pinned ? "Unpin sidebar" : "Pin sidebar"
+            );
+        }
+
+        sidebar.querySelectorAll(".primary-navigation-link").forEach(link => {
+            const label = link.dataset.tooltip || "";
+            if (!mobile && !state.expanded) {
+                link.setAttribute("title", label);
+            } else {
+                link.removeAttribute("title");
+            }
+        });
+    }
+
+    function openTemporaryNavigation() {
+        state.open = true;
+        applyState();
+        window.setTimeout(() => {
+            const focusTarget =
+                (mediaQuery.matches && closeButton) ||
+                sidebar.querySelector(".primary-navigation-link");
+            if (focusTarget) focusTarget.focus();
+        }, 0);
+    }
+
+    function closeTemporaryNavigation({restoreFocus = true} = {}) {
+        if (!state.open) return;
+        state.open = false;
+        applyState();
+        if (restoreFocus) toggle.focus();
+    }
+
+    toggle.addEventListener("click", () => {
+        if (!mediaQuery.matches && state.pinned) {
+            state.expanded = !state.expanded;
+            savePreference(SIDEBAR_EXPANDED_KEY, state.expanded);
+            applyState();
+            return;
+        }
+        if (state.open) {
+            closeTemporaryNavigation();
+        } else {
+            openTemporaryNavigation();
+        }
+    });
+
+    if (collapseButton) {
+        collapseButton.addEventListener("click", () => {
+            state.expanded = !state.expanded;
+            savePreference(SIDEBAR_EXPANDED_KEY, state.expanded);
+            applyState();
+        });
+    }
+
+    if (pinButton) {
+        pinButton.addEventListener("click", () => {
+            state.pinned = !state.pinned;
+            state.open = !state.pinned;
+            savePreference(SIDEBAR_PINNED_KEY, state.pinned);
+            applyState();
+        });
+    }
+
+    if (closeButton) {
+        closeButton.addEventListener("click", () => closeTemporaryNavigation());
+    }
+    backdrop.addEventListener("click", () => closeTemporaryNavigation());
+
+    sidebar.querySelectorAll(".primary-navigation-link").forEach(link => {
+        link.addEventListener("click", () => {
+            if (isTemporary()) {
+                closeTemporaryNavigation({restoreFocus: false});
+            }
+        });
+    });
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && state.open && isTemporary()) {
+            event.preventDefault();
+            closeTemporaryNavigation();
+            return;
+        }
+        if (event.key !== "Tab" || !state.open || !isTemporary()) {
+            return;
+        }
+        const focusable = Array.from(
+            sidebar.querySelectorAll(
+                "a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])"
+            )
+        ).filter(element => element.offsetParent !== null);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+
+    function handleResponsiveChange() {
+        const mobile = mediaQuery.matches;
+        if (mobile !== wasMobile) {
+            state.open = false;
+            wasMobile = mobile;
+        }
+        applyState();
+    }
+    if (typeof mediaQuery.addEventListener === "function") {
+        mediaQuery.addEventListener("change", handleResponsiveChange);
+    } else {
+        mediaQuery.addListener(handleResponsiveChange);
+    }
+
+    applyState();
+}
 
 function showLoading(title,message){
     document.getElementById("loadingTitle").innerHTML="<b>"+(title||"Processing...")+"</b>";
@@ -405,6 +733,7 @@ window.portalFetch = portalFetch;
 window.submitPortalFormWithAiHeaders = submitPortalFormWithAiHeaders;
 
 document.addEventListener("DOMContentLoaded",()=>{
+    initializePortalNavigation();
     renderPortalAiModeControls();
 
     const modeSelect = document.getElementById("portalAiModeSelect");

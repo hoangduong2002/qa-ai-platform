@@ -174,4 +174,104 @@
     <div class="placeholder-box">No documents yet.</div>
   {% endif %}
 </div>
+
+{% if maintainer_configured %}
+<div class="card" style="border-color: #b42318;">
+  <h3>Delete Knowledge Base</h3>
+  <p class="small">
+    Permanently removes this Knowledge Base's documents, collections, indexes,
+    operational metadata, and Jira Project Key assignments. Existing
+    Requirement analyses and their Knowledge snapshots are preserved.
+  </p>
+  <button type="button" id="open-kb-delete" style="background: #b42318;">
+    Delete Knowledge Base
+  </button>
+</div>
+
+<dialog id="kb-delete-dialog" aria-labelledby="kb-delete-title">
+  <form method="post" action="/portal/kb/{{ kb.kb_id }}/delete" id="kb-delete-form">
+    <h3 id="kb-delete-title">Permanently delete {{ kb.name }}?</h3>
+    <p>This operation cannot be undone.</p>
+    <ul>
+      <li>{{ deletion_impact.collection_count }} collections will be deleted</li>
+      <li>{{ deletion_impact.document_count }} documents will be deleted</li>
+      <li>
+        Jira Project Keys:
+        {% if deletion_impact.jira_project_keys %}
+          {{ deletion_impact.jira_project_keys | join(', ') }} (released)
+        {% else %}
+          none
+        {% endif %}
+      </li>
+      <li>
+        {{ deletion_impact.historical_snapshot_count }} historical Knowledge
+        snapshots will be preserved
+      </li>
+      {% if not deletion_impact.can_delete %}
+      <li>{{ deletion_impact.blocking_reasons | join(' ') }}</li>
+      {% endif %}
+    </ul>
+    <label for="kb-delete-confirmation">
+      Type <strong>{{ kb.kb_id }}</strong> to confirm
+    </label>
+    <input
+      id="kb-delete-confirmation"
+      name="confirmation"
+      type="text"
+      autocomplete="off"
+      data-required-value="{{ kb.kb_id }}"
+      required
+    />
+    <label for="kb-delete-token">Maintainer token</label>
+    <input
+      id="kb-delete-token"
+      type="password"
+      name="maintainer_token_value"
+      autocomplete="current-password"
+      required
+    />
+    <div style="display: flex; gap: 8px; margin-top: 12px;">
+      <button type="button" id="cancel-kb-delete">Cancel</button>
+      <button
+        type="submit"
+        id="confirm-kb-delete"
+        style="background: #b42318;"
+        disabled
+      >
+        Delete Knowledge Base
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const dialog = document.getElementById("kb-delete-dialog");
+  const openButton = document.getElementById("open-kb-delete");
+  const cancelButton = document.getElementById("cancel-kb-delete");
+  const form = document.getElementById("kb-delete-form");
+  const confirmation = document.getElementById("kb-delete-confirmation");
+  const submitButton = document.getElementById("confirm-kb-delete");
+  const requiredValue = confirmation.dataset.requiredValue;
+
+  openButton.addEventListener("click", () => {
+    dialog.showModal();
+    confirmation.focus();
+  });
+  cancelButton.addEventListener("click", () => dialog.close());
+  confirmation.addEventListener("input", () => {
+    submitButton.disabled = confirmation.value !== requiredValue;
+  });
+  form.addEventListener("submit", () => {
+    submitButton.disabled = true;
+    submitButton.textContent = "Deleting…";
+    cancelButton.disabled = true;
+  });
+  {% if open_deletion_dialog %}
+  dialog.showModal();
+  confirmation.focus();
+  {% endif %}
+})();
+</script>
+{% endif %}
 {% endblock %}

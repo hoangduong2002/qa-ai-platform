@@ -84,7 +84,9 @@ class KnowledgeStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def acquire_write_lock(self, kb_id: str) -> AbstractContextManager[None]:
+    def acquire_write_lock(
+        self, kb_id: str, timeout: float = -1
+    ) -> AbstractContextManager[None]:
         raise NotImplementedError
 
     @abstractmethod

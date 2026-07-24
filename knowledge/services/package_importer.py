@@ -593,6 +593,20 @@ class KnowledgePackageImporter:
         auto_publish: bool = False,
         actor: str = "maintainer",
     ) -> dict[str, Any]:
+        with self.service.storage.acquire_write_lock(plan.kb_id):
+            return self._execute_import(
+                plan,
+                auto_publish=auto_publish,
+                actor=actor,
+            )
+
+    def _execute_import(
+        self,
+        plan: KnowledgePackagePlan,
+        *,
+        auto_publish: bool = False,
+        actor: str = "maintainer",
+    ) -> dict[str, Any]:
         current = self.build_import_plan(
             kb_id=plan.kb_id,
             entries=plan.entries,

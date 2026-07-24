@@ -6,6 +6,9 @@
   {% if error_message %}
     <div class="placeholder-box">{{ error_message }}</div>
   {% endif %}
+  {% if success_message %}
+    <div class="placeholder-box" role="status">{{ success_message }}</div>
+  {% endif %}
   {% if not maintainer_configured %}
     <div class="placeholder-box">Read-only access. Configure KNOWLEDGE_BASE_MAINTAINER_TOKEN on the server to enable management operations.</div>
   {% endif %}

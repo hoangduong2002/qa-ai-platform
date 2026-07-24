@@ -3,15 +3,25 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import shutil
+import stat
+import time
+import threading
+import uuid
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 import jsonlines
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
-from knowledge.domain.errors import KnowledgeNotFoundError, KnowledgeValidationError
+from knowledge.domain.errors import (
+    KnowledgeConflictError,
+    KnowledgeDeletionError,
+    KnowledgeNotFoundError,
+    KnowledgeValidationError,
+)
 from knowledge.domain.models import (
     ChunkRecord,
     CollectionMetadata,
@@ -30,9 +40,17 @@ from knowledge.storage.utils import (
 
 class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
     def __init__(self, root: Path):
-        self.root = root
+        self.root = root.resolve()
         self.config_dir = self.root / "_config"
         self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.operation_locks_dir = self.config_dir / "operation_locks"
+        self.deletion_audit_dir = self.config_dir / "deletion_audit"
+        self.deletion_staging_dir = self.root / "_deleting"
+        self.operation_locks_dir.mkdir(parents=True, exist_ok=True)
+        self.deletion_audit_dir.mkdir(parents=True, exist_ok=True)
+        self.deletion_staging_dir.mkdir(parents=True, exist_ok=True)
+        self._operation_locks: dict[str, FileLock] = {}
+        self._operation_locks_guard = threading.Lock()
 
     def _kb_dir(self, kb_id: str) -> Path:
         kb_id = validate_identifier(kb_id, "kb_id")
@@ -311,6 +329,20 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
 
         return str(path)
 
+    def append_deletion_audit_event(self, kb_id: str, event: dict[str, Any]) -> str:
+        kb_id = validate_identifier(kb_id, "kb_id")
+        path = safe_child(self.deletion_audit_dir, kb_id) / "audit.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with jsonlines.open(str(path), mode="a") as writer:
+            writer.write(event)
+        return str(path)
+
+    def archive_audit_events_for_deletion(self, kb_id: str) -> int:
+        rows = self.list_audit_events(kb_id, limit=1_000_000)
+        for row in rows:
+            self.append_deletion_audit_event(kb_id, row)
+        return len(rows)
+
     def list_audit_events(self, kb_id: str, limit: int = 100) -> list[dict[str, Any]]:
         path = self._audit_jobs_dir(kb_id) / "audit.jsonl"
 
@@ -326,12 +358,88 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         return rows[-limit:]
 
     @contextmanager
-    def acquire_write_lock(self, kb_id: str) -> Iterator[None]:
-        self._ensure_kb_layout(kb_id)
-        lock_file = self._kb_dir(kb_id) / ".write.lock"
-        lock = FileLock(str(lock_file))
-        with lock:
-            yield
+    def acquire_write_lock(self, kb_id: str, timeout: float = -1) -> Iterator[None]:
+        kb_id = validate_identifier(kb_id, "kb_id")
+        lock_file = safe_child(self.operation_locks_dir, f"{kb_id}.lock")
+        with self._operation_locks_guard:
+            lock = self._operation_locks.setdefault(
+                kb_id, FileLock(str(lock_file))
+            )
+        try:
+            with lock.acquire(timeout=timeout):
+                self.get_kb(kb_id)
+                yield
+            if not self._kb_meta_file(kb_id).exists():
+                with self._operation_locks_guard:
+                    self._operation_locks.pop(kb_id, None)
+                try:
+                    lock_file.unlink(missing_ok=True)
+                except PermissionError:
+                    # The KB is already unavailable; a stale empty lock marker is
+                    # safe and can be removed by routine operational cleanup.
+                    pass
+        except Timeout as error:
+            raise KnowledgeConflictError(
+                "Knowledge Base has an active operation. Try again after it completes."
+            ) from error
+
+    def operation_is_active(self, kb_id: str) -> bool:
+        kb_id = validate_identifier(kb_id, "kb_id")
+        lock_file = safe_child(self.operation_locks_dir, f"{kb_id}.lock")
+        with self._operation_locks_guard:
+            lock = self._operation_locks.setdefault(
+                kb_id, FileLock(str(lock_file))
+            )
+        try:
+            with lock.acquire(timeout=0):
+                return False
+        except Timeout:
+            return True
+
+    def delete_kb_directory(self, kb_id: str) -> None:
+        """Atomically hide and then hard-delete one validated KB directory."""
+        target = self._kb_dir(kb_id)
+        if target == self.root or self.root not in target.parents:
+            raise KnowledgeValidationError("Refusing unsafe Knowledge Base deletion path.")
+        if not target.exists():
+            raise KnowledgeNotFoundError(f"Knowledge base not found: {kb_id}")
+        if target.is_symlink():
+            raise KnowledgeValidationError("Refusing to delete a symbolic-link Knowledge Base.")
+
+        staged = safe_child(
+            self.deletion_staging_dir,
+            f"{validate_identifier(kb_id, 'kb_id')}-{uuid.uuid4().hex}",
+        )
+        try:
+            os.replace(target, staged)
+            self._remove_tree_with_retry(staged)
+            if target.exists() or staged.exists():
+                raise KnowledgeDeletionError(
+                    "Knowledge Base storage deletion verification failed."
+                )
+        except (KnowledgeValidationError, KnowledgeNotFoundError):
+            raise
+        except OSError as error:
+            raise KnowledgeDeletionError(
+                "Knowledge Base storage could not be fully removed."
+            ) from error
+
+    @staticmethod
+    def _remove_tree_with_retry(path: Path, attempts: int = 5) -> None:
+        def make_writable_and_retry(function, item, _error_info):
+            os.chmod(item, stat.S_IWRITE)
+            function(item)
+
+        last_error: OSError | None = None
+        for attempt in range(attempts):
+            try:
+                shutil.rmtree(path, onexc=make_writable_and_retry)
+                return
+            except PermissionError as error:
+                last_error = error
+                time.sleep(0.05 * (attempt + 1))
+        if last_error:
+            raise last_error
 
     def kb_health(self, kb_id: str) -> dict[str, Any]:
         kb = self.get_kb(kb_id)
@@ -347,7 +455,6 @@ class FileSystemKnowledgeStorage(KnowledgeStorage, KnowledgeAuditWriter):
         }
 
     def index_db_path(self, kb_id: str) -> Path:
-        self._ensure_kb_layout(kb_id)
         return self._indexes_dir(kb_id) / "search.db"
 
     def index_manifest_path(self, kb_id: str) -> Path:

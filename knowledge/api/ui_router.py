@@ -12,6 +12,7 @@ from knowledge.api.deps import require_kb_enabled
 from knowledge.domain.models import SearchRequest
 from knowledge.domain.errors import (
     KnowledgeConflictError,
+    KnowledgeDeletionError,
     KnowledgeError,
     KnowledgeNotFoundError,
     KnowledgePackageError,
@@ -56,6 +57,7 @@ def _render_kb_detail(
     *,
     error_message: str = "",
     package_result: dict | None = None,
+    open_deletion_dialog: bool = False,
     status_code: int = 200,
 ):
     service = get_knowledge_service()
@@ -67,11 +69,13 @@ def _render_kb_detail(
             "collections": [item.model_dump() for item in service.list_collections(kb_id)],
             "documents": [item.model_dump() for item in service.list_documents(kb_id)],
             "health": service.kb_health(kb_id),
+            "deletion_impact": service.deletion_impact(kb_id).model_dump(),
             "search_results": [],
             "query": "",
             "maintainer_configured": bool(maintainer_token()),
             "error_message": error_message,
             "package_result": package_result,
+            "open_deletion_dialog": open_deletion_dialog,
         },
         status_code=status_code,
     )
@@ -81,6 +85,7 @@ def _render_kb_list(
     request: Request,
     *,
     error_message: str = "",
+    success_message: str = "",
     status_code: int = 200,
 ):
     service = get_knowledge_service()
@@ -91,6 +96,7 @@ def _render_kb_list(
             "kbs": [kb.model_dump() for kb in service.list_kbs()],
             "maintainer_configured": bool(maintainer_token()),
             "error_message": error_message,
+            "success_message": success_message,
         },
         status_code=status_code,
     )
@@ -132,11 +138,15 @@ async def _inspect_portal_package(
 def kb_list_page(
     request: Request,
     error: str = "",
+    deleted: str = "",
     _: None = Depends(require_kb_enabled),
 ):
     return _render_kb_list(
         request,
         error_message=_maintainer_error_message(error),
+        success_message=(
+            f'Knowledge Base "{deleted}" was deleted.' if deleted else ""
+        ),
     )
 
 
@@ -191,6 +201,67 @@ def kb_detail_page(
         kb_id,
         error_message=_maintainer_error_message(error),
     )
+
+
+@router.post("/{kb_id}/delete", response_class=HTMLResponse)
+async def kb_delete_page(
+    request: Request,
+    kb_id: str,
+    confirmation: str = Form(""),
+    maintainer_token_value: str = Form(""),
+    _: None = Depends(require_kb_enabled),
+):
+    try:
+        _assert_ui_maintainer(maintainer_token_value)
+        result = get_knowledge_service().delete_kb(
+            kb_id,
+            confirmation=confirmation,
+            actor="portal",
+        )
+        return RedirectResponse(
+            url=f"/portal/kb?{urlencode({'deleted': result.name})}",
+            status_code=303,
+        )
+    except KnowledgePermissionError:
+        return _render_kb_detail(
+            request,
+            kb_id,
+            error_message="Maintainer authorization failed.",
+            open_deletion_dialog=True,
+            status_code=403,
+        )
+    except KnowledgeConflictError as error:
+        return _render_kb_detail(
+            request,
+            kb_id,
+            error_message=str(error),
+            open_deletion_dialog=True,
+            status_code=409,
+        )
+    except KnowledgeValidationError as error:
+        return _render_kb_detail(
+            request,
+            kb_id,
+            error_message=str(error),
+            open_deletion_dialog=True,
+            status_code=400,
+        )
+    except KnowledgeNotFoundError as error:
+        return _render_kb_list(request, error_message=str(error), status_code=404)
+    except KnowledgeDeletionError:
+        logger.exception("Knowledge Base storage deletion failed for kb_id=%s", kb_id)
+        return _render_kb_list(
+            request,
+            error_message="Knowledge Base deletion could not be completed safely.",
+            status_code=500,
+        )
+    except Exception:
+        logger.exception("Unexpected Knowledge Base deletion failure for kb_id=%s", kb_id)
+        return _render_kb_list(
+            request,
+            error_message="Knowledge Base deletion could not be completed safely.",
+            status_code=500,
+        )
 
 
 @router.post("/{kb_id}/jira-project-keys", response_class=HTMLResponse)

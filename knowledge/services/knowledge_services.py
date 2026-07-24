@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import json
+import logging
 from pathlib import Path
 from typing import Any
 
+from app.config.env_loader import PROJECT_ROOT
 from knowledge.domain.errors import (
     KnowledgeConflictError,
+    KnowledgeDeletionError,
     KnowledgeValidationError,
 )
 from knowledge.domain.models import (
@@ -13,6 +17,8 @@ from knowledge.domain.models import (
     CollectionMetadata,
     DocumentMetadata,
     DocumentStatus,
+    KnowledgeBaseDeletionImpact,
+    KnowledgeBaseDeletionResult,
     KnowledgeBaseMetadata,
     SearchRequest,
     utc_now_iso,
@@ -28,10 +34,17 @@ from knowledge.services.jira_project_keys import (
 from knowledge.storage.filesystem_storage import FileSystemKnowledgeStorage
 from knowledge.storage.utils import content_checksum, validate_identifier
 
+logger = logging.getLogger(__name__)
+
 
 class KnowledgeServiceFacade:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, requirements_root: Path | None = None):
         self.storage = FileSystemKnowledgeStorage(root)
+        self.requirements_root = (
+            requirements_root.resolve()
+            if requirements_root is not None
+            else (PROJECT_ROOT / "requirements").resolve()
+        )
         self.parsers = ParserRegistry()
         self.package_parsers = StreamingPackageParserRegistry()
         self.retriever = SQLiteFTSKnowledgeRetriever(self.storage.index_db_path)
@@ -63,15 +76,15 @@ class KnowledgeServiceFacade:
         with self.storage.acquire_kb_metadata_lock():
             self.ensure_jira_project_keys_available(normalized_keys)
             created = self.storage.create_kb(kb)
-        self.storage.append_audit_event(
-            kb_id,
-            {
-                "ts": now,
-                "event": "kb_created",
-                "actor": actor,
-                "kb_id": kb_id,
-            },
-        )
+            self.storage.append_audit_event(
+                kb_id,
+                {
+                    "ts": now,
+                    "event": "kb_created",
+                    "actor": actor,
+                    "kb_id": kb_id,
+                },
+            )
         return created
 
     def list_kbs(self):
@@ -79,6 +92,106 @@ class KnowledgeServiceFacade:
 
     def get_kb(self, kb_id: str):
         return self.storage.get_kb(kb_id)
+
+    def _historical_snapshot_count(self, kb_id: str) -> int:
+        if not self.requirements_root.exists():
+            return 0
+        count = 0
+        for path in self.requirements_root.glob("*/knowledge/snapshots/*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if payload.get("knowledge_base_id") == kb_id:
+                count += 1
+        return count
+
+    def deletion_impact(self, kb_id: str) -> KnowledgeBaseDeletionImpact:
+        kb = self.storage.get_kb(kb_id)
+        active = self.storage.operation_is_active(kb_id)
+        return KnowledgeBaseDeletionImpact(
+            kb_id=kb.kb_id,
+            name=kb.name,
+            collection_count=len(self.storage.list_collections(kb_id)),
+            document_count=len(self.storage.list_documents(kb_id)),
+            jira_project_keys=list(kb.jira_project_keys),
+            historical_snapshot_count=self._historical_snapshot_count(kb_id),
+            active_operations=1 if active else 0,
+            can_delete=not active,
+            blocking_reasons=(
+                ["An active Knowledge Base operation must finish before deletion."]
+                if active
+                else []
+            ),
+        )
+
+    def delete_kb(
+        self,
+        kb_id: str,
+        *,
+        confirmation: str,
+        actor: str,
+    ) -> KnowledgeBaseDeletionResult:
+        kb_id = validate_identifier(kb_id, "kb_id")
+        if confirmation != kb_id:
+            raise KnowledgeValidationError(
+                "Deletion confirmation must exactly match the Knowledge Base ID."
+            )
+
+        with self.storage.acquire_kb_metadata_lock():
+            with self.storage.acquire_write_lock(kb_id, timeout=0):
+                impact = self.deletion_impact(kb_id)
+                self.storage.archive_audit_events_for_deletion(kb_id)
+                started_at = utc_now_iso()
+                self.storage.append_deletion_audit_event(
+                    kb_id,
+                    {
+                        "ts": started_at,
+                        "event": "kb_deletion_started",
+                        "actor": actor,
+                        "kb_id": kb_id,
+                        "impact": impact.model_dump(),
+                    },
+                )
+                try:
+                    self.storage.delete_kb_directory(kb_id)
+                except Exception as error:
+                    self.storage.append_deletion_audit_event(
+                        kb_id,
+                        {
+                            "ts": utc_now_iso(),
+                            "event": "kb_deletion_failed",
+                            "actor": actor,
+                            "kb_id": kb_id,
+                            "error_type": type(error).__name__,
+                        },
+                    )
+                    logger.exception("Knowledge Base deletion failed for kb_id=%s", kb_id)
+                    if isinstance(error, KnowledgeDeletionError):
+                        raise
+                    raise
+
+                deleted_at = utc_now_iso()
+                result = KnowledgeBaseDeletionResult(
+                    kb_id=kb_id,
+                    name=impact.name,
+                    deleted_collection_count=impact.collection_count,
+                    deleted_document_count=impact.document_count,
+                    released_jira_project_keys=impact.jira_project_keys,
+                    historical_snapshot_count=impact.historical_snapshot_count,
+                    deleted_at=deleted_at,
+                    deleted_by=actor,
+                )
+                self.storage.append_deletion_audit_event(
+                    kb_id,
+                    {
+                        "ts": deleted_at,
+                        "event": "kb_deleted",
+                        "actor": actor,
+                        **result.model_dump(),
+                    },
+                )
+                return result
 
     def update_kb(self, kb_id: str, patch: dict[str, Any], actor: str):
         safe_patch = dict(patch)
@@ -102,15 +215,15 @@ class KnowledgeServiceFacade:
                     current_kb_id=kb_id,
                 )
             updated = self.storage.update_kb(kb_id, safe_patch)
-        self.storage.append_audit_event(
-            kb_id,
-            {
-                "ts": utc_now_iso(),
-                "event": "kb_updated",
-                "actor": actor,
-                "patch": safe_patch,
-            },
-        )
+            self.storage.append_audit_event(
+                kb_id,
+                {
+                    "ts": utc_now_iso(),
+                    "event": "kb_updated",
+                    "actor": actor,
+                    "patch": safe_patch,
+                },
+            )
         return updated
 
     @staticmethod
@@ -167,19 +280,22 @@ class KnowledgeServiceFacade:
             created_by=actor,
             updated_by=actor,
         )
-        created = self.storage.create_collection(collection)
-        self.storage.append_audit_event(kb_id, {"ts": now, "event": "collection_created", "actor": actor, "collection_id": collection_id})
-        return created
+        with self.storage.acquire_write_lock(kb_id):
+            created = self.storage.create_collection(collection)
+            self.storage.append_audit_event(kb_id, {"ts": now, "event": "collection_created", "actor": actor, "collection_id": collection_id})
+            return created
 
     def list_collections(self, kb_id: str):
+        self.storage.get_kb(kb_id)
         return self.storage.list_collections(kb_id)
 
     def update_collection(self, kb_id: str, collection_id: str, patch: dict[str, Any], actor: str):
         patch["updated_by"] = actor
         patch["updated_at"] = utc_now_iso()
-        updated = self.storage.update_collection(kb_id, collection_id, patch)
-        self.storage.append_audit_event(kb_id, {"ts": utc_now_iso(), "event": "collection_updated", "actor": actor, "collection_id": collection_id})
-        return updated
+        with self.storage.acquire_write_lock(kb_id):
+            updated = self.storage.update_collection(kb_id, collection_id, patch)
+            self.storage.append_audit_event(kb_id, {"ts": utc_now_iso(), "event": "collection_updated", "actor": actor, "collection_id": collection_id})
+            return updated
 
     def _validate_no_duplicate(self, kb_id: str, external_id: str | None, checksum: str):
         for item in self.storage.list_documents(kb_id):
@@ -189,7 +305,12 @@ class KnowledgeServiceFacade:
             if item.checksum == checksum and item.status != DocumentStatus.ARCHIVED:
                 raise KnowledgeValidationError("Duplicate content checksum in knowledge base.")
 
-    def upload_document(
+    def upload_document(self, **kwargs: Any) -> DocumentMetadata:
+        kb_id = str(kwargs.get("kb_id") or "")
+        with self.storage.acquire_write_lock(kb_id):
+            return self._upload_document(**kwargs)
+
+    def _upload_document(
         self,
         *,
         kb_id: str,
@@ -232,7 +353,7 @@ class KnowledgeServiceFacade:
         )
 
         doc = self.storage.save_document(document, raw_content, extension)
-        preview = self.preview_document(kb_id, document.document_id, actor=actor)
+        preview = self._preview_document(kb_id, document.document_id, actor=actor)
         doc = self.storage.update_document(kb_id, document.document_id, {
             "status": DocumentStatus.READY_FOR_REVIEW,
             "parsing_preview": preview,
@@ -242,7 +363,12 @@ class KnowledgeServiceFacade:
         self.storage.append_audit_event(kb_id, {"ts": utc_now_iso(), "event": "document_uploaded", "actor": actor, "document_id": document.document_id})
         return doc
 
-    def ingest_package_document(
+    def ingest_package_document(self, **kwargs: Any) -> DocumentMetadata:
+        kb_id = str(kwargs.get("kb_id") or "")
+        with self.storage.acquire_write_lock(kb_id):
+            return self._ingest_package_document(**kwargs)
+
+    def _ingest_package_document(
         self,
         *,
         kb_id: str,
@@ -312,6 +438,10 @@ class KnowledgeServiceFacade:
         return doc
 
     def preview_document(self, kb_id: str, document_id: str, actor: str) -> dict[str, Any]:
+        with self.storage.acquire_write_lock(kb_id):
+            return self._preview_document(kb_id, document_id, actor)
+
+    def _preview_document(self, kb_id: str, document_id: str, actor: str) -> dict[str, Any]:
         document = self.storage.get_document(kb_id, document_id)
         self.storage.update_document(kb_id, document_id, {"status": DocumentStatus.VALIDATING, "updated_at": utc_now_iso(), "updated_by": actor})
 
@@ -337,6 +467,7 @@ class KnowledgeServiceFacade:
         return self.storage.get_document(kb_id, document_id)
 
     def list_documents(self, kb_id: str, collection_id: str | None = None):
+        self.storage.get_kb(kb_id)
         return self.storage.list_documents(kb_id, collection_id)
 
     def _build_chunks(self, document: DocumentMetadata):
@@ -445,6 +576,10 @@ class KnowledgeServiceFacade:
         return self.publish_document(kb_id, document_id, actor)
 
     def archive_document(self, kb_id: str, document_id: str, actor: str) -> DocumentMetadata:
+        with self.storage.acquire_write_lock(kb_id):
+            return self._archive_document(kb_id, document_id, actor)
+
+    def _archive_document(self, kb_id: str, document_id: str, actor: str) -> DocumentMetadata:
         doc = self.storage.update_document(
             kb_id,
             document_id,
@@ -458,6 +593,12 @@ class KnowledgeServiceFacade:
         return doc
 
     def supersede_document(self, kb_id: str, document_id: str, replacement_document_id: str, actor: str) -> dict[str, Any]:
+        with self.storage.acquire_write_lock(kb_id):
+            return self._supersede_document(
+                kb_id, document_id, replacement_document_id, actor
+            )
+
+    def _supersede_document(self, kb_id: str, document_id: str, replacement_document_id: str, actor: str) -> dict[str, Any]:
         original = self.storage.get_document(kb_id, document_id)
         replacement = self.storage.get_document(kb_id, replacement_document_id)
 
@@ -498,6 +639,7 @@ class KnowledgeServiceFacade:
         }
 
     def search(self, kb_id: str, request: SearchRequest):
+        self.storage.get_kb(kb_id)
         if request.top_k <= 0:
             request.top_k = default_top_k()
         return self.retriever.search(kb_id, request)
@@ -560,6 +702,10 @@ class KnowledgeServiceFacade:
         }
 
     def recover(self, kb_id: str, actor: str) -> dict[str, Any]:
+        with self.storage.acquire_write_lock(kb_id):
+            return self._recover(kb_id, actor)
+
+    def _recover(self, kb_id: str, actor: str) -> dict[str, Any]:
         docs = self.storage.list_documents(kb_id)
         recovered: list[str] = []
 
@@ -581,4 +727,5 @@ class KnowledgeServiceFacade:
         }
 
     def audit(self, kb_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        self.storage.get_kb(kb_id)
         return self.storage.list_audit_events(kb_id, limit=limit)

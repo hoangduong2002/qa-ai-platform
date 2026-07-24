@@ -18,6 +18,10 @@ class KnowledgePermissionError(KnowledgeError):
     pass
 
 
+class KnowledgeDeletionError(KnowledgeError):
+    """Raised when an operational Knowledge Base cannot be safely removed."""
+
+
 class KnowledgePackageError(KnowledgeValidationError):
     """Base error for package inspection or import validation."""
 

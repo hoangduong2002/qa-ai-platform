@@ -31,6 +31,33 @@ class KnowledgeBaseMetadata(BaseModel):
     updated_by: str
 
 
+class KnowledgeBaseDeletionImpact(BaseModel):
+    kb_id: str
+    name: str
+    collection_count: int
+    document_count: int
+    jira_project_keys: list[str] = Field(default_factory=list)
+    historical_snapshot_count: int = 0
+    historical_snapshots_preserved: bool = True
+    active_operations: int = 0
+    can_delete: bool = True
+    blocking_reasons: list[str] = Field(default_factory=list)
+
+
+class KnowledgeBaseDeletionResult(BaseModel):
+    status: str = "deleted"
+    deleted: bool = True
+    kb_id: str
+    name: str
+    deleted_collection_count: int
+    deleted_document_count: int
+    released_jira_project_keys: list[str] = Field(default_factory=list)
+    historical_snapshot_count: int = 0
+    historical_snapshots_preserved: bool = True
+    deleted_at: str
+    deleted_by: str
+
+
 class CollectionMetadata(BaseModel):
     kb_id: str
     collection_id: str

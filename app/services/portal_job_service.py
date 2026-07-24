@@ -1,7 +1,9 @@
 import asyncio
+import errno
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 import uuid
@@ -10,6 +12,7 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Callable
 
+from app.config.env_loader import PROJECT_ROOT
 from app.services.portal_ai_mode_service import (
     reset_portal_ai_mode,
     set_portal_ai_mode_context,
@@ -19,7 +22,7 @@ from app.services.ai_provider_error_service import format_provider_error
 
 logger = logging.getLogger(__name__)
 
-RUNTIME_PORTAL_JOBS_DIR = Path("runtime") / "portal_jobs"
+RUNTIME_PORTAL_JOBS_DIR = (PROJECT_ROOT / "runtime" / "portal_jobs").resolve()
 
 TICKET_BUSY_MESSAGE = "This ticket is already being processed."
 JOB_LIMIT_MESSAGE = "The portal is currently processing the maximum number of jobs. Please try again shortly."
@@ -48,6 +51,7 @@ _job_context: ContextVar[dict[str, Any] | None] = ContextVar(
 
 _ticket_locks_guard = threading.Lock()
 _ticket_locks: dict[str, threading.Lock] = {}
+_job_metadata_lock = threading.RLock()
 _generation_semaphore: threading.BoundedSemaphore | None = None
 _generation_semaphore_size: int | None = None
 _llm_semaphores_guard = threading.Lock()
@@ -63,6 +67,10 @@ class PortalJobBusyError(RuntimeError):
 
 
 class PortalConcurrencyError(RuntimeError):
+    pass
+
+
+class PortalJobMetadataInvalidError(RuntimeError):
     pass
 
 
@@ -214,20 +222,140 @@ def get_current_job_id() -> str:
     return str(context.get("job_id") or "")
 
 
-def _runtime_job_path(job_id: str) -> Path:
-    return RUNTIME_PORTAL_JOBS_DIR / f"{job_id}.json"
+def get_job_metadata_path(job_id: str) -> Path:
+    clean_job_id = str(job_id or "").strip()
+    if not clean_job_id or Path(clean_job_id).name != clean_job_id:
+        raise ValueError("Invalid portal job ID.")
+    return RUNTIME_PORTAL_JOBS_DIR / f"{clean_job_id}_metadata.json"
 
 
-def _read_job_metadata(job_id: str) -> dict[str, Any] | None:
-    path = _runtime_job_path(job_id)
-
-    if not path.exists():
-        return None
-
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    """Write formatted JSON through a same-directory temporary file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, indent=2, ensure_ascii=False)
+    temporary_path: Path | None = None
+    file_descriptor: int | None = None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        file_descriptor, temporary_name = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        )
+        temporary_path = Path(temporary_name)
+        with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            file_descriptor = None
+            stream.write(serialized)
+            stream.flush()
+            try:
+                os.fsync(stream.fileno())
+            except OSError as error:
+                if error.errno not in {errno.EINVAL, errno.ENOTSUP}:
+                    raise
+        for replace_attempt in range(1, 4):
+            try:
+                os.replace(temporary_path, path)
+                break
+            except PermissionError:
+                if replace_attempt == 3:
+                    raise
+                time.sleep(0.01 * replace_attempt)
+        temporary_path = None
     except Exception:
-        return None
+        logger.exception("Atomic portal job metadata write failed. path=%s", path)
+        raise
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning(
+                    "Unable to clean temporary portal job metadata file. path=%s",
+                    temporary_path,
+                    exc_info=True,
+                )
+
+
+def _read_job_metadata_unlocked(job_id: str) -> dict[str, Any]:
+    path = get_job_metadata_path(job_id)
+    exists = path.exists()
+    logger.info(
+        "Portal job metadata lookup. job_id=%s path=%s exists=%s cwd=%s",
+        job_id,
+        path,
+        exists,
+        Path.cwd(),
+    )
+
+    if not exists:
+        raise FileNotFoundError(f"Portal job metadata does not exist: {path}")
+
+    retry_delays = (0.025, 0.05)
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            raw_metadata = path.read_text(encoding="utf-8")
+        except PermissionError:
+            logger.exception(
+                "Portal job metadata permission error. job_id=%s path=%s "
+                "attempt=%s cwd=%s",
+                job_id,
+                path,
+                attempt,
+                Path.cwd(),
+            )
+            raise
+        except OSError:
+            logger.exception(
+                "Portal job metadata read error. job_id=%s path=%s attempt=%s cwd=%s",
+                job_id,
+                path,
+                attempt,
+                Path.cwd(),
+            )
+            raise
+
+        try:
+            metadata = json.loads(raw_metadata)
+            if not isinstance(metadata, dict):
+                raise ValueError("metadata JSON root is not an object")
+            return metadata
+        except (json.JSONDecodeError, ValueError) as error:
+            last_error = error
+            file_size = len(raw_metadata.encode("utf-8"))
+            if attempt < 3:
+                logger.warning(
+                    "Invalid portal job metadata; retrying. job_id=%s path=%s "
+                    "attempt=%s file_size=%s cwd=%s exception_type=%s",
+                    job_id,
+                    path,
+                    attempt,
+                    file_size,
+                    Path.cwd(),
+                    type(error).__name__,
+                )
+                time.sleep(retry_delays[attempt - 1])
+                continue
+            logger.error(
+                "Portal job metadata remains invalid after retries. job_id=%s "
+                "path=%s attempt=%s file_size=%s cwd=%s exception_type=%s",
+                job_id,
+                path,
+                attempt,
+                file_size,
+                Path.cwd(),
+                type(error).__name__,
+            )
+
+    raise PortalJobMetadataInvalidError(
+        "Portal job metadata remains invalid after bounded retries."
+    ) from last_error
+
+
+def _read_job_metadata(job_id: str) -> dict[str, Any]:
+    with _job_metadata_lock:
+        return _read_job_metadata_unlocked(job_id)
 
 
 def check_provider_safety(ai_mode_context: dict[str, Any] | None) -> None:
@@ -285,7 +413,7 @@ def create_job(
         "duration_ms": 0,
         "error": "",
     }
-    _write_job_metadata(context)
+    _update_job_metadata(context)
     return job_id
 
 
@@ -300,29 +428,30 @@ def update_job_progress(
     if not context:
         return
 
+    updates: dict[str, Any] = {}
     if current_step is not None:
-        context["current_step"] = current_step
-        context["step_label"] = current_step
+        updates["current_step"] = current_step
+        updates["step_label"] = current_step
 
     if step_label is not None:
-        context["step_label"] = step_label
-        context["current_step"] = step_label
+        updates["step_label"] = step_label
+        updates["current_step"] = step_label
 
     if message is not None:
-        context["message"] = message
-        context["detail"] = message
+        updates["message"] = message
+        updates["detail"] = message
 
     if detail is not None:
-        context["detail"] = detail
-        context["message"] = detail
+        updates["detail"] = detail
+        updates["message"] = detail
 
     if progress_percent is not None:
-        context["progress_percent"] = max(0, min(100, int(progress_percent)))
+        updates["progress_percent"] = max(0, min(100, int(progress_percent)))
 
-    _write_job_metadata(context)
+    _update_job_metadata(context, updates)
 
 
-def get_job_status(job_id: str) -> dict[str, Any] | None:
+def get_job_status(job_id: str) -> dict[str, Any]:
     return _read_job_metadata(job_id)
 
 
@@ -337,13 +466,11 @@ def _ticket_lock(ticket_id: str) -> threading.Lock:
         return lock
 
 
-def _write_job_metadata(context: dict[str, Any]) -> None:
+def _metadata_from_context(context: dict[str, Any]) -> dict[str, Any]:
     ticket_id = str(context.get("ticket_id") or "").strip()
-
     if not ticket_id:
-        return
-
-    metadata = {
+        raise ValueError("Portal job metadata requires a ticket_id.")
+    return {
         "job_id": context.get("job_id"),
         "ticket_id": ticket_id,
         "action": context.get("action"),
@@ -363,28 +490,26 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
         "source": "web_portal",
     }
 
-    payload = json.dumps(metadata, indent=2, ensure_ascii=False)
+
+def _write_job_metadata_unlocked(context: dict[str, Any]) -> None:
+    metadata = _metadata_from_context(context)
+    ticket_id = metadata["ticket_id"]
     action = str(context.get("action") or "")
 
     # For create_requirement_from_jira, write metadata to a staging location
     # so that the requirement folder is not created prematurely.
     # Premature folder creation causes requirement_exists() to return True
     # and the Jira loader gets skipped.
-    runtime_path = _runtime_job_path(str(context.get("job_id") or ""))
-    runtime_path.parent.mkdir(parents=True, exist_ok=True)
-    runtime_path.write_text(payload, encoding="utf-8")
+    runtime_path = get_job_metadata_path(str(context.get("job_id") or ""))
+    _write_json_atomic(runtime_path, metadata)
 
     if action == "create_requirement_from_jira":
         jobs_dir = Path("requirements") / "_jobs" / ticket_id
-        jobs_dir.mkdir(parents=True, exist_ok=True)
-        (jobs_dir / f"{context.get('job_id')}_metadata.json").write_text(
-            payload,
-            encoding="utf-8",
+        _write_json_atomic(
+            jobs_dir / f"{context.get('job_id')}_metadata.json",
+            metadata,
         )
-        (jobs_dir / "latest_job_metadata.json").write_text(
-            payload,
-            encoding="utf-8",
-        )
+        _write_json_atomic(jobs_dir / "latest_job_metadata.json", metadata)
         logger.info(
             "Portal job metadata written to staging path. "
             "job_id=%s ticket_id=%s action=%s path=%s",
@@ -395,15 +520,27 @@ def _write_job_metadata(context: dict[str, Any]) -> None:
         )
     else:
         analysis_dir = Path("requirements") / ticket_id / "analysis"
-        analysis_dir.mkdir(parents=True, exist_ok=True)
-        (analysis_dir / "latest_job_metadata.json").write_text(
-            payload,
-            encoding="utf-8",
+        _write_json_atomic(
+            analysis_dir / f"{context.get('job_id')}_metadata.json",
+            metadata,
         )
-        (analysis_dir / f"{context.get('job_id')}_metadata.json").write_text(
-            payload,
-            encoding="utf-8",
-        )
+        _write_json_atomic(analysis_dir / "latest_job_metadata.json", metadata)
+
+
+def _write_job_metadata(context: dict[str, Any]) -> None:
+    """Backward-compatible wrapper around the canonical update function."""
+    _update_job_metadata(context)
+
+
+def _update_job_metadata(
+    context: dict[str, Any],
+    updates: dict[str, Any] | None = None,
+) -> None:
+    """Serialize an in-process context update and all of its metadata writes."""
+    with _job_metadata_lock:
+        if updates:
+            context.update(updates)
+        _write_job_metadata_unlocked(context)
 
 
 def _copy_job_metadata_to_requirement(context: dict[str, Any]) -> None:
@@ -411,49 +548,20 @@ def _copy_job_metadata_to_requirement(context: dict[str, Any]) -> None:
 
     Only call after the requirement has been fully created.
     """
-    ticket_id = str(context.get("ticket_id") or "").strip()
-    if not ticket_id:
-        return
-
-    analysis_dir = Path("requirements") / ticket_id / "analysis"
-    jobs_dir = Path("requirements") / "_jobs" / ticket_id
-
-    if not jobs_dir.exists():
-        return
-
-    # Only copy if the requirement directory now exists (it should after a
-    # successful create_requirement_from_jira).
-    analysis_dir.mkdir(parents=True, exist_ok=True)
-
-    metadata = {
-        "job_id": context.get("job_id"),
-        "ticket_id": ticket_id,
-        "action": context.get("action"),
-        "ai_mode": context.get("ai_mode"),
-        "production_mode": context.get("production_mode"),
-        "local_ai_enabled": context.get("local_ai_enabled"),
-        "status": context.get("status"),
-        "current_step": context.get("current_step", ""),
-        "step_label": context.get("step_label") or context.get("current_step", ""),
-        "message": context.get("message", ""),
-        "detail": context.get("detail") or context.get("message", ""),
-        "progress_percent": context.get("progress_percent", 0),
-        "started_at": context.get("started_at"),
-        "ended_at": context.get("ended_at"),
-        "duration_ms": context.get("duration_ms"),
-        "error": context.get("error", ""),
-        "source": "web_portal",
-    }
-
-    payload = json.dumps(metadata, indent=2, ensure_ascii=False)
-    (analysis_dir / "latest_job_metadata.json").write_text(
-        payload,
-        encoding="utf-8",
-    )
-    (analysis_dir / f"{context.get('job_id')}_metadata.json").write_text(
-        payload,
-        encoding="utf-8",
-    )
+    with _job_metadata_lock:
+        metadata = _metadata_from_context(context)
+        ticket_id = metadata["ticket_id"]
+        analysis_dir = Path("requirements") / ticket_id / "analysis"
+        jobs_dir = Path("requirements") / "_jobs" / ticket_id
+        if not jobs_dir.exists():
+            return
+        _write_json_atomic(
+            analysis_dir / f"{context.get('job_id')}_metadata.json",
+            metadata,
+        )
+        # Diagnostic snapshot only; status lookup always uses the runtime
+        # job-specific file returned by get_job_metadata_path().
+        _write_json_atomic(analysis_dir / "latest_job_metadata.json", metadata)
 
     logger.info(
         "Portal job metadata copied to requirement analysis. "
@@ -514,7 +622,7 @@ async def run_portal_ticket_job(
     }
     token = _job_context.set(context)
     ai_mode_token = set_portal_ai_mode_context(ai_mode_context)
-    _write_job_metadata(context)
+    _update_job_metadata(context)
 
     logger.info(
         "Portal job started job_id=%s ticket_id=%s action=%s ai_mode=%s",
@@ -530,12 +638,17 @@ async def run_portal_ticket_job(
         if asyncio.iscoroutine(result):
             result = await result
 
-        context["status"] = "SUCCEEDED"
-        context["current_step"] = "Complete"
-        context["step_label"] = "Complete"
-        context["message"] = "Job completed."
-        context["detail"] = "Job completed."
-        context["progress_percent"] = 100
+        _update_job_metadata(
+            context,
+            {
+                "status": "SUCCEEDED",
+                "current_step": "Complete",
+                "step_label": "Complete",
+                "message": "Job completed.",
+                "detail": "Job completed.",
+                "progress_percent": 100,
+            },
+        )
 
         # After a successful create_requirement_from_jira, the requirement
         # folder should now be complete.  Copy job metadata into the
@@ -551,12 +664,17 @@ async def run_portal_ticket_job(
             ai_mode=context.get("ai_mode"),
             source_channel="portal",
         )
-        context["status"] = "FAILED"
-        context["error"] = formatted_error
-        context["current_step"] = "Failed"
-        context["step_label"] = "Failed"
-        context["message"] = formatted_error
-        context["detail"] = formatted_error
+        _update_job_metadata(
+            context,
+            {
+                "status": "FAILED",
+                "error": formatted_error,
+                "current_step": "Failed",
+                "step_label": "Failed",
+                "message": formatted_error,
+                "detail": formatted_error,
+            },
+        )
         logger.exception(
             "Portal job failed job_id=%s ticket_id=%s action=%s",
             job_id,
@@ -565,9 +683,13 @@ async def run_portal_ticket_job(
         )
         raise
     finally:
-        context["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        context["duration_ms"] = int((time.time() - started) * 1000)
-        _write_job_metadata(context)
+        _update_job_metadata(
+            context,
+            {
+                "ended_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "duration_ms": int((time.time() - started) * 1000),
+            },
+        )
         reset_portal_ai_mode(ai_mode_token)
         logger.info(
             "Portal job finished job_id=%s ticket_id=%s action=%s status=%s duration_ms=%s",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import NoReturn
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -10,6 +11,7 @@ from knowledge.domain.models import SearchRequest
 from knowledge.services.runtime import get_knowledge_service
 from knowledge.domain.errors import (
     KnowledgeConflictError,
+    KnowledgeDeletionError,
     KnowledgeNotFoundError,
     KnowledgePackageError,
     KnowledgePackageSecurityError,
@@ -19,6 +21,7 @@ from knowledge.services.package_importer import KnowledgePackageImporter
 
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge Base"])
+logger = logging.getLogger(__name__)
 
 
 async def _request_payload(request: Request) -> dict:
@@ -130,6 +133,49 @@ def resolve_kb_by_jira_project_key(
 @router.get("/bases/{kb_id}")
 def get_kb(kb_id: str, _: None = Depends(require_kb_enabled)):
     return get_knowledge_service().get_kb(kb_id).model_dump()
+
+
+@router.get("/bases/{kb_id}/deletion-impact")
+def get_kb_deletion_impact(
+    kb_id: str,
+    _: None = Depends(require_kb_enabled),
+    __: None = Depends(require_maintainer),
+):
+    try:
+        return get_knowledge_service().deletion_impact(kb_id).model_dump()
+    except (KnowledgeNotFoundError, KnowledgeValidationError) as error:
+        _raise_kb_http_error(error)
+
+
+@router.delete("/bases/{kb_id}")
+async def delete_kb(
+    kb_id: str,
+    request: Request,
+    _: None = Depends(require_kb_enabled),
+    __: None = Depends(require_maintainer),
+):
+    try:
+        payload = await _request_payload(request)
+        confirmation = str(payload.get("confirmation") or "")
+        return get_knowledge_service().delete_kb(
+            kb_id,
+            confirmation=confirmation,
+            actor="maintainer",
+        ).model_dump()
+    except (KnowledgeConflictError, KnowledgeNotFoundError, KnowledgeValidationError) as error:
+        _raise_kb_http_error(error)
+    except KnowledgeDeletionError as error:
+        logger.exception("Knowledge Base storage deletion failed for kb_id=%s", kb_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge Base deletion could not be completed safely.",
+        ) from error
+    except Exception as error:
+        logger.exception("Unexpected Knowledge Base deletion failure for kb_id=%s", kb_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge Base deletion could not be completed safely.",
+        ) from error
 
 
 @router.patch("/bases/{kb_id}")
